@@ -1,7 +1,9 @@
 "use client";
 
-import {useEffect,useMemo,useState} from "react";
-import {LayoutDashboard,ShoppingBag,ClipboardCheck,Box,ShoppingCart,Users,Wallet,Plus,X,Check,Truck,Pencil} from "lucide-react";
+import {useEffect,useMemo,useRef,useState} from "react";
+import type {Session} from "@supabase/supabase-js";
+import {LayoutDashboard,ShoppingBag,ClipboardCheck,Box,ShoppingCart,Users,Wallet,Plus,X,Check,Truck,Pencil,LogOut,Cloud,CloudOff} from "lucide-react";
+import {isSupabaseConfigured,supabase} from "./supabase";
 
 type P={id:number,brand:string,name:string,category:string,stock:number,min:number,cost:number};
 type S={id:number,name:string,stock:number,unit:string,min:number};
@@ -19,12 +21,32 @@ const LOGO="data:image/webp;base64,UklGRlgOAABXRUJQVlA4IEwOAAAQTQCdASpoAf0APpFEn
 const nav=[["dashboard","Visão geral",LayoutDashboard],["sales","Vendas",ShoppingBag],["prepare","Pedidos para preparar",ClipboardCheck],["shipping","Envios",Truck],["stock","Estoque",Box],["purchases","Compras",ShoppingCart],["clients","Clientes",Users],["finance","Financeiro",Wallet]] as const;
 
 export default function App(){
-  const[data,setData]=useState<D>(()=>{try{return JSON.parse(localStorage.getItem("daf-v4")||"null")||blank}catch{return blank}});
+  const[session,setSession]=useState<Session|null>(null),[authLoading,setAuthLoading]=useState(true);
+  useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session);setAuthLoading(false)});const{data:{subscription}}=supabase.auth.onAuthStateChange((_event,next)=>setSession(next));return()=>subscription.unsubscribe()},[]);
+  if(!isSupabaseConfigured)return <SetupRequired/>;
+  if(authLoading)return <div className="authPage"><div className="authCard"><Cloud/><h1>Conectando ao Supabase...</h1></div></div>;
+  if(!session)return <Auth/>;
+  return <System session={session}/>;
+}
+
+function System({session}:{session:Session}){
+  const[data,setData]=useState<D>(()=>readLocal()),[ready,setReady]=useState(false),[sync,setSync]=useState<"loading"|"saved"|"error">("loading");
+  const saveTimer=useRef<number|undefined>(undefined);
   const[page,setPage]=useState("dashboard"),[modal,setModal]=useState<Modal>(null),[history,setHistory]=useState(0);
-  useEffect(()=>localStorage.setItem("daf-v4",JSON.stringify(data)),[data]);
+  useEffect(()=>{let active=true;(async()=>{const{data:remote,error}=await supabase.from("app_state").select("data").eq("user_id",session.user.id).maybeSingle();if(!active)return;if(error){setSync("error");return}if(remote?.data&&Object.keys(remote.data).length){setData({...blank,...remote.data} as D)}else{const local=readLocal();const{error:saveError}=await supabase.from("app_state").upsert({user_id:session.user.id,data:local});if(saveError){setSync("error");return}}setReady(true);setSync("saved")})();return()=>{active=false}},[session.user.id]);
+  useEffect(()=>{localStorage.setItem("daf-v4",JSON.stringify(data));if(!ready)return;setSync("loading");window.clearTimeout(saveTimer.current);saveTimer.current=window.setTimeout(async()=>{const{error}=await supabase.from("app_state").upsert({user_id:session.user.id,data});setSync(error?"error":"saved")},450);return()=>window.clearTimeout(saveTimer.current)},[data,ready,session.user.id]);
   const totals=useMemo(()=>data.sales.reduce((a,s)=>({gross:a.gross+s.total,paid:a.paid+s.paid}),{gross:0,paid:0}),[data.sales]);
   const action=page==="sales"?["Nova venda","sale"]:page==="stock"?["Novo perfume","product"]:page==="purchases"?["Nova compra","purchase"]:page==="clients"?["Novo cliente","client"]:null;
-  return <div className="shell"><aside><img src={LOGO} alt="DAF Splits"/><nav>{nav.map(([id,label,Icon])=><button key={id} className={page===id?"on":""} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><footer>FC <span>Fábio Cruz<small>Administrador</small></span></footer></aside><main><header><div><small>PAINEL ADMINISTRATIVO</small><h1>{nav.find(n=>n[0]===page)?.[1]}</h1></div>{action?<button className="primary" onClick={()=>setModal({type:action[1]})}><Plus/>{action[0]}</button>:null}</header><section className="content">{page==="dashboard"?<Dash d={data} totals={totals}/>:page==="sales"?<Sales d={data} edit={id=>setModal({type:"sale",id})}/>:page==="prepare"?<Prepare d={data} set={setData}/>:page==="shipping"?<Shipping d={data}/>:page==="stock"?<Stock d={data} add={()=>setModal({type:"supply"})} edit={id=>setModal({type:"product",id})}/>:page==="purchases"?<Purchases d={data}/>:page==="clients"?<Clients d={data} history={setHistory} edit={id=>setModal({type:"client",id})}/>:<Finance d={data} totals={totals}/>}</section></main>{modal?<Form modal={modal} d={data} set={setData} close={()=>setModal(null)}/>:null}{history?<History id={history} d={data} close={()=>setHistory(0)}/>:null}</div>
+  if(!ready&&sync!=="error")return <div className="authPage"><div className="authCard"><Cloud/><h1>Carregando seus dados...</h1></div></div>;
+  return <div className="shell"><aside><img src={LOGO} alt="DAF Splits"/><nav>{nav.map(([id,label,Icon])=><button key={id} className={page===id?"on":""} onClick={()=>setPage(id)}><Icon/>{label}</button>)}</nav><div className={"sync "+sync}>{sync==="error"?<CloudOff/>:<Cloud/>}{sync==="saved"?"Dados sincronizados":sync==="error"?"Falha na sincronização":"Salvando..."}</div><footer>FC <span>Fábio Cruz<small>{session.user.email}</small></span><button title="Sair" onClick={()=>supabase.auth.signOut()}><LogOut/></button></footer></aside><main><header><div><small>PAINEL ADMINISTRATIVO</small><h1>{nav.find(n=>n[0]===page)?.[1]}</h1></div>{action?<button className="primary" onClick={()=>setModal({type:action[1]})}><Plus/>{action[0]}</button>:null}</header><section className="content">{page==="dashboard"?<Dash d={data} totals={totals}/>:page==="sales"?<Sales d={data} edit={id=>setModal({type:"sale",id})}/>:page==="prepare"?<Prepare d={data} set={setData}/>:page==="shipping"?<Shipping d={data}/>:page==="stock"?<Stock d={data} add={()=>setModal({type:"supply"})} edit={id=>setModal({type:"product",id})}/>:page==="purchases"?<Purchases d={data}/>:page==="clients"?<Clients d={data} history={setHistory} edit={id=>setModal({type:"client",id})}/>:<Finance d={data} totals={totals}/>}</section></main>{modal?<Form modal={modal} d={data} set={setData} close={()=>setModal(null)}/>:null}{history?<History id={history} d={data} close={()=>setHistory(0)}/>:null}</div>
+}
+
+function readLocal():D{try{const stored=JSON.parse(localStorage.getItem("daf-v4")||"null");return stored?{...blank,...stored}:blank}catch{return blank}}
+function SetupRequired(){return <div className="authPage"><div className="authCard"><CloudOff/><h1>Supabase não configurado</h1><p>Adicione as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY na Vercel.</p></div></div>}
+function Auth(){
+  const[mode,setMode]=useState<"login"|"signup">("login"),[message,setMessage]=useState(""),[busy,setBusy]=useState(false);
+  async function submit(e:any){e.preventDefault();setBusy(true);setMessage("");const f=Object.fromEntries(new FormData(e.currentTarget)),email=String(f.email),password=String(f.password);const{error}=mode==="login"?await supabase.auth.signInWithPassword({email,password}):await supabase.auth.signUp({email,password});setBusy(false);setMessage(error?error.message:mode==="signup"?"Cadastro criado. Confira seu e-mail se a confirmação estiver ativada.":"")}
+  return <div className="authPage"><form className="authCard" onSubmit={submit}><img src={LOGO} alt="DAF Splits"/><small>SISTEMA DE GESTÃO</small><h1>{mode==="login"?"Entrar no sistema":"Criar acesso"}</h1><label><span>E-mail</span><input name="email" type="email" required/></label><label><span>Senha</span><input name="password" type="password" minLength={6} required/></label>{message?<p className="authMessage">{message}</p>:null}<button className="primary" disabled={busy}>{busy?"Aguarde...":mode==="login"?"Entrar":"Cadastrar"}</button><button type="button" className="authSwitch" onClick={()=>setMode(mode==="login"?"signup":"login")}>{mode==="login"?"Primeiro acesso? Criar conta":"Já possui conta? Entrar"}</button></form></div>
 }
 
 function Cards({v}:{v:[string,string][]}){return <div className="cards">{v.map(([value,label])=><div key={label}><span>{label}</span><b>{value}</b></div>)}</div>}
