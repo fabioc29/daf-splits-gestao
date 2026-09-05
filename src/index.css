@@ -583,8 +583,49 @@ fieldset input:checked + span {
 }
 .marketplaceSummary {
   display: grid;
-  grid-template-columns: 1.4fr repeat(3, 1fr);
+  grid-template-columns: 1.4fr repeat(2, 1fr);
   gap: 16px;
+}
+.navAlert {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: #e5484d;
+  color: #fff;
+  font-size: 10px;
+  box-shadow: 0 0 0 3px #e5484d24;
+}
+nav button.on .navAlert,
+nav button:hover .navAlert {
+  color: #fff;
+}
+.clientSearch {
+  position: relative;
+  max-width: 520px;
+}
+.clientSearch svg {
+  position: absolute;
+  left: 14px;
+  top: 13px;
+  width: 19px;
+  color: var(--muted);
+}
+.clientSearch input {
+  width: 100%;
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 0 15px 0 44px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.reportButton svg {
+  width: 17px;
 }
 .marketplaceSummary > div {
   min-width: 0;
@@ -654,6 +695,45 @@ fieldset input:checked + span {
   .marketplaceSummary > div:first-child {
     border-top: 0;
     padding-top: 0;
+  }
+}
+@media print {
+  :root {
+    --bg: #fff;
+    --panel: #fff;
+    --line: #d8dde5;
+    --text: #111827;
+    --muted: #526071;
+  }
+  aside,
+  main > header,
+  button,
+  .tableActions {
+    display: none !important;
+  }
+  main {
+    margin: 0;
+    width: 100%;
+  }
+  .content {
+    padding: 0;
+  }
+  .panel,
+  .cards > div {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+  .grid,
+  .financeChart {
+    grid-template-columns: 1fr !important;
+  }
+  .bars,
+  .paymentDonut,
+  .categoryDonut,
+  .statusDonut,
+  .marginTrack {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
   }
 }
 
