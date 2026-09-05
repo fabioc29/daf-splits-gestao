@@ -570,6 +570,92 @@ fieldset input:checked + span {
     grid-template-columns: 1fr;
   }
 }
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.marketplaceButton {
+  background: #111a28;
+}
+.marketplaceButton svg {
+  width: 17px;
+}
+.marketplaceSummary {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 1fr);
+  gap: 16px;
+}
+.marketplaceSummary > div {
+  min-width: 0;
+  border-left: 1px solid var(--line);
+  padding-left: 18px;
+}
+.marketplaceSummary > div:first-child {
+  border-left: 0;
+  padding-left: 0;
+}
+.marketplaceSummary span,
+.marketplaceSummary b,
+.marketplaceSummary small {
+  display: block;
+}
+.marketplaceSummary span,
+.marketplaceSummary small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.marketplaceSummary b {
+  margin: 7px 0;
+  font-size: 20px;
+}
+.marketplaceFields {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #dfc46f;
+  border-radius: 12px;
+  background: #fffaf0;
+}
+.marketplaceBadge {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 5px 9px;
+  background: #e8dfc8;
+  color: #7b5b10;
+  font-weight: 800;
+}
+@media (max-width: 800px) {
+  .marketplaceSummary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .marketplaceSummary > div:nth-child(3) {
+    border-left: 0;
+    padding-left: 0;
+  }
+  .headerActions {
+    gap: 6px;
+  }
+  .headerActions button {
+    padding: 10px;
+  }
+}
+@media (max-width: 520px) {
+  .marketplaceSummary,
+  .marketplaceFields {
+    grid-template-columns: 1fr;
+  }
+  .marketplaceSummary > div {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 12px 0 0;
+  }
+  .marketplaceSummary > div:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+}
 
 button,
 select,
