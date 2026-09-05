@@ -24,6 +24,8 @@ import {
   ReceiptText,
   Printer,
 } from "lucide-react";
+import { packaging } from "./packaging";
+import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
 
 type P = {
@@ -96,6 +98,7 @@ type D = {
   purchases: B[];
   suppliers: string[];
   brands: string[];
+  orderSequenceVersion?: number;
 };
 type Modal = { type: string; id?: number } | null;
 
@@ -222,6 +225,7 @@ function System({ session }: { session: Session }) {
     [data.sales],
   );
   const navAlerts: Record<string, number> = {
+    receivables: data.sales.filter(s => s.status !== "cancelled" && !isNoCost(s) && s.paid < s.total).length,
     prepare: data.sales.filter(
       (sale) => sale.status !== "cancelled" && !sale.prepared,
     ).length,
@@ -300,9 +304,9 @@ function System({ session }: { session: Session }) {
             {page === "dashboard" || page === "finance" ? (
               <button
                 className="secondary reportButton"
-                onClick={() => window.print()}
+                onClick={() => captureReport().catch(() => notify("Não foi possível capturar o painel. Tente novamente."))}
               >
-                <Printer /> Relatório / PDF
+                <Printer /> Capturar relatório (PNG)
               </button>
             ) : null}
             {page === "sales" ? (
@@ -351,11 +355,12 @@ function System({ session }: { session: Session }) {
               set={setData}
               add={() => setModal({ type: "supply" })}
               addProduct={() => setModal({ type: "product" })}
+              editSupply={(id) => setModal({ type: "supplyEdit", id })}
               edit={(id) => setModal({ type: "product", id })}
               notify={notify}
             />
           ) : page === "purchases" ? (
-            <Purchases d={data} set={setData} notify={notify} />
+            <Purchases d={data} set={setData} notify={notify} edit={(id) => setModal({type:"purchaseEdit",id})} />
           ) : page === "clients" ? (
             <Clients
               d={data}
@@ -369,7 +374,7 @@ function System({ session }: { session: Session }) {
           )}
         </section>
       </main>
-      {modal ? (
+      {modal?.type === "supplyEdit" || modal?.type === "purchaseEdit" ? <InventoryEdit modal={modal} d={data} set={setData} close={() => setModal(null)} /> : modal ? (
         <Form
           modal={modal}
           d={data}
@@ -406,7 +411,7 @@ function normalizeData(stored: any): D {
   ) as string[];
   const rawSales = (merged.sales || []) as V[];
   const ids = rawSales.map((sale) => sale.id).sort((a, b) => a - b);
-  const needsSequentialIds = ids.some((id, index) => id !== index + 1);
+  const needsSequentialIds = !merged.orderSequenceVersion && ids.some((id, index) => id !== index + 1);
   const sequentialIds = new Map<number, number>();
   if (needsSequentialIds) {
     [...rawSales]
@@ -416,6 +421,7 @@ function normalizeData(stored: any): D {
   return {
     ...merged,
     products,
+    orderSequenceVersion: 1,
     supplies: (merged.supplies || []).map((s: S) => ({
       ...s,
       attachCost: Boolean(s.attachCost),
@@ -580,6 +586,7 @@ function Dash({
         ]}
       />
       <MarketplaceSummary sales={marketplaceSales} />
+      <PackagingSummary d={d} />
       <div className="grid">
         <div className="dashboardMain">
           <div className="panel chart">
@@ -821,7 +828,7 @@ function Sales({
                   <small>Taxa: {brl(s.marketplaceFee)}</small>
                 ) : null}
               </td>
-              <td>{brl(s.total)}</td>
+              <td>{brl(s.total)}<small>Insumos: {brl(packaging(s, d.supplies).total)}</small></td>
               <td>{saleBadge(s)}</td>
               {edit ? (
                 <td>
@@ -1200,6 +1207,7 @@ function Stock({
   d,
   add,
   addProduct,
+  editSupply,
   edit,
   set,
   notify,
@@ -1207,6 +1215,7 @@ function Stock({
   d: D;
   add: () => void;
   addProduct: () => void;
+  editSupply: (id: number) => void;
   edit: (id: number) => void;
   set: any;
   notify: (s: string) => void;
@@ -1218,6 +1227,7 @@ function Stock({
   const brands = Array.from(new Set(d.products.map((p) => p.brand))).sort();
   const filtered = d.products.filter(
     (p) =>
+      (view === "out" ? p.stock <= 0 : p.stock > 0) &&
       (category === "Todos" || p.category === category) &&
       (brand === "Todas" || p.brand === brand) &&
       `${p.brand} ${p.name}`.toLowerCase().includes(query.toLowerCase()),
@@ -1241,10 +1251,10 @@ function Stock({
         </div>
         <button
           className="primary stockAction"
-          onClick={view === "perfumes" ? addProduct : add}
+          onClick={view !== "supplies" ? addProduct : add}
         >
           <Plus />
-          {view === "perfumes" ? "Novo perfume" : "Novo suprimento/insumo"}
+          {view !== "supplies" ? "Novo perfume" : "Novo suprimento/insumo"}
         </button>
       </div>
       <div className="segmented stockSwitch">
@@ -1261,7 +1271,8 @@ function Stock({
           Suprimentos / insumos
         </button>
       </div>
-      {view === "perfumes" ? (
+      <div className="segmented"><button className={view === "out" ? "active" : ""} onClick={() => setView("out")}>Perfumes fora de estoque ({d.products.filter(p => p.stock <= 0).length})</button></div>
+      {view !== "supplies" ? (
         <>
           <Cards
             v={[
@@ -1334,10 +1345,7 @@ function Stock({
           <Cards
             v={[
               [String(d.supplies.length), "Itens"],
-              [
-                String(d.supplies.reduce((n, s) => n + s.stock, 0)),
-                "Quantidade total",
-              ],
+
             ]}
           />
           <div className="products">
@@ -1349,6 +1357,7 @@ function Stock({
                   {s.cost ? ` · ${brl(s.cost)} por unidade` : ""}
                 </p>
                 <p>Custo na venda: {s.attachCost ? "Sim" : "Não"}</p>
+                <button className="iconButton" onClick={() => editSupply(s.id)}><Pencil/>Editar</button>
                 <button
                   className="iconButton danger"
                   onClick={() => removeSupply(s.id)}
@@ -1368,8 +1377,10 @@ function Stock({
 function Purchases({
   d,
   set,
+  edit,
   notify,
 }: {
+  edit: (id: number) => void;
   d: D;
   set: any;
   notify: (s: string) => void;
@@ -1424,7 +1435,7 @@ function Purchases({
                   {p.mlPerBottle ? ` × ${p.mlPerBottle} ml` : ""}
                 </td>
                 <td>{brl(p.total)}</td>
-                <td>
+                <td><button className="iconButton" onClick={() => edit(p.id)}><Pencil/>Editar</button>
                   <button
                     className="iconButton danger"
                     onClick={() => remove(p.id)}
@@ -1517,7 +1528,7 @@ function PaymentBreakdown({ d }: { d: D }) {
   const payments = [
     { name: "Pix", color: "#22a66f" },
     { name: "Cartão de Crédito", color: "#2f80ed" },
-    { name: "Dinheiro", color: "#e0b43c" },
+
     { name: "À prazo", color: "#8b5cf6" },
   ].map((x) => ({
     ...x,
@@ -1604,7 +1615,7 @@ function ProfitControl({
   notify: (message: string) => void;
 }) {
   const sales = d.sales.filter(
-    (sale) => sale.status !== "cancelled" && !isNoCost(sale),
+    (sale) => sale.status !== "cancelled",
   );
   const rows = sales.map((sale) => {
     const perfumeCost = sale.items.reduce(
@@ -1617,11 +1628,11 @@ function ProfitControl({
       0,
     );
     const expenses =
-      Number(sale.expenses || 0) + Number(sale.marketplaceFee || 0);
-    const profit = sale.total - perfumeCost - expenses;
+      Number(sale.expenses || 0) + Number(sale.marketplaceFee || 0) + packaging(sale, d.supplies).total;
+    const profit = (isNoCost(sale) ? 0 : sale.total) - perfumeCost - expenses;
     return { sale, perfumeCost, expenses, profit };
   });
-  const revenue = rows.reduce((sum, row) => sum + row.sale.total, 0);
+  const revenue = rows.reduce((sum, row) => sum + (isNoCost(row.sale) ? 0 : row.sale.total), 0);
   const perfumeCost = rows.reduce((sum, row) => sum + row.perfumeCost, 0);
   const expenses = rows.reduce((sum, row) => sum + row.expenses, 0);
   const profit = revenue - perfumeCost - expenses;
@@ -1687,7 +1698,7 @@ function ProfitControl({
                   <td>#{orderNo(sale.id)}</td>
                   <td>{brl(sale.total)}</td>
                   <td>{brl(cost)}</td>
-                  <td>{brl(expense)}</td>
+                  <td>{brl(expense)}<details><summary>Ver insumos</summary>{packaging(sale,d.supplies).lines.map(line => <small key={line.name}>{line.qty} × {line.name}: {line.missing ? "Custo não cadastrado" : brl(line.total)}</small>)}</details></td>
                   <td>{brl(rowProfit)}</td>
                   <td>
                     <button
@@ -1705,6 +1716,49 @@ function ProfitControl({
       </div>
     </div>
   );
+}
+
+function PackagingSummary({d}: {d: D}) {
+  const active = d.sales.filter(s => s.status !== "cancelled");
+  const cost = active.reduce((n,s) => n + packaging(s,d.supplies).total, 0);
+  const missing = [...new Set(active.flatMap(s => packaging(s,d.supplies).missing))];
+  const revenue = active.reduce((n,s) => n + (isNoCost(s) ? 0 : s.total), 0);
+  const otherCosts = active.reduce((n,s) => n + (s.expenses || 0) + (s.marketplaceFee || 0) + s.items.reduce((sum,i) => sum + i.ml * (i.unitCost ?? d.products.find(p => p.id === i.productId)?.cost ?? 0),0),0);
+  return <div className="panel"><h2>Custos e resultado</h2><Cards v={[[brl(cost),"Insumos dos pedidos"],[brl(revenue-cost-otherCosts),"Lucro estimado"],[(revenue ? (revenue-cost-otherCosts)/revenue*100 : 0).toFixed(1)+"%","Margem estimada"]]}/><p>Insumos calculados pelos preços unitários atuais, incluindo vendas antigas. Não altera retroativamente o saldo físico dos suprimentos.</p>{missing.length ? <p>Custos incompletos: confira {missing.join(", ")}.</p> : null}</div>;
+}
+
+function InventoryEdit({modal,d,set,close}: {modal: NonNullable<Modal>; d:D; set:any; close:()=>void}) {
+  const supply = modal.type === "supplyEdit" ? d.supplies.find(s=>s.id===modal.id) : undefined;
+  const purchase = modal.type === "purchaseEdit" ? d.purchases.find(p=>p.id===modal.id) : undefined;
+  const [error,setError] = useState("");
+  function save(e:any) {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.currentTarget));
+    if (supply) {
+      const stock=Number(f.stock), cost=Number(f.cost);
+      if(stock<0 || cost<0 || !Number.isFinite(stock+cost)) {setError("Informe valores válidos.");return;}
+      set((x:D)=>({...x,supplies:x.supplies.map(s=>s.id===supply.id?{...s,name:String(f.name),unit:String(f.unit),stock,cost,attachCost:f.attachCost==="Sim"}:s)}));
+    } else if(purchase) {
+      const qty=Number(f.qty), total=Number(f.total), ml=purchase.type==="Perfume"?Number(f.ml):undefined;
+      if(qty<=0 || total<0 || (ml!==undefined && ml<=0) || !Number.isFinite(qty+total+(ml||0))) {setError("Quantidade e volume devem ser positivos.");return;}
+      const product=d.products.find(p=>`${p.brand} ${p.name}`.trim().toLowerCase()===purchase.description.trim().toLowerCase());
+      const item=d.supplies.find(s=>s.name.trim().toLowerCase()===purchase.description.trim().toLowerCase());
+      const target=purchase.type==="Perfume"?product:item;
+      if(!target){setError("O item original não foi encontrado no estoque. Restaure o nome original antes de editar esta compra.");return;}
+      const before=purchase.qty*(purchase.mlPerBottle||1), after=qty*(ml||1), delta=after-before;
+      if(target.stock+delta<0){setError("A correção deixaria o estoque negativo. Confira as vendas e a quantidade da compra.");return;}
+      const newCost=total/after;
+      set((x:D)=>({...x,
+        purchases:x.purchases.map(p=>p.id===purchase.id?{...p,date:String(f.date),supplier:String(f.supplier),qty,total,mlPerBottle:ml}:p),
+        products:x.products.map(p=>product && p.id===product.id?{...p,stock:p.stock+delta,cost:newCost}:p),
+        supplies:x.supplies.map(s=>item && purchase.type!=="Perfume" && s.id===item.id?{...s,stock:s.stock+delta,cost:newCost}:s)
+      }));
+    }
+    close();
+  }
+  return <div className="overlay"><form onSubmit={save}><header><h2>{supply?"Editar suprimento":"Editar compra"}</h2><button type="button" onClick={close}><X/></button></header>
+    {supply ? <><Field n="name" l="Nome" v={supply.name}/><Field n="unit" l="Unidade" v={supply.unit}/><Field n="stock" l="Estoque atual" t="number" v={supply.stock}/><Field n="cost" l="Preço por unidade (R$)" t="number" v={supply.cost||0}/><Choices name="attachCost" label="Atrelar custo na venda?" a={["Sim","Não"]} v={supply.attachCost?"Sim":"Não"}/></> : purchase ? <><p>{purchase.description}</p><Field n="date" l="Data" t="date" v={purchase.date}/><Field n="supplier" l="Fornecedor" v={purchase.supplier}/><Field n="qty" l="Quantidade" t="number" v={purchase.qty}/>{purchase.type==="Perfume"?<Field n="ml" l="ml por frasco" t="number" v={purchase.mlPerBottle}/>:null}<Field n="total" l="Total pago" t="number" v={purchase.total}/><p>A quantidade altera o estoque pela diferença. O preço unitário será atualizado para o valor desta compra corrigida.</p></>:null}
+    {error?<p role="alert">{error}</p>:null}<footer><button type="button" onClick={close}>Cancelar</button><button className="primary">Salvar alterações</button></footer></form></div>;
 }
 
 function Form({
