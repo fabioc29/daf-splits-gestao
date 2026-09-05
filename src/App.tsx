@@ -72,6 +72,9 @@ type V = {
   sent?: boolean;
   status?: string;
   expenses?: number;
+  channel?: "direct" | "marketplace";
+  marketplace?: "TikTok Shop" | "Shopee";
+  marketplaceFee?: number;
 };
 type B = {
   id: number;
@@ -277,15 +280,25 @@ function System({ session }: { session: Session }) {
             <small>PAINEL ADMINISTRATIVO</small>
             <h1>{nav.find((n) => n[0] === page)?.[1]}</h1>
           </div>
-          {action ? (
-            <button
-              className="primary"
-              onClick={() => setModal({ type: action[1] })}
-            >
-              <Plus />
-              {action[0]}
-            </button>
-          ) : null}
+          <div className="headerActions">
+            {page === "sales" ? (
+              <button
+                className="secondary marketplaceButton"
+                onClick={() => setModal({ type: "marketplace" })}
+              >
+                <ShoppingBag /> Marketplace
+              </button>
+            ) : null}
+            {action ? (
+              <button
+                className="primary"
+                onClick={() => setModal({ type: action[1] })}
+              >
+                <Plus />
+                {action[0]}
+              </button>
+            ) : null}
+          </div>
         </header>
         <section className="content">
           {page === "dashboard" ? (
@@ -379,6 +392,8 @@ function normalizeData(stored: any): D {
       sent: Boolean(s.sent),
       status: s.status || "active",
       expenses: Number(s.expenses || 0),
+      channel: s.channel || "direct",
+      marketplaceFee: Number(s.marketplaceFee || 0),
       items: (s.items || []).map((item: L) => ({
         ...item,
         isApc: Boolean(item.isApc),
@@ -485,6 +500,9 @@ function Dash({
   const activeSales = d.sales.filter(
     (s) => s.status !== "cancelled" && !isNoCost(s),
   );
+  const marketplaceSales = activeSales.filter(
+    (sale) => sale.channel === "marketplace",
+  );
   const now = new Date(),
     days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
     day = now.getDate();
@@ -526,6 +544,7 @@ function Dash({
           [brl(totals.gross / (activeSales.length || 1)), "Ticket médio"],
         ]}
       />
+      <MarketplaceSummary sales={marketplaceSales} />
       <div className="grid">
         <div className="dashboardMain">
           <div className="panel chart">
@@ -611,6 +630,42 @@ function Dash({
   );
 }
 
+function MarketplaceSummary({ sales }: { sales: V[] }) {
+  const gross = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const fees = sales.reduce(
+    (sum, sale) => sum + Number(sale.marketplaceFee || 0),
+    0,
+  );
+  const tiktok = sales
+    .filter((sale) => sale.marketplace === "TikTok Shop")
+    .reduce((sum, sale) => sum + sale.total, 0);
+  const shopee = sales
+    .filter((sale) => sale.marketplace === "Shopee")
+    .reduce((sum, sale) => sum + sale.total, 0);
+  return (
+    <div className="panel marketplaceSummary">
+      <div>
+        <span>Faturamento Marketplace</span>
+        <b>{brl(gross)}</b>
+        <small>{sales.length} venda(s) cadastrada(s)</small>
+      </div>
+      <div>
+        <span>TikTok Shop</span>
+        <b>{brl(tiktok)}</b>
+      </div>
+      <div>
+        <span>Shopee</span>
+        <b>{brl(shopee)}</b>
+      </div>
+      <div>
+        <span>Taxas descontadas</span>
+        <b>{brl(fees)}</b>
+        <small>Líquido: {brl(gross - fees)}</small>
+      </div>
+    </div>
+  );
+}
+
 function categoryGradient(
   c: { category: string; value: number }[],
   total: number,
@@ -691,6 +746,7 @@ function Sales({
             <th>Cliente</th>
             <th>Produtos</th>
             <th>Pagamento</th>
+            <th>Origem</th>
             <th>Total</th>
             <th>Status</th>
             {edit ? <th>Ações</th> : null}
@@ -722,6 +778,16 @@ function Sales({
                   <small>
                     {s.dueDate} · {brl(s.installment || 0)}
                   </small>
+                ) : null}
+              </td>
+              <td>
+                {s.channel === "marketplace" ? (
+                  <span className="marketplaceBadge">{s.marketplace}</span>
+                ) : (
+                  "Venda direta"
+                )}
+                {s.marketplaceFee ? (
+                  <small>Taxa: {brl(s.marketplaceFee)}</small>
                 ) : null}
               </td>
               <td>{brl(s.total)}</td>
@@ -1495,7 +1561,8 @@ function ProfitControl({
             0),
       0,
     );
-    const expenses = Number(sale.expenses || 0);
+    const expenses =
+      Number(sale.expenses || 0) + Number(sale.marketplaceFee || 0);
     const profit = sale.total - perfumeCost - expenses;
     return { sale, perfumeCost, expenses, profit };
   });
@@ -1533,7 +1600,7 @@ function ProfitControl({
       <Cards
         v={[
           [brl(perfumeCost), "Custo dos perfumes"],
-          [brl(expenses), "Despesas por pedido"],
+          [brl(expenses), "Taxas e despesas"],
           [brl(profit), "Lucro estimado"],
           [`${margin.toFixed(1).replace(".", ",")}%`, "Margem estimada"],
         ]}
@@ -1600,6 +1667,9 @@ function Form({
     existingSale = d.sales.find((s) => s.id === modal!.id),
     existingClient = d.clients.find((c) => c.id === modal!.id),
     existingProduct = d.products.find((p) => p.id === modal!.id);
+  const isSale = type === "sale" || type === "marketplace";
+  const isMarketplace =
+    type === "marketplace" || existingSale?.channel === "marketplace";
   const existingInstallments = existingSale?.installments?.length
     ? existingSale.installments
     : existingSale?.dueDate
@@ -1637,7 +1707,7 @@ function Form({
   function submit(e: any) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
-    if (type === "sale") {
+    if (isSale) {
       const invalid = Array.from({ length: lines }, (_, i) =>
         String(f["productName" + i] || ""),
       ).find(
@@ -1864,6 +1934,11 @@ function Form({
         sent: existingSale?.sent || false,
         status: existingSale?.status || "active",
         expenses: existingSale?.expenses || 0,
+        channel: isMarketplace ? "marketplace" : "direct",
+        marketplace: isMarketplace
+          ? (String(f.marketplace) as "TikTok Shop" | "Shopee")
+          : undefined,
+        marketplaceFee: isMarketplace ? Number(f.marketplaceFee || 0) : 0,
       };
       const products = x.products.map((p) => {
         const restored =
@@ -1898,22 +1973,23 @@ function Form({
     });
     close();
   }
-  const title =
-    type === "sale"
-      ? existingSale
-        ? "Editar venda"
+  const title = isSale
+    ? existingSale
+      ? "Editar venda"
+      : isMarketplace
+        ? "Lançar venda Marketplace"
         : "Lançar venda"
-      : type === "client"
-        ? existingClient
-          ? "Editar cliente"
-          : "Cadastrar cliente"
-        : type === "product"
-          ? existingProduct
-            ? "Editar perfume"
-            : "Cadastrar perfume"
-          : type === "supply"
-            ? "Cadastrar suprimento/insumo"
-            : "Registrar compra";
+    : type === "client"
+      ? existingClient
+        ? "Editar cliente"
+        : "Cadastrar cliente"
+      : type === "product"
+        ? existingProduct
+          ? "Editar perfume"
+          : "Cadastrar perfume"
+        : type === "supply"
+          ? "Cadastrar suprimento/insumo"
+          : "Registrar compra";
   return (
     <div className="overlay">
       <form onSubmit={submit}>
@@ -1926,8 +2002,24 @@ function Form({
             <X />
           </button>
         </header>
-        {type === "sale" ? (
+        {isSale ? (
           <>
+            {isMarketplace ? (
+              <div className="marketplaceFields">
+                <Choices
+                  name="marketplace"
+                  label="Onde foi feita a venda?"
+                  a={["TikTok Shop", "Shopee"]}
+                  v={existingSale?.marketplace || "TikTok Shop"}
+                />
+                <Field
+                  n="marketplaceFee"
+                  l="Taxas descontadas da venda"
+                  t="number"
+                  v={existingSale?.marketplaceFee || 0}
+                />
+              </div>
+            ) : null}
             <label className="check">
               <input
                 type="checkbox"
