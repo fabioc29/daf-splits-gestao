@@ -22,6 +22,7 @@ import {
   Ban,
   Search,
   ReceiptText,
+  Printer,
 } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./supabase";
 
@@ -110,6 +111,7 @@ const blank: D = {
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const today = () => new Date().toISOString().slice(0, 10);
+const orderNo = (id: number) => String(id).padStart(5, "0");
 const LOGO =
   "data:image/webp;base64,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";
 const nav = [
@@ -219,18 +221,24 @@ function System({ session }: { session: Session }) {
         ),
     [data.sales],
   );
+  const navAlerts: Record<string, number> = {
+    prepare: data.sales.filter(
+      (sale) => sale.status !== "cancelled" && !sale.prepared,
+    ).length,
+    shipping: data.sales.filter(
+      (sale) => sale.status !== "cancelled" && sale.prepared && !sale.sent,
+    ).length,
+  };
   const action =
     page === "sales"
       ? ["Nova venda", "sale"]
-      : page === "stock"
-        ? ["Novo perfume", "product"]
-        : page === "purchases"
-          ? ["Nova compra", "purchase"]
-          : page === "clients"
-            ? ["Novo cliente", "client"]
-            : page === "receivables"
-              ? ["Cadastrar venda antiga", "sale"]
-              : null;
+      : page === "purchases"
+        ? ["Nova compra", "purchase"]
+        : page === "clients"
+          ? ["Novo cliente", "client"]
+          : page === "receivables"
+            ? ["Cadastrar venda antiga", "sale"]
+            : null;
   if (!ready && sync !== "error")
     return (
       <div className="authPage">
@@ -253,6 +261,14 @@ function System({ session }: { session: Session }) {
             >
               <Icon />
               {label}
+              {navAlerts[id] ? (
+                <span
+                  className="navAlert"
+                  aria-label={`${navAlerts[id]} pendente(s)`}
+                >
+                  {navAlerts[id]}
+                </span>
+              ) : null}
             </button>
           ))}
         </nav>
@@ -281,6 +297,14 @@ function System({ session }: { session: Session }) {
             <h1>{nav.find((n) => n[0] === page)?.[1]}</h1>
           </div>
           <div className="headerActions">
+            {page === "dashboard" || page === "finance" ? (
+              <button
+                className="secondary reportButton"
+                onClick={() => window.print()}
+              >
+                <Printer /> Relatório / PDF
+              </button>
+            ) : null}
             {page === "sales" ? (
               <button
                 className="secondary marketplaceButton"
@@ -326,6 +350,7 @@ function System({ session }: { session: Session }) {
               d={data}
               set={setData}
               add={() => setModal({ type: "supply" })}
+              addProduct={() => setModal({ type: "product" })}
               edit={(id) => setModal({ type: "product", id })}
               notify={notify}
             />
@@ -379,6 +404,15 @@ function normalizeData(stored: any): D {
       ...products.map((p: P) => p.brand).filter(Boolean),
     ]),
   ) as string[];
+  const rawSales = (merged.sales || []) as V[];
+  const ids = rawSales.map((sale) => sale.id).sort((a, b) => a - b);
+  const needsSequentialIds = ids.some((id, index) => id !== index + 1);
+  const sequentialIds = new Map<number, number>();
+  if (needsSequentialIds) {
+    [...rawSales]
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+      .forEach((sale, index) => sequentialIds.set(sale.id, index + 1));
+  }
   return {
     ...merged,
     products,
@@ -387,8 +421,9 @@ function normalizeData(stored: any): D {
       attachCost: Boolean(s.attachCost),
     })),
     brands,
-    sales: (merged.sales || []).map((s: V) => ({
+    sales: rawSales.map((s: V) => ({
       ...s,
+      id: needsSequentialIds ? sequentialIds.get(s.id) || s.id : s.id,
       sent: Boolean(s.sent),
       status: s.status || "active",
       expenses: Number(s.expenses || 0),
@@ -632,10 +667,6 @@ function Dash({
 
 function MarketplaceSummary({ sales }: { sales: V[] }) {
   const gross = sales.reduce((sum, sale) => sum + sale.total, 0);
-  const fees = sales.reduce(
-    (sum, sale) => sum + Number(sale.marketplaceFee || 0),
-    0,
-  );
   const tiktok = sales
     .filter((sale) => sale.marketplace === "TikTok Shop")
     .reduce((sum, sale) => sum + sale.total, 0);
@@ -656,11 +687,6 @@ function MarketplaceSummary({ sales }: { sales: V[] }) {
       <div>
         <span>Shopee</span>
         <b>{brl(shopee)}</b>
-      </div>
-      <div>
-        <span>Taxas descontadas</span>
-        <b>{brl(fees)}</b>
-        <small>Líquido: {brl(gross - fees)}</small>
       </div>
     </div>
   );
@@ -714,7 +740,9 @@ function Sales({
   function cancel(s: V) {
     if (
       !set ||
-      !window.confirm(`Cancelar o pedido #${s.id}? O estoque será devolvido.`)
+      !window.confirm(
+        `Cancelar o pedido #${orderNo(s.id)}? O estoque será devolvido.`,
+      )
     )
       return;
     set((x: D) => ({
@@ -727,7 +755,10 @@ function Sales({
     notify?.("Venda cancelada e estoque devolvido.");
   }
   function remove(s: V) {
-    if (!set || !window.confirm(`Excluir definitivamente o pedido #${s.id}?`))
+    if (
+      !set ||
+      !window.confirm(`Excluir definitivamente o pedido #${orderNo(s.id)}?`)
+    )
       return;
     set((x: D) => ({
       ...x,
@@ -759,7 +790,7 @@ function Sales({
               className={s.status === "cancelled" ? "cancelled" : ""}
             >
               <td>
-                #{s.id}
+                #{orderNo(s.id)}
                 <small>{s.date}</small>
                 {s.status === "cancelled" ? <em>Cancelada</em> : null}
               </td>
@@ -881,8 +912,8 @@ function Prepare({
     }));
     notify(
       done
-        ? `Pedido #${s.id} movido para Finalizados.`
-        : `Pedido #${s.id} voltou para A preparar.`,
+        ? `Pedido #${orderNo(s.id)} movido para Finalizados.`
+        : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
     );
   }
   return (
@@ -955,8 +986,8 @@ function Shipping({
     }));
     notify(
       sent
-        ? `Pedido #${s.id} movido para Enviados.`
-        : `Pedido #${s.id} voltou para A enviar.`,
+        ? `Pedido #${orderNo(s.id)} movido para Enviados.`
+        : `Pedido #${orderNo(s.id)} voltou para A enviar.`,
     );
   }
   return (
@@ -995,7 +1026,7 @@ function Shipping({
                 <summary>
                   <span>
                     <b>
-                      Pedido #{s.id} · {c?.name}
+                      Pedido #{orderNo(s.id)} · {c?.name}
                     </b>
                     <small>
                       {s.items
@@ -1094,8 +1125,8 @@ function Receivables({
     }));
     notify(
       amount >= s.total - s.paid
-        ? `Pedido #${s.id} quitado.`
-        : `Pagamento de ${brl(amount)} lançado no pedido #${s.id}.`,
+        ? `Pedido #${orderNo(s.id)} quitado.`
+        : `Pagamento de ${brl(amount)} lançado no pedido #${orderNo(s.id)}.`,
     );
   }
   return (
@@ -1123,7 +1154,7 @@ function Receivables({
           <tbody>
             {list.map((s) => (
               <tr key={s.id}>
-                <td>#{s.id}</td>
+                <td>#{orderNo(s.id)}</td>
                 <td>{d.clients.find((c) => c.id === s.clientId)?.name}</td>
                 <td>{s.date}</td>
                 <td>
@@ -1168,12 +1199,14 @@ function Receivables({
 function Stock({
   d,
   add,
+  addProduct,
   edit,
   set,
   notify,
 }: {
   d: D;
   add: () => void;
+  addProduct: () => void;
   edit: (id: number) => void;
   set: any;
   notify: (s: string) => void;
@@ -1206,9 +1239,12 @@ function Stock({
           <h2>Estoque</h2>
           <p>Escolha qual tipo de estoque deseja consultar.</p>
         </div>
-        <button className="secondary" onClick={add}>
+        <button
+          className="primary stockAction"
+          onClick={view === "perfumes" ? addProduct : add}
+        >
           <Plus />
-          Cadastrar suprimento/insumo
+          {view === "perfumes" ? "Novo perfume" : "Novo suprimento/insumo"}
         </button>
       </div>
       <div className="segmented stockSwitch">
@@ -1310,6 +1346,7 @@ function Stock({
                 <h3>{s.name}</h3>
                 <p>
                   {s.stock} {s.unit}
+                  {s.cost ? ` · ${brl(s.cost)} por unidade` : ""}
                 </p>
                 <p>Custo na venda: {s.attachCost ? "Sim" : "Não"}</p>
                 <button
@@ -1417,6 +1454,10 @@ function Clients({
   set: any;
   notify: (s: string) => void;
 }) {
+  const [query, setQuery] = useState("");
+  const clients = d.clients.filter((client) =>
+    client.name.toLowerCase().includes(query.trim().toLowerCase()),
+  );
   function remove(id: number) {
     if (d.sales.some((s) => s.clientId === id)) {
       window.alert(
@@ -1429,33 +1470,47 @@ function Clients({
     notify("Cliente excluído.");
   }
   return (
-    <div className="clients">
-      {d.clients.map((c) => (
-        <div key={c.id}>
-          <i>
-            {c.name
-              .split(" ")
-              .map((x) => x[0])
-              .slice(0, 2)}
-          </i>
-          <h3>{c.name}</h3>
-          <p>
-            {c.phone} · CEP {c.cep}
-          </p>
-          <div className="clientActions">
-            <button onClick={() => history(c.id)}>Ver histórico</button>
-            <button onClick={() => edit(c.id)}>
-              <Pencil />
-              Editar
-            </button>
-            <button className="dangerText" onClick={() => remove(c.id)}>
-              <Trash2 />
-              Excluir
-            </button>
+    <>
+      <div className="clientSearch">
+        <Search />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Pesquisar cliente pelo nome"
+          aria-label="Pesquisar cliente pelo nome"
+        />
+      </div>
+      <div className="clients">
+        {clients.map((c) => (
+          <div key={c.id}>
+            <i>
+              {c.name
+                .split(" ")
+                .map((x) => x[0])
+                .slice(0, 2)}
+            </i>
+            <h3>{c.name}</h3>
+            <p>
+              {c.phone} · CEP {c.cep}
+            </p>
+            <div className="clientActions">
+              <button onClick={() => history(c.id)}>Ver histórico</button>
+              <button onClick={() => edit(c.id)}>
+                <Pencil />
+                Editar
+              </button>
+              <button className="dangerText" onClick={() => remove(c.id)}>
+                <Trash2 />
+                Excluir
+              </button>
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+      {!clients.length ? (
+        <p className="empty">Nenhum cliente encontrado.</p>
+      ) : null}
+    </>
   );
 }
 function PaymentBreakdown({ d }: { d: D }) {
@@ -1573,7 +1628,7 @@ function ProfitControl({
   const margin = revenue ? (profit / revenue) * 100 : 0;
   function setExpense(sale: V) {
     const raw = window.prompt(
-      `Despesas do pedido #${sale.id} (embalagem, frete, insumos etc.)`,
+      `Despesas do pedido #${orderNo(sale.id)} (embalagem, frete, insumos etc.)`,
       String(sale.expenses || 0).replace(".", ","),
     );
     if (raw === null) return;
@@ -1588,7 +1643,7 @@ function ProfitControl({
         item.id === sale.id ? { ...item, expenses: value } : item,
       ),
     }));
-    notify(`Despesa do pedido #${sale.id} atualizada.`);
+    notify(`Despesa do pedido #${orderNo(sale.id)} atualizada.`);
   }
   return (
     <div className="panel profitControl">
@@ -1629,7 +1684,7 @@ function ProfitControl({
                 profit: rowProfit,
               }) => (
                 <tr key={sale.id}>
-                  <td>#{sale.id}</td>
+                  <td>#{orderNo(sale.id)}</td>
                   <td>{brl(sale.total)}</td>
                   <td>{brl(cost)}</td>
                   <td>{brl(expense)}</td>
@@ -1697,6 +1752,7 @@ function Form({
       !existingProduct && d.brands.length === 0,
     ),
     [purchaseCalc, setPurchaseCalc] = useState({ qty: 0, ml: 0, total: 0 }),
+    [supplyCalc, setSupplyCalc] = useState({ qty: 0, total: 0 }),
     [installmentLines, setInstallmentLines] = useState(
       existingInstallments.length || 1,
     ),
@@ -1765,6 +1821,7 @@ function Form({
               unit: String(f.unit),
               min: 0,
               attachCost: String(f.attachCost) === "Sim",
+              cost: Number(f.total) / (Number(f.stock) || 1),
             },
           ],
         };
@@ -1919,7 +1976,9 @@ function Form({
             })).filter((p) => p.date || p.amount)
           : [];
       const sale: V = {
-        id: existingSale?.id || Math.floor(1000 + Math.random() * 8999),
+        id:
+          existingSale?.id ||
+          x.sales.reduce((max, current) => Math.max(max, current.id), 0) + 1,
         date: String(f.date),
         clientId,
         items,
@@ -2031,8 +2090,12 @@ function Form({
               <>
                 <div className="row three">
                   <Field n="newName" l="Nome" />
-                  <Field n="newPhone" l="WhatsApp" />
-                  <Field n="newCpf" l="CPF" />
+                  <Field
+                    n="newPhone"
+                    l="WhatsApp (opcional)"
+                    required={false}
+                  />
+                  <Field n="newCpf" l="CPF (opcional)" required={false} />
                 </div>
                 <div className="row">
                   <Field
@@ -2125,7 +2188,7 @@ function Form({
             />
             <Choices
               label="Forma de pagamento"
-              a={["Pix", "Cartão de Crédito", "Dinheiro", "À prazo", "Outro"]}
+              a={["Pix", "Cartão de Crédito", "À prazo", "Outro"]}
               v={pay}
               set={setPay}
             />
@@ -2206,9 +2269,34 @@ function Form({
         {type === "supply" ? (
           <>
             <Field n="name" l="Suprimento/insumo" />
-            <div className="row">
-              <Field n="stock" l="Quantidade" t="number" />
+            <div className="row three">
+              <Field
+                n="stock"
+                l="Quantidade"
+                t="number"
+                onChange={(e) =>
+                  setSupplyCalc((current) => ({
+                    ...current,
+                    qty: Number(e.target.value),
+                  }))
+                }
+              />
               <Field n="unit" l="Unidade" p="un., caixas..." />
+              <Field
+                n="total"
+                l="Valor pago"
+                t="number"
+                onChange={(e) =>
+                  setSupplyCalc((current) => ({
+                    ...current,
+                    total: Number(e.target.value),
+                  }))
+                }
+              />
+            </div>
+            <div className="calculated">
+              Preço pago por unidade
+              <b>{brl(supplyCalc.total / (supplyCalc.qty || 1))}</b>
             </div>
             <Choices
               name="attachCost"
