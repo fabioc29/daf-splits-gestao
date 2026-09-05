@@ -39,3 +39,21 @@ button:active{transform:translateY(1px)}
 .authMessage{background:#fff3cf;border:1px solid #e5ca76;border-radius:9px;padding:10px;font-size:12px!important}
 .sync{margin:12px 9px 0;display:flex;align-items:center;gap:7px;font-size:10px;color:#9ba7b8}.sync svg{width:14px}.sync.saved{color:#52c39b}.sync.error{color:#e66b70}
 aside>footer>button{border:0;background:none;color:#aaa;padding:4px;margin-left:auto}aside>footer>button svg{width:18px}
+
+.checkButton{width:38px!important;height:38px!important;min-width:38px;border:2px solid #637086!important;border-radius:11px!important;background:#0d1725!important;color:#081a16!important;display:grid;place-items:center;padding:0;box-shadow:inset 0 0 0 3px #172234}
+.done>.checkButton,.prepare .done>.checkButton{background:#45a789!important;border-color:#76cbb0!important;box-shadow:0 0 0 3px #45a78925}
+.checkButton svg{width:22px;height:22px;stroke-width:3}
+.shippingItem{display:flex;align-items:flex-start;gap:14px;border:1px solid var(--line);border-radius:13px;background:#111a28;padding:15px}
+.shippingItem>details{flex:1;padding:0!important;border:0!important;background:transparent!important}
+.shippingItem.done{opacity:.72}
+.toast{position:fixed;right:24px;bottom:24px;z-index:80;display:flex;align-items:center;gap:10px;background:#effaf5;color:#116149;border:1px solid #83cfb4;border-radius:13px;padding:14px 18px;font-weight:800;box-shadow:0 16px 45px #0007;animation:toastIn .22s ease-out}
+.toast svg{width:20px}
+@keyframes toastIn{from{transform:translateY(12px);opacity:0}}
+.tableActions{display:flex;gap:7px;flex-wrap:wrap}.iconButton.danger{color:#ff8e91;border-color:#6e373f}.dangerText{color:#ef777c!important}
+.cancelled{opacity:.58}.cancelled td{text-decoration:line-through}.cancelled em{display:block;color:#ef777c;text-decoration:none;font-size:10px;font-weight:800;margin-top:5px}
+.stockFilters{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px}.stockFilters label{position:relative}.stockFilters svg{position:absolute;left:12px;top:12px;width:18px;color:var(--muted)}.stockFilters input,.stockFilters select{width:100%;height:44px;border:1px solid var(--line);border-radius:10px;background:#111a28;color:white;padding:0 12px}.stockFilters input{padding-left:40px}.stockFilters select{height:44px;border:1px solid var(--line);border-radius:10px;background:#111a28;color:white;padding:0 12px}
+.calculated{background:#e9e2cf;color:#677284;border-radius:10px;padding:13px;font-size:12px;display:flex;justify-content:space-between}.calculated b{color:#172233;font-size:15px}
+.content>.cards+.financeChart{margin-top:0}
+@media(max-width:720px){.stockFilters{grid-template-columns:1fr}.shippingItem{gap:9px}.toast{left:18px;right:18px;bottom:18px}}
+.categoryLegend .designer i b{background:#2f80ed}
+.prepare>div.done{opacity:1}
