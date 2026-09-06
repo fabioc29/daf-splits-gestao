@@ -63,6 +63,7 @@ type V = {
   id: number;
   date: string;
   clientId: number;
+  customerName?: string;
   items: L[];
   total: number;
   paid: number;
@@ -115,6 +116,10 @@ const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const today = () => new Date().toISOString().slice(0, 10);
 const orderNo = (id: number) => String(id).padStart(5, "0");
+const saleCustomer = (sale: V, data: D) =>
+  sale.customerName ||
+  data.clients.find((client) => client.id === sale.clientId)?.name ||
+  "Cliente não informado";
 const LOGO =
   "data:image/webp;base64,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";
 const nav = [
@@ -225,7 +230,9 @@ function System({ session }: { session: Session }) {
     [data.sales],
   );
   const navAlerts: Record<string, number> = {
-    receivables: data.sales.filter(s => s.status !== "cancelled" && !isNoCost(s) && s.paid < s.total).length,
+    receivables: data.sales.filter(
+      (s) => s.status !== "cancelled" && !isNoCost(s) && s.paid < s.total,
+    ).length,
     prepare: data.sales.filter(
       (sale) => sale.status !== "cancelled" && !sale.prepared,
     ).length,
@@ -304,7 +311,13 @@ function System({ session }: { session: Session }) {
             {page === "dashboard" || page === "finance" ? (
               <button
                 className="secondary reportButton"
-                onClick={() => captureReport().catch(() => notify("Não foi possível capturar o painel. Tente novamente."))}
+                onClick={() =>
+                  captureReport().catch(() =>
+                    notify(
+                      "Não foi possível capturar o painel. Tente novamente.",
+                    ),
+                  )
+                }
               >
                 <Printer /> Capturar relatório (PNG)
               </button>
@@ -360,7 +373,12 @@ function System({ session }: { session: Session }) {
               notify={notify}
             />
           ) : page === "purchases" ? (
-            <Purchases d={data} set={setData} notify={notify} edit={(id) => setModal({type:"purchaseEdit",id})} />
+            <Purchases
+              d={data}
+              set={setData}
+              notify={notify}
+              edit={(id) => setModal({ type: "purchaseEdit", id })}
+            />
           ) : page === "clients" ? (
             <Clients
               d={data}
@@ -374,7 +392,14 @@ function System({ session }: { session: Session }) {
           )}
         </section>
       </main>
-      {modal?.type === "supplyEdit" || modal?.type === "purchaseEdit" ? <InventoryEdit modal={modal} d={data} set={setData} close={() => setModal(null)} /> : modal ? (
+      {modal?.type === "supplyEdit" || modal?.type === "purchaseEdit" ? (
+        <InventoryEdit
+          modal={modal}
+          d={data}
+          set={setData}
+          close={() => setModal(null)}
+        />
+      ) : modal ? (
         <Form
           modal={modal}
           d={data}
@@ -411,7 +436,8 @@ function normalizeData(stored: any): D {
   ) as string[];
   const rawSales = (merged.sales || []) as V[];
   const ids = rawSales.map((sale) => sale.id).sort((a, b) => a - b);
-  const needsSequentialIds = !merged.orderSequenceVersion && ids.some((id, index) => id !== index + 1);
+  const needsSequentialIds =
+    !merged.orderSequenceVersion && ids.some((id, index) => id !== index + 1);
   const sequentialIds = new Map<number, number>();
   if (needsSequentialIds) {
     [...rawSales]
@@ -427,33 +453,44 @@ function normalizeData(stored: any): D {
       attachCost: Boolean(s.attachCost),
     })),
     brands,
-    sales: rawSales.map((s: V) => ({
-      ...s,
-      id: needsSequentialIds ? sequentialIds.get(s.id) || s.id : s.id,
-      sent: Boolean(s.sent),
-      status: s.status || "active",
-      expenses: Number(s.expenses || 0),
-      channel: s.channel || "direct",
-      marketplaceFee: Number(s.marketplaceFee || 0),
-      items: (s.items || []).map((item: L) => ({
-        ...item,
-        isApc: Boolean(item.isApc),
-        unitCost:
-          item.unitCost ??
-          products.find((p: P) => p.id === item.productId)?.cost ??
-          0,
-      })),
-      installments: s.installments?.length
-        ? s.installments
-        : s.dueDate
-          ? [
-              {
-                date: s.dueDate,
-                amount: s.installment || Math.max(0, s.total - s.paid),
-              },
-            ]
-          : [],
-    })),
+    sales: rawSales.map((s: V) => {
+      const marketplaceSale = s.channel === "marketplace";
+      const linkedCustomer = merged.clients.find(
+        (client: C) => client.id === s.clientId,
+      );
+      return {
+        ...s,
+        id: needsSequentialIds ? sequentialIds.get(s.id) || s.id : s.id,
+        clientId: marketplaceSale ? 0 : s.clientId,
+        customerName:
+          s.customerName ||
+          (marketplaceSale ? linkedCustomer?.name : undefined),
+        payment: marketplaceSale ? "À prazo" : s.payment,
+        sent: Boolean(s.sent),
+        status: s.status || "active",
+        expenses: Number(s.expenses || 0),
+        channel: s.channel || "direct",
+        marketplaceFee: Number(s.marketplaceFee || 0),
+        items: (s.items || []).map((item: L) => ({
+          ...item,
+          isApc: Boolean(item.isApc),
+          unitCost:
+            item.unitCost ??
+            products.find((p: P) => p.id === item.productId)?.cost ??
+            0,
+        })),
+        installments: s.installments?.length
+          ? s.installments
+          : s.dueDate
+            ? [
+                {
+                  date: s.dueDate,
+                  amount: s.installment || Math.max(0, s.total - s.paid),
+                },
+              ]
+            : [],
+      };
+    }),
   };
 }
 function readLocal(): D {
@@ -801,7 +838,7 @@ function Sales({
                 <small>{s.date}</small>
                 {s.status === "cancelled" ? <em>Cancelada</em> : null}
               </td>
-              <td>{d.clients.find((c) => c.id === s.clientId)?.name}</td>
+              <td>{saleCustomer(s, d)}</td>
               <td>
                 {s.items.map((x, i) => (
                   <small key={i}>
@@ -828,7 +865,10 @@ function Sales({
                   <small>Taxa: {brl(s.marketplaceFee)}</small>
                 ) : null}
               </td>
-              <td>{brl(s.total)}<small>Insumos: {brl(packaging(s, d.supplies).total)}</small></td>
+              <td>
+                {brl(s.total)}
+                <small>Insumos: {brl(packaging(s, d.supplies).total)}</small>
+              </td>
               <td>{saleBadge(s)}</td>
               {edit ? (
                 <td>
@@ -952,7 +992,7 @@ function Prepare({
               {s.prepared ? <Check /> : null}
             </button>
             <span>
-              <b>{d.clients.find((c) => c.id === s.clientId)?.name}</b>
+              <b>{saleCustomer(s, d)}</b>
               {s.items.map((x, i) => (
                 <small key={i}>
                   {d.products.find((p) => p.id === x.productId)?.name} — {x.ml}{" "}
@@ -1033,7 +1073,7 @@ function Shipping({
                 <summary>
                   <span>
                     <b>
-                      Pedido #{orderNo(s.id)} · {c?.name}
+                      Pedido #{orderNo(s.id)} · {saleCustomer(s, d)}
                     </b>
                     <small>
                       {s.items
@@ -1047,7 +1087,7 @@ function Shipping({
                   <strong>Informações de entrega</strong>
                 </summary>
                 <div className="delivery">
-                  <FieldView label="Nome" value={c?.name} />
+                  <FieldView label="Nome" value={saleCustomer(s, d)} />
                   <FieldView label="CPF" value={c?.cpf} />
                   <FieldView label="Telefone" value={c?.phone} />
                   <label>
@@ -1162,7 +1202,7 @@ function Receivables({
             {list.map((s) => (
               <tr key={s.id}>
                 <td>#{orderNo(s.id)}</td>
-                <td>{d.clients.find((c) => c.id === s.clientId)?.name}</td>
+                <td>{saleCustomer(s, d)}</td>
                 <td>{s.date}</td>
                 <td>
                   <b>{brl(Math.max(0, s.total - s.paid))}</b>
@@ -1271,7 +1311,15 @@ function Stock({
           Suprimentos / insumos
         </button>
       </div>
-      <div className="segmented"><button className={view === "out" ? "active" : ""} onClick={() => setView("out")}>Perfumes fora de estoque ({d.products.filter(p => p.stock <= 0).length})</button></div>
+      <div className="segmented">
+        <button
+          className={view === "out" ? "active" : ""}
+          onClick={() => setView("out")}
+        >
+          Perfumes fora de estoque (
+          {d.products.filter((p) => p.stock <= 0).length})
+        </button>
+      </div>
       {view !== "supplies" ? (
         <>
           <Cards
@@ -1342,12 +1390,7 @@ function Stock({
         </>
       ) : (
         <>
-          <Cards
-            v={[
-              [String(d.supplies.length), "Itens"],
-
-            ]}
-          />
+          <Cards v={[[String(d.supplies.length), "Itens"]]} />
           <div className="products">
             {d.supplies.map((s) => (
               <div key={s.id}>
@@ -1357,7 +1400,10 @@ function Stock({
                   {s.cost ? ` · ${brl(s.cost)} por unidade` : ""}
                 </p>
                 <p>Custo na venda: {s.attachCost ? "Sim" : "Não"}</p>
-                <button className="iconButton" onClick={() => editSupply(s.id)}><Pencil/>Editar</button>
+                <button className="iconButton" onClick={() => editSupply(s.id)}>
+                  <Pencil />
+                  Editar
+                </button>
                 <button
                   className="iconButton danger"
                   onClick={() => removeSupply(s.id)}
@@ -1435,7 +1481,11 @@ function Purchases({
                   {p.mlPerBottle ? ` × ${p.mlPerBottle} ml` : ""}
                 </td>
                 <td>{brl(p.total)}</td>
-                <td><button className="iconButton" onClick={() => edit(p.id)}><Pencil/>Editar</button>
+                <td>
+                  <button className="iconButton" onClick={() => edit(p.id)}>
+                    <Pencil />
+                    Editar
+                  </button>
                   <button
                     className="iconButton danger"
                     onClick={() => remove(p.id)}
@@ -1614,9 +1664,7 @@ function ProfitControl({
   set: any;
   notify: (message: string) => void;
 }) {
-  const sales = d.sales.filter(
-    (sale) => sale.status !== "cancelled",
-  );
+  const sales = d.sales.filter((sale) => sale.status !== "cancelled");
   const rows = sales.map((sale) => {
     const perfumeCost = sale.items.reduce(
       (sum, item) =>
@@ -1628,11 +1676,16 @@ function ProfitControl({
       0,
     );
     const expenses =
-      Number(sale.expenses || 0) + Number(sale.marketplaceFee || 0) + packaging(sale, d.supplies).total;
+      Number(sale.expenses || 0) +
+      Number(sale.marketplaceFee || 0) +
+      packaging(sale, d.supplies).total;
     const profit = (isNoCost(sale) ? 0 : sale.total) - perfumeCost - expenses;
     return { sale, perfumeCost, expenses, profit };
   });
-  const revenue = rows.reduce((sum, row) => sum + (isNoCost(row.sale) ? 0 : row.sale.total), 0);
+  const revenue = rows.reduce(
+    (sum, row) => sum + (isNoCost(row.sale) ? 0 : row.sale.total),
+    0,
+  );
   const perfumeCost = rows.reduce((sum, row) => sum + row.perfumeCost, 0);
   const expenses = rows.reduce((sum, row) => sum + row.expenses, 0);
   const profit = revenue - perfumeCost - expenses;
@@ -1698,7 +1751,20 @@ function ProfitControl({
                   <td>#{orderNo(sale.id)}</td>
                   <td>{brl(sale.total)}</td>
                   <td>{brl(cost)}</td>
-                  <td>{brl(expense)}<details><summary>Ver insumos</summary>{packaging(sale,d.supplies).lines.map(line => <small key={line.name}>{line.qty} × {line.name}: {line.missing ? "Custo não cadastrado" : brl(line.total)}</small>)}</details></td>
+                  <td>
+                    {brl(expense)}
+                    <details>
+                      <summary>Ver insumos</summary>
+                      {packaging(sale, d.supplies).lines.map((line) => (
+                        <small key={line.name}>
+                          {line.qty} × {line.name}:{" "}
+                          {line.missing
+                            ? "Custo não cadastrado"
+                            : brl(line.total)}
+                        </small>
+                      ))}
+                    </details>
+                  </td>
                   <td>{brl(rowProfit)}</td>
                   <td>
                     <button
@@ -1718,47 +1784,227 @@ function ProfitControl({
   );
 }
 
-function PackagingSummary({d}: {d: D}) {
-  const active = d.sales.filter(s => s.status !== "cancelled");
-  const cost = active.reduce((n,s) => n + packaging(s,d.supplies).total, 0);
-  const missing = [...new Set(active.flatMap(s => packaging(s,d.supplies).missing))];
-  const revenue = active.reduce((n,s) => n + (isNoCost(s) ? 0 : s.total), 0);
-  const otherCosts = active.reduce((n,s) => n + (s.expenses || 0) + (s.marketplaceFee || 0) + s.items.reduce((sum,i) => sum + i.ml * (i.unitCost ?? d.products.find(p => p.id === i.productId)?.cost ?? 0),0),0);
-  return <div className="panel"><h2>Custos e resultado</h2><Cards v={[[brl(cost),"Insumos dos pedidos"],[brl(revenue-cost-otherCosts),"Lucro estimado"],[(revenue ? (revenue-cost-otherCosts)/revenue*100 : 0).toFixed(1)+"%","Margem estimada"]]}/><p>Insumos calculados pelos preços unitários atuais, incluindo vendas antigas. Não altera retroativamente o saldo físico dos suprimentos.</p>{missing.length ? <p>Custos incompletos: confira {missing.join(", ")}.</p> : null}</div>;
+function PackagingSummary({ d }: { d: D }) {
+  const active = d.sales.filter((s) => s.status !== "cancelled");
+  const cost = active.reduce((n, s) => n + packaging(s, d.supplies).total, 0);
+  const missing = [
+    ...new Set(active.flatMap((s) => packaging(s, d.supplies).missing)),
+  ];
+  const revenue = active.reduce((n, s) => n + (isNoCost(s) ? 0 : s.total), 0);
+  const otherCosts = active.reduce(
+    (n, s) =>
+      n +
+      (s.expenses || 0) +
+      (s.marketplaceFee || 0) +
+      s.items.reduce(
+        (sum, i) =>
+          sum +
+          i.ml *
+            (i.unitCost ??
+              d.products.find((p) => p.id === i.productId)?.cost ??
+              0),
+        0,
+      ),
+    0,
+  );
+  return (
+    <div className="panel">
+      <h2>Custos e resultado</h2>
+      <Cards
+        v={[
+          [brl(cost), "Insumos dos pedidos"],
+          [brl(revenue - cost - otherCosts), "Lucro estimado"],
+          [
+            (revenue
+              ? ((revenue - cost - otherCosts) / revenue) * 100
+              : 0
+            ).toFixed(1) + "%",
+            "Margem estimada",
+          ],
+        ]}
+      />
+      <p>
+        Insumos calculados pelos preços unitários atuais, incluindo vendas
+        antigas. Não altera retroativamente o saldo físico dos suprimentos.
+      </p>
+      {missing.length ? (
+        <p>Custos incompletos: confira {missing.join(", ")}.</p>
+      ) : null}
+    </div>
+  );
 }
 
-function InventoryEdit({modal,d,set,close}: {modal: NonNullable<Modal>; d:D; set:any; close:()=>void}) {
-  const supply = modal.type === "supplyEdit" ? d.supplies.find(s=>s.id===modal.id) : undefined;
-  const purchase = modal.type === "purchaseEdit" ? d.purchases.find(p=>p.id===modal.id) : undefined;
-  const [error,setError] = useState("");
-  function save(e:any) {
+function InventoryEdit({
+  modal,
+  d,
+  set,
+  close,
+}: {
+  modal: NonNullable<Modal>;
+  d: D;
+  set: any;
+  close: () => void;
+}) {
+  const supply =
+    modal.type === "supplyEdit"
+      ? d.supplies.find((s) => s.id === modal.id)
+      : undefined;
+  const purchase =
+    modal.type === "purchaseEdit"
+      ? d.purchases.find((p) => p.id === modal.id)
+      : undefined;
+  const [error, setError] = useState("");
+  function save(e: any) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
     if (supply) {
-      const stock=Number(f.stock), cost=Number(f.cost);
-      if(stock<0 || cost<0 || !Number.isFinite(stock+cost)) {setError("Informe valores válidos.");return;}
-      set((x:D)=>({...x,supplies:x.supplies.map(s=>s.id===supply.id?{...s,name:String(f.name),unit:String(f.unit),stock,cost,attachCost:f.attachCost==="Sim"}:s)}));
-    } else if(purchase) {
-      const qty=Number(f.qty), total=Number(f.total), ml=purchase.type==="Perfume"?Number(f.ml):undefined;
-      if(qty<=0 || total<0 || (ml!==undefined && ml<=0) || !Number.isFinite(qty+total+(ml||0))) {setError("Quantidade e volume devem ser positivos.");return;}
-      const product=d.products.find(p=>`${p.brand} ${p.name}`.trim().toLowerCase()===purchase.description.trim().toLowerCase());
-      const item=d.supplies.find(s=>s.name.trim().toLowerCase()===purchase.description.trim().toLowerCase());
-      const target=purchase.type==="Perfume"?product:item;
-      if(!target){setError("O item original não foi encontrado no estoque. Restaure o nome original antes de editar esta compra.");return;}
-      const before=purchase.qty*(purchase.mlPerBottle||1), after=qty*(ml||1), delta=after-before;
-      if(target.stock+delta<0){setError("A correção deixaria o estoque negativo. Confira as vendas e a quantidade da compra.");return;}
-      const newCost=total/after;
-      set((x:D)=>({...x,
-        purchases:x.purchases.map(p=>p.id===purchase.id?{...p,date:String(f.date),supplier:String(f.supplier),qty,total,mlPerBottle:ml}:p),
-        products:x.products.map(p=>product && p.id===product.id?{...p,stock:p.stock+delta,cost:newCost}:p),
-        supplies:x.supplies.map(s=>item && purchase.type!=="Perfume" && s.id===item.id?{...s,stock:s.stock+delta,cost:newCost}:s)
+      const stock = Number(f.stock),
+        cost = Number(f.cost);
+      if (stock < 0 || cost < 0 || !Number.isFinite(stock + cost)) {
+        setError("Informe valores válidos.");
+        return;
+      }
+      set((x: D) => ({
+        ...x,
+        supplies: x.supplies.map((s) =>
+          s.id === supply.id
+            ? {
+                ...s,
+                name: String(f.name),
+                unit: String(f.unit),
+                stock,
+                cost,
+                attachCost: f.attachCost === "Sim",
+              }
+            : s,
+        ),
+      }));
+    } else if (purchase) {
+      const qty = Number(f.qty),
+        total = Number(f.total),
+        ml = purchase.type === "Perfume" ? Number(f.ml) : undefined;
+      if (
+        qty <= 0 ||
+        total < 0 ||
+        (ml !== undefined && ml <= 0) ||
+        !Number.isFinite(qty + total + (ml || 0))
+      ) {
+        setError("Quantidade e volume devem ser positivos.");
+        return;
+      }
+      const product = d.products.find(
+        (p) =>
+          `${p.brand} ${p.name}`.trim().toLowerCase() ===
+          purchase.description.trim().toLowerCase(),
+      );
+      const item = d.supplies.find(
+        (s) =>
+          s.name.trim().toLowerCase() ===
+          purchase.description.trim().toLowerCase(),
+      );
+      const target = purchase.type === "Perfume" ? product : item;
+      if (!target) {
+        setError(
+          "O item original não foi encontrado no estoque. Restaure o nome original antes de editar esta compra.",
+        );
+        return;
+      }
+      const before = purchase.qty * (purchase.mlPerBottle || 1),
+        after = qty * (ml || 1),
+        delta = after - before;
+      if (target.stock + delta < 0) {
+        setError(
+          "A correção deixaria o estoque negativo. Confira as vendas e a quantidade da compra.",
+        );
+        return;
+      }
+      const newCost = total / after;
+      set((x: D) => ({
+        ...x,
+        purchases: x.purchases.map((p) =>
+          p.id === purchase.id
+            ? {
+                ...p,
+                date: String(f.date),
+                supplier: String(f.supplier),
+                qty,
+                total,
+                mlPerBottle: ml,
+              }
+            : p,
+        ),
+        products: x.products.map((p) =>
+          product && p.id === product.id
+            ? { ...p, stock: p.stock + delta, cost: newCost }
+            : p,
+        ),
+        supplies: x.supplies.map((s) =>
+          item && purchase.type !== "Perfume" && s.id === item.id
+            ? { ...s, stock: s.stock + delta, cost: newCost }
+            : s,
+        ),
       }));
     }
     close();
   }
-  return <div className="overlay"><form onSubmit={save}><header><h2>{supply?"Editar suprimento":"Editar compra"}</h2><button type="button" onClick={close}><X/></button></header>
-    {supply ? <><Field n="name" l="Nome" v={supply.name}/><Field n="unit" l="Unidade" v={supply.unit}/><Field n="stock" l="Estoque atual" t="number" v={supply.stock}/><Field n="cost" l="Preço por unidade (R$)" t="number" v={supply.cost||0}/><Choices name="attachCost" label="Atrelar custo na venda?" a={["Sim","Não"]} v={supply.attachCost?"Sim":"Não"}/></> : purchase ? <><p>{purchase.description}</p><Field n="date" l="Data" t="date" v={purchase.date}/><Field n="supplier" l="Fornecedor" v={purchase.supplier}/><Field n="qty" l="Quantidade" t="number" v={purchase.qty}/>{purchase.type==="Perfume"?<Field n="ml" l="ml por frasco" t="number" v={purchase.mlPerBottle}/>:null}<Field n="total" l="Total pago" t="number" v={purchase.total}/><p>A quantidade altera o estoque pela diferença. O preço unitário será atualizado para o valor desta compra corrigida.</p></>:null}
-    {error?<p role="alert">{error}</p>:null}<footer><button type="button" onClick={close}>Cancelar</button><button className="primary">Salvar alterações</button></footer></form></div>;
+  return (
+    <div className="overlay">
+      <form onSubmit={save}>
+        <header>
+          <h2>{supply ? "Editar suprimento" : "Editar compra"}</h2>
+          <button type="button" onClick={close}>
+            <X />
+          </button>
+        </header>
+        {supply ? (
+          <>
+            <Field n="name" l="Nome" v={supply.name} />
+            <Field n="unit" l="Unidade" v={supply.unit} />
+            <Field n="stock" l="Estoque atual" t="number" v={supply.stock} />
+            <Field
+              n="cost"
+              l="Preço por unidade (R$)"
+              t="number"
+              v={supply.cost || 0}
+            />
+            <Choices
+              name="attachCost"
+              label="Atrelar custo na venda?"
+              a={["Sim", "Não"]}
+              v={supply.attachCost ? "Sim" : "Não"}
+            />
+          </>
+        ) : purchase ? (
+          <>
+            <p>{purchase.description}</p>
+            <Field n="date" l="Data" t="date" v={purchase.date} />
+            <Field n="supplier" l="Fornecedor" v={purchase.supplier} />
+            <Field n="qty" l="Quantidade" t="number" v={purchase.qty} />
+            {purchase.type === "Perfume" ? (
+              <Field
+                n="ml"
+                l="ml por frasco"
+                t="number"
+                v={purchase.mlPerBottle}
+              />
+            ) : null}
+            <Field n="total" l="Total pago" t="number" v={purchase.total} />
+            <p>
+              A quantidade altera o estoque pela diferença. O preço unitário
+              será atualizado para o valor desta compra corrigida.
+            </p>
+          </>
+        ) : null}
+        {error ? <p role="alert">{error}</p> : null}
+        <footer>
+          <button type="button" onClick={close}>
+            Cancelar
+          </button>
+          <button className="primary">Salvar alterações</button>
+        </footer>
+      </form>
+    </div>
+  );
 }
 
 function Form({
@@ -1791,7 +2037,9 @@ function Form({
           },
         ]
       : [];
-  const [pay, setPay] = useState(existingSale?.payment || "Pix"),
+  const [pay, setPay] = useState(
+      isMarketplace ? "À prazo" : existingSale?.payment || "Pix",
+    ),
     [lines, setLines] = useState(existingSale?.items.length || 1),
     [apcLines, setApcLines] = useState<boolean[]>(
       existingSale?.items.map((item) => Boolean(item.isApc)) || [],
@@ -1992,9 +2240,9 @@ function Form({
             : [...x.suppliers, supplier],
         };
       }
-      let clientId = Number(f.clientId),
+      let clientId = isMarketplace ? 0 : Number(f.clientId),
         clients = x.clients;
-      if (newClient) {
+      if (newClient && !isMarketplace) {
         clientId = Date.now();
         const address = String(f.newAddress || "");
         clients = [
@@ -2035,6 +2283,9 @@ function Form({
           x.sales.reduce((max, current) => Math.max(max, current.id), 0) + 1,
         date: String(f.date),
         clientId,
+        customerName: isMarketplace
+          ? String(f.marketplaceCustomer || "").trim()
+          : undefined,
         items,
         total: Number(f.total),
         paid: Number(f.paid),
@@ -2127,46 +2378,57 @@ function Form({
                 />
                 <Field
                   n="marketplaceFee"
-                  l="Taxas descontadas da venda"
+                  l="Taxa descontada da venda (R$)"
                   t="number"
                   v={existingSale?.marketplaceFee || 0}
                 />
               </div>
             ) : null}
-            <label className="check">
-              <input
-                type="checkbox"
-                onChange={(e) => setNewClient(e.target.checked)}
-              />
-              Cadastrar cliente nesta venda
-            </label>
-            {newClient ? (
-              <>
-                <div className="row three">
-                  <Field n="newName" l="Nome" />
-                  <Field
-                    n="newPhone"
-                    l="WhatsApp (opcional)"
-                    required={false}
-                  />
-                  <Field n="newCpf" l="CPF (opcional)" required={false} />
-                </div>
-                <div className="row">
-                  <Field
-                    n="newAddress"
-                    l="Endereço (opcional)"
-                    required={false}
-                  />
-                  <Field n="newCep" l="CEP (opcional)" required={false} />
-                </div>
-              </>
-            ) : (
-              <Select
-                n="clientId"
+            {isMarketplace ? (
+              <Field
+                n="marketplaceCustomer"
                 l="Cliente"
-                value={existingSale?.clientId}
-                o={d.clients.map((c) => [c.id, c.name])}
+                p="Escreva o nome da pessoa"
+                v={existingSale ? saleCustomer(existingSale, d) : ""}
               />
+            ) : (
+              <>
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    onChange={(e) => setNewClient(e.target.checked)}
+                  />
+                  Cadastrar cliente nesta venda
+                </label>
+                {newClient ? (
+                  <>
+                    <div className="row three">
+                      <Field n="newName" l="Nome" />
+                      <Field
+                        n="newPhone"
+                        l="WhatsApp (opcional)"
+                        required={false}
+                      />
+                      <Field n="newCpf" l="CPF (opcional)" required={false} />
+                    </div>
+                    <div className="row">
+                      <Field
+                        n="newAddress"
+                        l="Endereço (opcional)"
+                        required={false}
+                      />
+                      <Field n="newCep" l="CEP (opcional)" required={false} />
+                    </div>
+                  </>
+                ) : (
+                  <Select
+                    n="clientId"
+                    l="Cliente"
+                    value={existingSale?.clientId}
+                    o={d.clients.map((c) => [c.id, c.name])}
+                  />
+                )}
+              </>
             )}{" "}
             {Array.from({ length: lines }, (_, i) => (
               <div className="row item" key={i}>
@@ -2240,12 +2502,19 @@ function Form({
                 setSaleAmounts((v) => ({ ...v, paid: Number(e.target.value) }))
               }
             />
-            <Choices
-              label="Forma de pagamento"
-              a={["Pix", "Cartão de Crédito", "À prazo", "Outro"]}
-              v={pay}
-              set={setPay}
-            />
+            {isMarketplace ? (
+              <div className="fixedPayment">
+                <span>Forma de pagamento</span>
+                <b>À prazo</b>
+              </div>
+            ) : (
+              <Choices
+                label="Forma de pagamento"
+                a={["Pix", "Cartão de Crédito", "À prazo", "Outro"]}
+                v={pay}
+                set={setPay}
+              />
+            )}
             {pay === "À prazo" ? (
               <>
                 <div className="installmentSummary">
