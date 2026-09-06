@@ -1355,6 +1355,35 @@ aside > footer > button svg {
 .stockFilters input {
   padding-left: 40px;
 }
+.purchaseFilters {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 10px;
+  margin-top: 18px;
+}
+.purchaseFilters label {
+  position: relative;
+}
+.purchaseFilters svg {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  width: 18px;
+  color: var(--muted);
+}
+.purchaseFilters input,
+.purchaseFilters select {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #111a28;
+  color: white;
+  padding: 0 12px;
+}
+.purchaseFilters input {
+  padding-left: 40px;
+}
 .stockFilters select {
   height: 44px;
   border: 1px solid var(--line);
@@ -1376,12 +1405,93 @@ aside > footer > button svg {
   color: #172233;
   font-size: 15px;
 }
+.saleSupplies {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #d7c58e;
+  border-radius: 13px;
+  padding: 15px;
+  background: #fffaf0;
+}
+.saleSuppliesHead {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.saleSuppliesHead b,
+.saleSuppliesHead small {
+  display: block;
+}
+.saleSuppliesHead small {
+  margin-top: 4px;
+  color: #647185;
+}
+.saleSuppliesHead button {
+  border: 0;
+  background: transparent;
+  color: #9a6c00;
+  font-weight: 800;
+}
+.saleSupplyList {
+  display: grid;
+  gap: 7px;
+}
+.saleSupplyList > div {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) 120px 110px;
+  align-items: end;
+  gap: 10px;
+  border: 1px solid #d9dde4;
+  border-radius: 10px;
+  padding: 10px;
+  background: white;
+  opacity: 0.62;
+}
+.saleSupplyList > div.selected {
+  opacity: 1;
+  border-color: #d7c58e;
+}
+.saleSupplyList > div > label:first-child {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 700;
+}
+.saleSupplyList > div > label:first-child input {
+  width: 18px;
+  height: 18px;
+}
+.saleSupplyList input[type="number"] {
+  height: 36px;
+}
+.saleSupplyList > div > small {
+  padding-bottom: 10px;
+  text-align: right;
+  color: #647185;
+}
+.saleSupplies > strong {
+  text-align: right;
+  color: #172233;
+}
 .content > .cards + .financeChart {
   margin-top: 0;
 }
 @media (max-width: 720px) {
-  .stockFilters {
+  .stockFilters,
+  .purchaseFilters {
     grid-template-columns: 1fr;
+  }
+  .saleSuppliesHead {
+    display: grid;
+  }
+  .saleSupplyList > div {
+    grid-template-columns: 1fr 90px;
+  }
+  .saleSupplyList > div > small {
+    grid-column: 1 / -1;
+    padding: 0;
+    text-align: left;
   }
   .shippingItem {
     gap: 9px;
