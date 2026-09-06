@@ -659,6 +659,22 @@ nav button:hover .navAlert {
   border-radius: 12px;
   background: #fffaf0;
 }
+.fixedPayment {
+  display: grid;
+  gap: 7px;
+}
+.fixedPayment span {
+  color: #647185;
+  font-size: 11px;
+  font-weight: 800;
+}
+.fixedPayment b {
+  width: fit-content;
+  border-radius: 9px;
+  padding: 10px 14px;
+  background: #172233;
+  color: white;
+}
 .marketplaceBadge {
   display: inline-flex;
   border-radius: 999px;
