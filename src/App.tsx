@@ -24,7 +24,7 @@ import {
   ReceiptText,
   Printer,
 } from "lucide-react";
-import { packaging } from "./packaging";
+import { automaticPackaging, packaging, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
 
@@ -76,6 +76,7 @@ type V = {
   sent?: boolean;
   status?: string;
   expenses?: number;
+  supplyOverrides?: Record<string, number>;
   channel?: "direct" | "marketplace";
   marketplace?: "TikTok Shop" | "Shopee";
   marketplaceFee?: number;
@@ -469,6 +470,12 @@ function normalizeData(stored: any): D {
         sent: Boolean(s.sent),
         status: s.status || "active",
         expenses: Number(s.expenses || 0),
+        supplyOverrides: Object.fromEntries(
+          Object.entries(s.supplyOverrides || {}).map(([name, qty]) => [
+            name,
+            Math.max(0, Number(qty) || 0),
+          ]),
+        ),
         channel: s.channel || "direct",
         marketplaceFee: Number(s.marketplaceFee || 0),
         items: (s.items || []).map((item: L) => ({
@@ -578,9 +585,6 @@ function Dash({
   const activeSales = d.sales.filter(
     (s) => s.status !== "cancelled" && !isNoCost(s),
   );
-  const marketplaceSales = activeSales.filter(
-    (sale) => sale.channel === "marketplace",
-  );
   const now = new Date(),
     days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
     day = now.getDate();
@@ -622,8 +626,6 @@ function Dash({
           [brl(totals.gross / (activeSales.length || 1)), "Ticket médio"],
         ]}
       />
-      <MarketplaceSummary sales={marketplaceSales} />
-      <PackagingSummary d={d} />
       <div className="grid">
         <div className="dashboardMain">
           <div className="panel chart">
@@ -1311,15 +1313,17 @@ function Stock({
           Suprimentos / insumos
         </button>
       </div>
-      <div className="segmented">
-        <button
-          className={view === "out" ? "active" : ""}
-          onClick={() => setView("out")}
-        >
-          Perfumes fora de estoque (
-          {d.products.filter((p) => p.stock <= 0).length})
-        </button>
-      </div>
+      {view !== "supplies" ? (
+        <div className="segmented">
+          <button
+            className={view === "out" ? "active" : ""}
+            onClick={() => setView("out")}
+          >
+            Perfumes fora de estoque (
+            {d.products.filter((p) => p.stock <= 0).length})
+          </button>
+        </div>
+      ) : null}
       {view !== "supplies" ? (
         <>
           <Cards
@@ -1390,7 +1394,6 @@ function Stock({
         </>
       ) : (
         <>
-          <Cards v={[[String(d.supplies.length), "Itens"]]} />
           <div className="products">
             {d.supplies.map((s) => (
               <div key={s.id}>
@@ -1431,9 +1434,23 @@ function Purchases({
   set: any;
   notify: (s: string) => void;
 }) {
+  const [supplierFilter, setSupplierFilter] = useState("Todos");
+  const [purchaseQuery, setPurchaseQuery] = useState("");
   const month = today().slice(0, 7),
     monthly = d.purchases.filter((p) => p.date.startsWith(month)),
     spent = monthly.reduce((n, p) => n + p.total, 0);
+  const suppliers = Array.from(
+    new Set(d.purchases.map((purchase) => purchase.supplier).filter(Boolean)),
+  ).sort();
+  const filteredPurchases = d.purchases.filter((purchase) => {
+    const matchesSupplier =
+      supplierFilter === "Todos" || purchase.supplier === supplierFilter;
+    const searchable =
+      `${purchase.date} ${purchase.supplier} ${purchase.type} ${purchase.description}`.toLowerCase();
+    return (
+      matchesSupplier && searchable.includes(purchaseQuery.trim().toLowerCase())
+    );
+  });
   function remove(id: number) {
     if (
       !window.confirm(
@@ -1457,6 +1474,27 @@ function Purchases({
       />
       <div className="panel table">
         <h2>Histórico de compras</h2>
+        <div className="purchaseFilters">
+          <label>
+            <Search />
+            <input
+              value={purchaseQuery}
+              onChange={(event) => setPurchaseQuery(event.target.value)}
+              placeholder="Pesquisar compra, item ou fornecedor"
+              aria-label="Pesquisar no histórico de compras"
+            />
+          </label>
+          <select
+            value={supplierFilter}
+            onChange={(event) => setSupplierFilter(event.target.value)}
+            aria-label="Filtrar compras por fornecedor"
+          >
+            <option>Todos</option>
+            {suppliers.map((supplier) => (
+              <option key={supplier}>{supplier}</option>
+            ))}
+          </select>
+        </div>
         <table>
           <thead>
             <tr>
@@ -1470,7 +1508,7 @@ function Purchases({
             </tr>
           </thead>
           <tbody>
-            {d.purchases.map((p) => (
+            {filteredPurchases.map((p) => (
               <tr key={p.id}>
                 <td>{p.date}</td>
                 <td>{p.supplier}</td>
@@ -1498,6 +1536,9 @@ function Purchases({
             ))}
           </tbody>
         </table>
+        {!filteredPurchases.length ? (
+          <p className="empty">Nenhuma compra encontrada.</p>
+        ) : null}
       </div>
     </>
   );
@@ -1601,10 +1642,7 @@ function PaymentBreakdown({ d }: { d: D }) {
     <div className="panel financeChart">
       <div>
         <h2>Vendas por forma de pagamento</h2>
-        <p>
-          Distribuição do faturamento entre Pix, cartão, dinheiro e vendas a
-          prazo.
-        </p>
+        <p>Distribuição do faturamento entre Pix, cartão e vendas a prazo.</p>
         <div className="paymentDonut" style={{ background: gradient }}>
           <span>
             <small>Total vendido</small>
@@ -1644,9 +1682,9 @@ function Finance({
     <>
       <Cards
         v={[
+          [brl(totals.gross), "Faturamento"],
           [brl(totals.paid), "Recebido"],
           [brl(totals.gross - totals.paid), "A receber"],
-          [brl(totals.gross), "Faturamento"],
         ]}
       />
       <PaymentBreakdown d={d} />
@@ -1771,7 +1809,7 @@ function ProfitControl({
                       className="iconButton"
                       onClick={() => setExpense(sale)}
                     >
-                      <Pencil /> Lançar despesa
+                      <Pencil /> Editar despesa
                     </button>
                   </td>
                 </tr>
@@ -2062,6 +2100,12 @@ function Form({
       total: existingSale?.total || 0,
       paid: existingSale?.paid || 0,
     });
+  const [saleVolumes, setSaleVolumes] = useState<number[]>(
+    existingSale?.items.map((item) => item.ml) || [],
+  );
+  const [supplyOverrides, setSupplyOverrides] = useState<
+    Record<string, number>
+  >(existingSale?.supplyOverrides || {});
   function submit(e: any) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
@@ -2298,6 +2342,7 @@ function Form({
         sent: existingSale?.sent || false,
         status: existingSale?.status || "active",
         expenses: existingSale?.expenses || 0,
+        supplyOverrides,
         channel: isMarketplace ? "marketplace" : "direct",
         marketplace: isMarketplace
           ? (String(f.marketplace) as "TikTok Shop" | "Shopee")
@@ -2447,6 +2492,13 @@ function Form({
                     l="Volume (ml)"
                     t="number"
                     v={existingSale?.items[i]?.ml}
+                    onChange={(event) =>
+                      setSaleVolumes((current) => {
+                        const next = [...current];
+                        next[i] = Number(event.target.value);
+                        return next;
+                      })
+                    }
                   />
                   <button
                     type="button"
@@ -2473,6 +2525,15 @@ function Form({
               <Plus />
               Adicionar outro perfume
             </button>
+            <SaleSupplyPicker
+              items={Array.from({ length: lines }, (_, index) => ({
+                ml: saleVolumes[index] || 0,
+                isApc: Boolean(apcLines[index]),
+              }))}
+              supplies={d.supplies}
+              overrides={supplyOverrides}
+              setOverrides={setSupplyOverrides}
+            />
             <div className="row">
               <Field
                 n="date"
@@ -2792,6 +2853,83 @@ function Form({
           <button className="primary">Salvar registro</button>
         </footer>
       </form>
+    </div>
+  );
+}
+
+function SaleSupplyPicker({
+  items,
+  supplies,
+  overrides,
+  setOverrides,
+}: {
+  items: { ml: number; isApc?: boolean }[];
+  supplies: S[];
+  overrides: Record<string, number>;
+  setOverrides: (value: Record<string, number>) => void;
+}) {
+  const automatic = automaticPackaging({ items });
+  const effectiveSale = { items, supplyOverrides: overrides };
+  const effectiveLines = packaging(effectiveSale, supplies).lines;
+  const total = effectiveLines.reduce((sum, line) => sum + line.total, 0);
+
+  function update(name: string, qty: number) {
+    setOverrides({ ...overrides, [name]: Math.max(0, qty) });
+  }
+
+  return (
+    <div className="saleSupplies">
+      <div className="saleSuppliesHead">
+        <div>
+          <b>Insumos/suprimentos contabilizados</b>
+          <small>
+            Quantidades pré-calculadas pelo pedido. Você pode alterar
+            manualmente.
+          </small>
+        </div>
+        {Object.keys(overrides).length ? (
+          <button type="button" onClick={() => setOverrides({})}>
+            Restaurar automático
+          </button>
+        ) : null}
+      </div>
+      <div className="saleSupplyList">
+        {PACKAGING_RULES.map((name) => {
+          const qty = overrides[name] ?? automatic[name];
+          const line = effectiveLines.find((item) => item.name === name);
+          return (
+            <div key={name} className={qty > 0 ? "selected" : ""}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={qty > 0}
+                  onChange={(event) =>
+                    update(
+                      name,
+                      event.target.checked ? automatic[name] || 1 : 0,
+                    )
+                  }
+                />
+                <span>{name}</span>
+              </label>
+              <label>
+                <span>Quantidade</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={qty}
+                  onChange={(event) => update(name, Number(event.target.value))}
+                />
+              </label>
+              <small>
+                {line?.missing ? "Custo não cadastrado" : brl(line?.total || 0)}
+              </small>
+            </div>
+          );
+        })}
+      </div>
+      <strong>Total dos insumos: {brl(total)}</strong>
     </div>
   );
 }
