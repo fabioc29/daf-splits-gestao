@@ -1,11 +1,11 @@
 import {createClient} from "@supabase/supabase-js";
 
-const url=import.meta.env.VITE_SUPABASE_URL||"https://aazstrkrizfprewctmwy.supabase.co";
-const publishableKey=import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY||"sb_publishable_GuBnhpDwOqCF9uhGDHxNcQ_Yzg8KKDq";
+const url=import.meta.env.VITE_SUPABASE_URL||"";
+const publishableKey=import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY||"";
 
 export const isSupabaseConfigured=Boolean(url&&publishableKey);
 export const supabase=createClient(
-  url,
-  publishableKey,
+  url||"https://invalid.supabase.co",
+  publishableKey||"missing-publishable-key",
   {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}
 );
