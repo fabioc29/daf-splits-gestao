@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
   LayoutDashboard,
@@ -166,7 +166,6 @@ function System({ session }: { session: Session }) {
   const [data, setData] = useState<D>(() => readLocal()),
     [ready, setReady] = useState(false),
     [sync, setSync] = useState<"loading" | "saved" | "error">("loading");
-  const saveTimer = useRef<number | undefined>(undefined);
   const [page, setPage] = useState("dashboard"),
     [modal, setModal] = useState<Modal>(null),
     [history, setHistory] = useState(0),
@@ -210,15 +209,17 @@ function System({ session }: { session: Session }) {
   useEffect(() => {
     localStorage.setItem("daf-v4", JSON.stringify(data));
     if (!ready) return;
+    let active = true;
     setSync("loading");
-    window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(async () => {
+    void (async () => {
       const { error } = await supabase
         .from("app_state")
         .upsert({ user_id: session.user.id, data });
-      setSync(error ? "error" : "saved");
-    }, 450);
-    return () => window.clearTimeout(saveTimer.current);
+      if (active) setSync(error ? "error" : "saved");
+    })();
+    return () => {
+      active = false;
+    };
   }, [data, ready, session.user.id]);
   const totals = useMemo(
     () =>
@@ -591,7 +592,7 @@ function Dash({
   const daily = Array.from({ length: days }, (_, i) =>
     activeSales
       .filter((s) => new Date(s.date + "T12:00").getDate() === i + 1)
-      .reduce((n, s) => n + s.total, 0),
+      .reduce((n, s) => n + Math.max(0, s.paid), 0),
   );
   const avg = daily.slice(0, day).reduce((n, v) => n + v, 0) / Math.max(1, day),
     max = Math.max(avg, ...daily, 1);
@@ -605,7 +606,7 @@ function Dash({
             d.products.find((p) => p.id === x.productId)?.category === category,
         )
         .reduce((n, x) => n + x.ml, 0);
-      return sum + (s.total * categoryMl) / totalMl;
+      return sum + (Math.max(0, s.paid) * categoryMl) / totalMl;
     }, 0),
   }));
   const catTotal = categories.reduce((n, x) => n + x.value, 0),
@@ -620,10 +621,16 @@ function Dash({
     <>
       <Cards
         v={[
-          [brl(totals.gross), "Faturamento mensal"],
-          [brl(totals.paid), "Total recebido"],
+          [brl(totals.paid), "Faturamento mensal"],
+          [brl(totals.gross), "Total vendido"],
           [brl(totals.gross - totals.paid), "A receber"],
-          [brl(totals.gross / (activeSales.length || 1)), "Ticket médio"],
+          [
+            brl(
+              totals.paid /
+                (activeSales.filter((sale) => sale.paid > 0).length || 1),
+            ),
+            "Ticket médio recebido",
+          ],
         ]}
       />
       <div className="grid">
@@ -712,13 +719,13 @@ function Dash({
 }
 
 function MarketplaceSummary({ sales }: { sales: V[] }) {
-  const gross = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const gross = sales.reduce((sum, sale) => sum + Math.max(0, sale.paid), 0);
   const tiktok = sales
     .filter((sale) => sale.marketplace === "TikTok Shop")
-    .reduce((sum, sale) => sum + sale.total, 0);
+    .reduce((sum, sale) => sum + Math.max(0, sale.paid), 0);
   const shopee = sales
     .filter((sale) => sale.marketplace === "Shopee")
-    .reduce((sum, sale) => sum + sale.total, 0);
+    .reduce((sum, sale) => sum + Math.max(0, sale.paid), 0);
   return (
     <div className="panel marketplaceSummary">
       <div>
@@ -1624,8 +1631,13 @@ function PaymentBreakdown({ d }: { d: D }) {
   ].map((x) => ({
     ...x,
     value: d.sales
-      .filter((s) => s.status !== "cancelled" && s.payment === x.name)
-      .reduce((n, s) => n + s.total, 0),
+      .filter(
+        (s) =>
+          s.status !== "cancelled" &&
+          !isNoCost(s) &&
+          s.payment === x.name,
+      )
+      .reduce((n, s) => n + Math.max(0, s.paid), 0),
   }));
   const total = payments.reduce((n, x) => n + x.value, 0);
   let cursor = 0;
@@ -1642,10 +1654,10 @@ function PaymentBreakdown({ d }: { d: D }) {
     <div className="panel financeChart">
       <div>
         <h2>Vendas por forma de pagamento</h2>
-        <p>Distribuição do faturamento entre Pix, cartão e vendas a prazo.</p>
+        <p>Distribuição do faturamento já recebido entre Pix, cartão e vendas a prazo.</p>
         <div className="paymentDonut" style={{ background: gradient }}>
           <span>
-            <small>Total vendido</small>
+            <small>Total recebido</small>
             <b>{brl(total)}</b>
           </span>
         </div>
@@ -1682,8 +1694,8 @@ function Finance({
     <>
       <Cards
         v={[
-          [brl(totals.gross), "Faturamento"],
-          [brl(totals.paid), "Recebido"],
+          [brl(totals.paid), "Faturamento"],
+          [brl(totals.gross), "Total vendido"],
           [brl(totals.gross - totals.paid), "A receber"],
         ]}
       />
