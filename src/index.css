@@ -14,6 +14,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: Inter, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 .shell {
   display: flex;
@@ -452,6 +454,59 @@ fieldset input:checked + span {
   background: var(--gold);
   border: 0;
 }
+.paymentOverlay form {
+  width: min(620px, 100%);
+}
+.paymentContext {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.paymentContext > span,
+.paymentWithoutSchedule {
+  border: 1px solid #d8dde4;
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px;
+}
+.paymentContext small,
+.paymentContext b {
+  display: block;
+}
+.paymentContext small {
+  color: #647185;
+  margin-bottom: 4px;
+}
+.installmentChoices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.installmentChoices label span {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 10px;
+  min-height: 72px;
+}
+.installmentChoices label span b {
+  grid-column: 1;
+}
+.installmentChoices label span small {
+  grid-column: 1;
+  color: #647185;
+}
+.installmentChoices label span strong {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+}
+.installmentChoices input:checked + span {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.formError {
+  color: #c43d49;
+  font-weight: 700;
+}
 .check {
   display: flex !important;
   align-items: center;
@@ -479,45 +534,11 @@ fieldset input:checked + span {
 }
 @media (max-width: 720px) {
   aside {
-    transform: none;
-    inset: auto 0 0 0;
-    width: 100%;
-    height: 78px;
-    padding: 8px;
-    z-index: 60;
-    overflow-x: auto;
-    overflow-y: hidden;
-    border-top: 1px solid #2a2a2a;
-  }
-  aside > img,
-  aside > .sync,
-  aside > footer {
-    display: none;
-  }
-  aside nav {
-    display: flex;
-    gap: 6px;
-    width: max-content;
-    min-width: 100%;
-  }
-  aside nav button {
-    min-width: 76px;
-    min-height: 60px;
-    padding: 6px 9px;
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
-    font-size: 9px;
-    text-align: center;
-  }
-  aside nav button .navAlert {
-    position: absolute;
-    margin: -35px 0 0 42px;
+    transform: translateX(-100%);
   }
   main {
     margin: 0;
     width: 100%;
-    padding-bottom: 92px;
   }
   main > header {
     padding: 14px 18px;
@@ -575,6 +596,23 @@ fieldset input:checked + span {
   display: grid;
   gap: 18px;
 }
+.profitControlHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.profitControlHeader h2,
+.profitControlHeader p {
+  margin-top: 0;
+}
+.profitControlHeader p {
+  margin-bottom: 0;
+}
+.profitControlDetails {
+  display: grid;
+  gap: 18px;
+}
 .profitControl > .cards {
   grid-template-columns: repeat(4, 1fr);
 }
@@ -600,6 +638,10 @@ fieldset input:checked + span {
   }
 }
 @media (max-width: 520px) {
+  .profitControlHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .profitControl > .cards {
     grid-template-columns: 1fr;
   }
@@ -708,6 +750,15 @@ nav button:hover .navAlert {
   padding: 10px 14px;
   background: #172233;
   color: white;
+}
+.oldSaleNotice {
+  border: 1px solid #dfc46f;
+  border-radius: 11px;
+  background: #fffaf0;
+  color: #725816;
+  padding: 12px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 .marketplaceBadge {
   display: inline-flex;
@@ -1044,8 +1095,30 @@ button:active {
 }
 .addressRow {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr 0.65fr 1fr 1fr;
   gap: 12px;
+}
+.cepStatus {
+  color: #647185;
+  line-height: 1.4;
+}
+.shippingCostBox {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dfc46f;
+  border-radius: 12px;
+  background: #fffaf0;
+}
+.shippingCostBox > label:not(.check) {
+  max-width: 260px;
+}
+.shippingCostBox > small {
+  color: #647185;
+  line-height: 1.4;
+}
+.mobileProductSearch {
+  display: none;
 }
 @media (max-width: 720px) {
   .delivery,
@@ -1418,6 +1491,117 @@ aside > footer > button svg {
 .purchaseFilters input {
   padding-left: 40px;
 }
+.salesFilterArea {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+.salesSearchRow {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(250px, 390px) auto;
+  align-items: end;
+  gap: 10px;
+}
+.salesSearchRow label {
+  position: relative;
+}
+.salesSearchRow label svg {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  width: 18px;
+  color: var(--muted);
+}
+.salesSearchRow input,
+.salesDateFilters input,
+.salesDateFilters select {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #111a28;
+  color: white;
+  padding: 0 12px;
+}
+.salesSearchRow input {
+  padding-left: 40px;
+}
+.salesSearchRow button,
+.salesDateFilters button {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #111a28;
+  color: white;
+  padding: 0 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.salesSearchRow button.active {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+.salesSearchRow button svg {
+  width: 18px;
+}
+.salesDateFilters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr)) auto;
+  align-items: end;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #111a28;
+}
+.salesDateFilters label {
+  display: grid;
+  gap: 6px;
+}
+.salesDateFilters label span,
+.salesMonthFilter > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+.salesMonthFilter {
+  display: grid;
+  gap: 6px;
+}
+.salesMonthPicker {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 42px minmax(150px, 1fr) 42px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #111a28;
+  overflow: hidden;
+}
+.salesMonthPicker b {
+  text-align: center;
+  text-transform: capitalize;
+  color: white;
+}
+.salesMonthPicker button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: var(--gold);
+}
+.salesMonthPicker button svg {
+  width: 20px;
+  height: 20px;
+}
+.salesDateFilters button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .stockFilters select {
   height: 44px;
   border: 1px solid var(--line);
@@ -1499,6 +1683,16 @@ aside > footer > button svg {
 .saleSupplyList input[type="number"] {
   height: 36px;
 }
+.numberWithoutControls {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.numberWithoutControls::-webkit-inner-spin-button,
+.numberWithoutControls::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
 .saleSupplyList > div > small {
   padding-bottom: 10px;
   text-align: right;
@@ -1511,9 +1705,62 @@ aside > footer > button svg {
 .content > .cards + .financeChart {
   margin-top: 0;
 }
+.financeChartsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.financeChartsGrid .financeChart {
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+.financeChartsGrid .paymentDonut {
+  width: 150px;
+  height: 150px;
+  margin: 18px auto 0;
+}
+.financeChartsGrid .paymentDonut:before {
+  inset: 30px;
+}
+.financeCategoryChart > p {
+  color: var(--muted);
+  font-size: 12px;
+}
+.financeCategoryChart .categoryDonut {
+  width: 150px;
+  height: 150px;
+}
+.financeCategoryChart .categoryDonut:after {
+  inset: 31px;
+}
+.removeSaleItem {
+  grid-column: 1 / -1;
+  justify-self: end;
+  border: 0;
+  background: transparent;
+  color: #bd2836;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  font-weight: 800;
+}
+.removeSaleItem svg {
+  width: 15px;
+  height: 15px;
+}
 @media (max-width: 720px) {
+  .financeChartsGrid {
+    grid-template-columns: 1fr;
+  }
+  .paymentContext,
+  .installmentChoices {
+    grid-template-columns: 1fr;
+  }
   .stockFilters,
-  .purchaseFilters {
+  .purchaseFilters,
+  .salesSearchRow,
+  .salesDateFilters {
     grid-template-columns: 1fr;
   }
   .saleSuppliesHead {
@@ -1567,6 +1814,26 @@ aside {
   background: #fff1d8;
   color: #a56400;
 }
+.saleBadge.marketplace,
+.receivableMarketplace {
+  background: #eee7ff;
+  color: #7043c7;
+}
+.receivableMarketplace {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 800;
+}
+.receivableTabs {
+  margin: 0;
+}
+.receivableTabs button.marketplace.active {
+  background: #8356d8;
+  border-color: #8356d8;
+  color: white;
+}
 .saleBadge.semcusto {
   background: #e4edff;
   color: #1757b8;
@@ -1593,6 +1860,24 @@ aside {
   background: #eee;
   color: #526071;
 }
+.cancelInstallment {
+  grid-column: 1 / -1;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #dca3a6;
+  border-radius: 9px;
+  background: #fff;
+  color: #bd2836;
+  padding: 8px 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.cancelInstallment svg {
+  width: 16px;
+  height: 16px;
+}
 .dashboardMain .financeChart {
   grid-template-columns: 1fr;
 }
@@ -1610,5 +1895,162 @@ aside {
   .dashboardMain .paymentDonut {
     width: 170px;
     height: 170px;
+  }
+}
+
+/* Navegação e densidade específicas para celular */
+@media (max-width: 720px) {
+  aside {
+    inset: auto 0 0;
+    width: 100%;
+    height: 72px;
+    padding: 6px 7px;
+    transform: none;
+    z-index: 25;
+    border-top: 1px solid #2b3749;
+  }
+  aside > img,
+  aside > footer,
+  aside > .sync {
+    display: none;
+  }
+  aside nav {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  aside nav::-webkit-scrollbar {
+    display: none;
+  }
+  nav button {
+    position: relative;
+    flex: 0 0 76px;
+    min-height: 58px;
+    padding: 4px 6px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    text-align: center;
+    font-size: 9px;
+    line-height: 1.1;
+  }
+  nav svg {
+    width: 18px;
+    height: 18px;
+  }
+  .navAlert {
+    position: absolute;
+    top: 3px;
+    right: 5px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    font-size: 8px;
+  }
+  main {
+    padding-bottom: 76px;
+  }
+  main > header {
+    height: auto;
+    min-height: 74px;
+    padding: 11px 13px;
+    align-items: flex-start;
+    gap: 9px;
+    flex-wrap: wrap;
+  }
+  main > header h1 {
+    font-size: 21px;
+  }
+  .headerActions {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+  .headerActions button {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .headerActions.salesHeaderActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: visible;
+  }
+  .headerActions.salesHeaderActions button {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+  }
+  .content {
+    padding: 12px;
+    gap: 12px;
+  }
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .cards > div,
+  .panel,
+  .products > div,
+  .clients > div {
+    padding: 14px;
+    border-radius: 13px;
+  }
+  .cards b {
+    font-size: 18px;
+  }
+  .panel h2 {
+    font-size: 18px;
+  }
+  .products,
+  .clients {
+    grid-template-columns: 1fr;
+  }
+  .overlay {
+    padding: 0;
+    place-items: stretch;
+  }
+  .overlay form,
+  .history {
+    width: 100%;
+    min-height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+    padding: 16px;
+    gap: 12px;
+  }
+  .overlay h2 {
+    font-size: 23px;
+  }
+  .overlay input,
+  .overlay select {
+    width: 100%;
+    min-width: 0;
+    font-size: 16px;
+  }
+  .desktopProductSearch {
+    display: none;
+  }
+  .mobileProductSearch {
+    display: block;
+  }
+  .overlay form > footer {
+    position: sticky;
+    bottom: -16px;
+    background: #f8f6f0;
+    padding: 12px 0 16px;
+  }
+  .volumeApc {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  table {
+    margin-top: 10px;
+  }
+}
+
+@media (max-width: 380px) {
+  .cards {
+    grid-template-columns: 1fr;
   }
 }
