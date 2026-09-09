@@ -2132,3 +2132,29 @@ aside {
 .preparationStatus select option {
   text-align: center;
 }
+
+/* Supplier history and queued supply lots */
+.queuedSupplyLot {
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+}
+.supplierHistory {
+  width: min(920px, calc(100vw - 32px));
+}
+.supplierHistoryTable {
+  overflow-x: auto;
+  margin-top: 18px;
+}
+.supplierHistoryTable table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.supplierHistoryTable th,
+.supplierHistoryTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
