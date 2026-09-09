@@ -1400,7 +1400,7 @@ function Prepare({
                     }
                   >
                     <option value="preparing">A preparar</option>
-                    <option value="accumulating">Vai acumular mais decantes</option>
+                    <option value="accumulating">Vai acumular</option>
                     <option value="waiting">Vai esperar</option>
                   </select>
                 </label>
