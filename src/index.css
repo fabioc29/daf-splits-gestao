@@ -1933,8 +1933,29 @@ input[type="number"]::-webkit-outer-spin-button {
   opacity: 1;
 }
 
-aside {
-  overflow-y: auto;
+@media (min-width: 721px) {
+  aside {
+    overflow: hidden;
+    padding: 18px 16px;
+  }
+  aside > img {
+    width: 158px;
+    height: 66px;
+    margin: 0 10px 16px;
+  }
+  aside nav {
+    gap: 3px;
+  }
+  aside nav button {
+    min-height: 43px;
+    padding: 0 12px;
+  }
+  .sync {
+    margin-top: 8px;
+  }
+  aside > footer {
+    padding-top: 12px;
+  }
 }
 .dashboardMain {
   display: grid;

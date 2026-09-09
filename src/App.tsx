@@ -632,12 +632,34 @@ function normalizeData(stored: any): D {
       ...products.map((p: P) => p.brand).filter(Boolean),
     ]),
   ) as string[];
-  const suppliers = Array.from(
-    new Set([
-      ...(merged.suppliers || []),
-      ...(merged.purchases || []).map((purchase: B) => purchase.supplier).filter(Boolean),
-    ]),
-  ) as string[];
+  const cleanSupplierName = (value: unknown) =>
+    String(value || "")
+      .trim()
+      .replace(/\s+/g, " ");
+  const supplierKey = (value: unknown) =>
+    cleanSupplierName(value)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  const supplierByKey = new Map<string, string>();
+  [
+    ...(merged.suppliers || []),
+    ...(merged.purchases || []).map((purchase: B) => purchase.supplier),
+  ]
+    .map(cleanSupplierName)
+    .filter(Boolean)
+    .forEach((name) => {
+      const key = supplierKey(name);
+      if (!supplierByKey.has(key)) supplierByKey.set(key, name);
+    });
+  const suppliers = [...supplierByKey.values()];
+  const purchases = (merged.purchases || []).map((purchase: B) => {
+    const cleaned = cleanSupplierName(purchase.supplier);
+    return {
+      ...purchase,
+      supplier: supplierByKey.get(supplierKey(cleaned)) || cleaned,
+    };
+  });
   const rawSales = (merged.sales || []) as V[];
   const ids = rawSales.map((sale) => sale.id).sort((a, b) => a - b);
   const needsSequentialIds =
@@ -723,6 +745,7 @@ function normalizeData(stored: any): D {
       "TikTok Shop": Number(merged.marketplacePayoutDays?.["TikTok Shop"] || 9),
       Shopee: Number(merged.marketplacePayoutDays?.Shopee || 7),
     },
+    purchases,
     supplies: normalizedSupplies,
     suppliers,
     brands,
