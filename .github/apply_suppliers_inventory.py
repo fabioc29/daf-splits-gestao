@@ -715,12 +715,12 @@ replace_once(
     "case insensitive supplier dedupe",
 )
 replace_once(
-    """    : type === "client"
+    '''    : type === "client"
       ? existingClient
         ? "Editar cliente"
         : "Cadastrar cliente"
-      : type === "product"""",
-    """    : type === "client"
+      : type === "product"''',
+    '''    : type === "client"
       ? existingClient
         ? "Editar cliente"
         : "Cadastrar cliente"
@@ -728,7 +728,7 @@ replace_once(
         ? existingSupplier !== undefined
           ? "Editar fornecedor"
           : "Cadastrar fornecedor"
-      : type === "product"""",
+      : type === "product"''',
     "supplier form title",
 )
 replace_once(
