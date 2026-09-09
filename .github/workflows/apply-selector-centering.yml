@@ -1,0 +1,47 @@
+name: Apply selector centering
+
+on:
+  push:
+    branches:
+      - codex/ajustar-seletor-pedidos
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip-selector-centering]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply centering and font adjustment
+        shell: bash
+        run: |
+          echo 'CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAoKYXBwX3BhdGggPSBQYXRoKCJzcmMvQXBwLnRzeCIpCmNzc19wYXRoID0gUGF0aCgic3JjL2luZGV4LmNzcyIpCgphcHAgPSBhcHBfcGF0aC5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKY3NzID0gY3NzX3BhdGgucmVhZF90ZXh0KGVuY29kaW5nPSJ1dGYtOCIpCgpvbGRfc2VsZWN0ID0gJycnICAgICAgICAgICAgICAgICAgPHNlbGVjdAogICAgICAgICAgICAgICAgICAgIGFyaWEtbGFiZWw9e2BTaXR1YcOnw6NvIGRvIHBlZGlkbyAjJHtvcmRlck5vKHMuaWQpfWB9CiAgICAgICAgICAgICAgICAgICAgdmFsdWU9e2dldFByZXBhcmF0aW9uU3RhdHVzKHMpfQonJycKbmV3X3NlbGVjdCA9ICcnJyAgICAgICAgICAgICAgICAgIDxzZWxlY3QKICAgICAgICAgICAgICAgICAgICBjbGFzc05hbWU9ewogICAgICAgICAgICAgICAgICAgICAgZ2V0UHJlcGFyYXRpb25TdGF0dXMocykgPT09ICJhY2N1bXVsYXRpbmciCiAgICAgICAgICAgICAgICAgICAgICAgID8gImxvbmdWYWx1ZSIKICAgICAgICAgICAgICAgICAgICAgICAgOiB1bmRlZmluZWQKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgYXJpYS1sYWJlbD17YFNpdHVhw6fDo28gZG8gcGVkaWRvICMke29yZGVyTm8ocy5pZCl9YH0KICAgICAgICAgICAgICAgICAgICB2YWx1ZT17Z2V0UHJlcGFyYXRpb25TdGF0dXMocyl9CicnJwppZiBvbGRfc2VsZWN0IG5vdCBpbiBhcHA6CiAgICByYWlzZSBTeXN0ZW1FeGl0KCJTZWxlY3QgYW5jaG9yIG5vdCBmb3VuZCIpCmFwcCA9IGFwcC5yZXBsYWNlKG9sZF9zZWxlY3QsIG5ld19zZWxlY3QsIDEpCgpvbGRfY3NzID0gJycnLyogQ29tcGFjdCBwcmVwYXJhdGlvbiBzdGF0dXMgc2VsZWN0b3IgKi8KLnByZXBhcmF0aW9uU3RhdHVzIHsKICBkaXNwbGF5OiBmbGV4OwogIGp1c3RpZnktY29udGVudDogZmxleC1lbmQ7CiAgYWxpZ24taXRlbXM6IGNlbnRlcjsKICB3aWR0aDogYXV0bzsKICBnYXA6IDA7Cn0KLnByZXBhcmF0aW9uU3RhdHVzIHNlbGVjdCB7CiAgd2lkdGg6IDIwNXB4OwogIG1heC13aWR0aDogMTAwJTsKICBtaW4taGVpZ2h0OiAzNHB4OwogIGJvcmRlci1yYWRpdXM6IDhweDsKICBwYWRkaW5nOiA1cHggMjdweCA1cHggOXB4OwogIGZvbnQtc2l6ZTogMTFweDsKICBsaW5lLWhlaWdodDogMS4xNTsKfQonJycKbmV3X2NzcyA9ICcnJy8qIENvbXBhY3QgcHJlcGFyYXRpb24gc3RhdHVzIHNlbGVjdG9yICovCi5wcmVwYXJhdGlvblN0YXR1cyB7CiAgZGlzcGxheTogZmxleDsKICBqdXN0aWZ5LWNvbnRlbnQ6IGNlbnRlcjsKICBhbGlnbi1pdGVtczogY2VudGVyOwogIHdpZHRoOiAxMDAlOwogIGdhcDogMDsKfQoucHJlcGFyYXRpb25TdGF0dXMgc2VsZWN0IHsKICB3aWR0aDogMjA1cHg7CiAgbWF4LXdpZHRoOiAxMDAlOwogIG1pbi1oZWlnaHQ6IDM0cHg7CiAgYm9yZGVyLXJhZGl1czogOHB4OwogIHBhZGRpbmc6IDVweCAyNnB4OwogIGZvbnQtc2l6ZTogMTFweDsKICBsaW5lLWhlaWdodDogMS4xNTsKICB0ZXh0LWFsaWduOiBjZW50ZXI7CiAgdGV4dC1hbGlnbi1sYXN0OiBjZW50ZXI7Cn0KLnByZXBhcmF0aW9uU3RhdHVzIHNlbGVjdC5sb25nVmFsdWUgewogIGZvbnQtc2l6ZTogOXB4Owp9Ci5wcmVwYXJhdGlvblN0YXR1cyBzZWxlY3Qgb3B0aW9uIHsKICB0ZXh0LWFsaWduOiBjZW50ZXI7Cn0KJycnCmlmIG9sZF9jc3Mgbm90IGluIGNzczoKICAgIHJhaXNlIFN5c3RlbUV4aXQoIkNvbXBhY3Qgc2VsZWN0b3IgQ1NTIGJsb2NrIG5vdCBmb3VuZCIpCmNzcyA9IGNzcy5yZXBsYWNlKG9sZF9jc3MsIG5ld19jc3MsIDEpCgphcHBfcGF0aC53cml0ZV90ZXh0KGFwcCwgZW5jb2Rpbmc9InV0Zi04IikKY3NzX3BhdGgud3JpdGVfdGV4dChjc3MsIGVuY29kaW5nPSJ1dGYtOCIpCg==' | base64 -d > /tmp/apply_selector_patch.py
+          python /tmp/apply_selector_patch.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: test-anon-key
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/index.css
+          git commit -m "Centraliza seletor e ajusta fonte da opção longa [skip-selector-centering]"
+          git push origin HEAD:codex/ajustar-seletor-pedidos
