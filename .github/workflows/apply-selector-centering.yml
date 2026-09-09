@@ -45,3 +45,5 @@ jobs:
           git add src/App.tsx src/index.css
           git commit -m "Centraliza seletor e ajusta fonte da opção longa [skip-selector-centering]"
           git push origin HEAD:codex/ajustar-seletor-pedidos
+
+# trigger
