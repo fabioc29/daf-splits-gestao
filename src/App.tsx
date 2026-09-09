@@ -58,7 +58,14 @@ type C = {
   cpf: string;
   cep: string;
   date: string;
-  addresses: { label: string; value: string; number?: string }[];
+  addresses: {
+    label: string;
+    value: string;
+    number?: string;
+    district?: string;
+    city?: string;
+    state?: string;
+  }[];
 };
 type L = { productId: number; ml: number; isApc?: boolean; unitCost?: number };
 type Installment = { date: string; amount: number; paid?: boolean };
@@ -84,6 +91,8 @@ type V = {
   marketplace?: "TikTok Shop" | "Shopee";
   marketplaceFee?: number;
   shippingCost?: number;
+  shippingPaidBy?: "client" | "daf";
+  shippingMethod?: "Correios" | "Loggi" | "Jadlog" | "Uber/Pessoalmente";
   historicalReceivable?: boolean;
   preparationTracked?: boolean;
 };
@@ -107,6 +116,7 @@ type D = {
   suppliers: string[];
   brands: string[];
   orderSequenceVersion?: number;
+  supplyInventoryVersion?: number;
 };
 type Modal = { type: string; id?: number } | null;
 
@@ -207,6 +217,8 @@ const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const roundMoney = (value: number) =>
   Math.round((value + Number.EPSILON) * 100) / 100;
+const parseDecimal = (value: unknown) =>
+  Number(String(value ?? "").trim().replace(",", ".")) || 0;
 const splitMoney = (total: number, count: number) => {
   if (count <= 0) return [];
   const cents = Math.max(0, Math.round(total * 100));
@@ -225,6 +237,36 @@ const today = () => {
   return `${year}-${month}-${day}`;
 };
 const orderNo = (id: number) => String(id).padStart(5, "0");
+const BRAZIL_STATES = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT",
+  "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO",
+  "RR", "SC", "SP", "SE", "TO",
+];
+const shippingClass = (method?: string) =>
+  (method || "Não informado")
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+const supplyStockKey = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+function moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {
+  if (sale.historicalReceivable) return supplies;
+  const usage = packaging(sale, supplies).lines;
+  return supplies.map((supply) => {
+    const line = usage.find(
+      (item) => supplyStockKey(item.name) === supplyStockKey(supply.name),
+    );
+    return line
+      ? { ...supply, stock: Math.max(0, supply.stock + direction * line.qty) }
+      : supply;
+  });
+}
 const saleCustomer = (sale: V, data: D) =>
   sale.customerName ||
   data.clients.find((client) => client.id === sale.clientId)?.name ||
@@ -703,6 +745,15 @@ function normalizeData(stored: any): D {
       ...products.map((p: P) => p.brand).filter(Boolean),
     ]),
   ) as string[];
+  const clients = (merged.clients || []).map((client: C) => ({
+    ...client,
+    addresses: (client.addresses || []).map((address) => ({
+      ...address,
+      district: address.district || "",
+      city: address.city || "",
+      state: address.state || "",
+    })),
+  }));
   const rawSales = (merged.sales || []) as V[];
   const ids = rawSales.map((sale) => sale.id).sort((a, b) => a - b);
   const needsSequentialIds =
@@ -713,16 +764,7 @@ function normalizeData(stored: any): D {
       .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
       .forEach((sale, index) => sequentialIds.set(sale.id, index + 1));
   }
-  return {
-    ...merged,
-    products,
-    orderSequenceVersion: 1,
-    supplies: (merged.supplies || []).map((s: S) => ({
-      ...s,
-      attachCost: Boolean(s.attachCost),
-    })),
-    brands,
-    sales: rawSales.map((s: V) => {
+  const normalizedSales = rawSales.map((s: V) => {
       const marketplaceSale = s.channel === "marketplace";
       const linkedCustomer = merged.clients.find(
         (client: C) => client.id === s.clientId,
@@ -747,6 +789,8 @@ function normalizeData(stored: any): D {
         channel: s.channel || "direct",
         marketplaceFee: Number(s.marketplaceFee || 0),
         shippingCost: Number(s.shippingCost || 0),
+        shippingPaidBy:
+          s.shippingPaidBy || (Number(s.shippingCost || 0) > 0 ? "daf" : "client"),
         prepared:
           marketplaceSale && !s.preparationTracked
             ? false
@@ -771,7 +815,25 @@ function normalizeData(stored: any): D {
               ]
             : [],
       };
-    }),
+    });
+  let normalizedSupplies = (merged.supplies || []).map((s: S) => ({
+    ...s,
+    attachCost: Boolean(s.attachCost),
+  }));
+  if (!merged.supplyInventoryVersion) {
+    normalizedSales.forEach((sale) => {
+      normalizedSupplies = moveSupplyStock(normalizedSupplies, sale, -1);
+    });
+  }
+  return {
+    ...merged,
+    products,
+    orderSequenceVersion: 1,
+    supplyInventoryVersion: 1,
+    supplies: normalizedSupplies,
+    clients,
+    brands,
+    sales: normalizedSales,
   };
 }
 function readLocal(): D {
@@ -1112,6 +1174,7 @@ function Sales({
     set((x: D) => ({
       ...x,
       products: restoreStock(x, s),
+      supplies: moveSupplyStock(x.supplies, s, 1),
       sales: x.sales.map((v) =>
         v.id === s.id ? { ...v, status: "cancelled" } : v,
       ),
@@ -1127,6 +1190,10 @@ function Sales({
     set((x: D) => ({
       ...x,
       products: s.status === "cancelled" ? x.products : restoreStock(x, s),
+      supplies:
+        s.status === "cancelled"
+          ? x.supplies
+          : moveSupplyStock(x.supplies, s, 1),
       sales: x.sales.filter((v) => v.id !== s.id),
     }));
     notify?.("Venda excluída.");
@@ -1386,9 +1453,12 @@ function Prepare({
   notify: (s: string) => void;
 }) {
   const [tab, setTab] = useState("pending");
+  const [shippingSale, setShippingSale] = useState<V | null>(null);
   const list = d.sales.filter(
     (s) =>
-      s.status !== "cancelled" && (tab === "done" ? s.prepared : !s.prepared),
+      s.status !== "cancelled" &&
+      !s.historicalReceivable &&
+      (tab === "done" ? s.prepared : !s.prepared),
   );
   function toggle(s: V) {
     const done = !s.prepared;
@@ -1406,8 +1476,28 @@ function Prepare({
         : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
     );
   }
+  function finishWithShipping(method: V["shippingMethod"]) {
+    if (!shippingSale || !method) return;
+    set((state: D) => ({
+      ...state,
+      sales: state.sales.map((sale) =>
+        sale.id === shippingSale.id
+          ? { ...sale, prepared: true, sent: false, shippingMethod: method }
+          : sale,
+      ),
+    }));
+    notify(
+      `Pedido #${orderNo(shippingSale.id)} finalizado para envio por ${method}.`,
+    );
+    setShippingSale(null);
+  }
+  function originLabel(sale: V) {
+    if (sale.channel !== "marketplace") return "Venda direta";
+    return sale.marketplace === "Shopee" ? "Shopee" : "TikTok Shop";
+  }
   return (
-    <div className="panel">
+    <>
+      <div className="panel">
       <h2>Pedidos para preparar</h2>
       <p>Lista alimentada exclusivamente pelas vendas.</p>
       <div className="segmented">
@@ -1430,7 +1520,7 @@ function Prepare({
             <button
               className="checkButton"
               aria-label={s.prepared ? "Reabrir pedido" : "Finalizar pedido"}
-              onClick={() => toggle(s)}
+              onClick={() => (s.prepared ? toggle(s) : setShippingSale(s))}
             >
               {s.prepared ? <Check /> : null}
             </button>
@@ -1443,12 +1533,55 @@ function Prepare({
                 </small>
               ))}
             </span>
+            <strong
+              className={`prepareOrigin ${
+                s.channel !== "marketplace"
+                  ? "direct"
+                  : s.marketplace === "Shopee"
+                    ? "shopee"
+                    : "tiktok"
+              }`}
+            >
+              {originLabel(s)}
+            </strong>
             <em>{s.prepared ? "Finalizado" : "A preparar"}</em>
           </div>
         ))}
         {!list.length ? <p>Nenhum pedido nesta lista.</p> : null}
       </div>
-    </div>
+      </div>
+      {shippingSale ? (
+        <div className="overlay">
+          <div className="systemDialog">
+            <header>
+              <div>
+                <small>FORMA DE ENVIO</small>
+                <h2>Como o pedido será enviado?</h2>
+              </div>
+              <button type="button" onClick={() => setShippingSale(null)}>
+                <X />
+              </button>
+            </header>
+            <p>
+              Pedido #{orderNo(shippingSale.id)} · {saleCustomer(shippingSale, d)}
+            </p>
+            <div className="shippingChoices">
+              {(["Correios", "Loggi", "Jadlog", "Uber/Pessoalmente"] as const).map(
+                (method) => (
+                  <button
+                    type="button"
+                    key={method}
+                    onClick={() => finishWithShipping(method)}
+                  >
+                    {method}
+                  </button>
+                ),
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -1466,6 +1599,7 @@ function Shipping({
     (s) =>
       s.status !== "cancelled" &&
       s.prepared &&
+      !s.historicalReceivable &&
       (tab === "sent" ? s.sent : !s.sent),
   );
   function toggle(s: V) {
@@ -1479,6 +1613,18 @@ function Shipping({
         ? `Pedido #${orderNo(s.id)} movido para Enviados.`
         : `Pedido #${orderNo(s.id)} voltou para A enviar.`,
     );
+  }
+  function changeShippingMethod(
+    saleId: number,
+    shippingMethod: V["shippingMethod"],
+  ) {
+    set((state: D) => ({
+      ...state,
+      sales: state.sales.map((sale) =>
+        sale.id === saleId ? { ...sale, shippingMethod } : sale,
+      ),
+    }));
+    notify("Forma de envio atualizada.");
   }
   return (
     <div className="panel">
@@ -1514,7 +1660,7 @@ function Shipping({
               </button>
               <details>
                 <summary>
-                  <span>
+                  <span className="shippingCustomer">
                     <b>
                       Pedido #{orderNo(s.id)} · {saleCustomer(s, d)}
                     </b>
@@ -1527,9 +1673,34 @@ function Shipping({
                         .join(" · ")}
                     </small>
                   </span>
-                  <strong>Informações de entrega</strong>
+                  <strong
+                    className={`shippingMethod ${shippingClass(s.shippingMethod)}`}
+                  >
+                    {s.shippingMethod || "Envio não informado"}
+                  </strong>
+                  <strong className="deliveryTitle">Informações de entrega</strong>
                 </summary>
                 <div className="delivery">
+                  <label>
+                    <span>Forma de envio</span>
+                    <select
+                      value={s.shippingMethod || ""}
+                      onChange={(event) =>
+                        changeShippingMethod(
+                          s.id,
+                          event.target.value as V["shippingMethod"],
+                        )
+                      }
+                    >
+                      <option value="" disabled>
+                        Selecione...
+                      </option>
+                      <option>Correios</option>
+                      <option>Loggi</option>
+                      <option>Jadlog</option>
+                      <option>Uber/Pessoalmente</option>
+                    </select>
+                  </label>
                   <FieldView label="Nome" value={saleCustomer(s, d)} />
                   <FieldView label="CPF" value={c?.cpf} />
                   <FieldView label="Telefone" value={c?.phone} />
@@ -1545,6 +1716,14 @@ function Shipping({
                     </select>
                   </label>
                   <FieldView label="CEP" value={c?.cep} />
+                  <FieldView label="Número" value={c?.addresses[0]?.number} />
+                  <FieldView label="Bairro" value={c?.addresses[0]?.district} />
+                  <FieldView
+                    label="Cidade / Estado"
+                    value={[c?.addresses[0]?.city, c?.addresses[0]?.state]
+                      .filter(Boolean)
+                      .join(" / ")}
+                  />
                 </div>
               </details>
             </div>
@@ -1589,7 +1768,14 @@ function Receivables({
     (sale) => sale.channel === "marketplace",
   );
   const list = receivableView === "marketplace" ? marketplaceSales : directSales;
-  const total = list.reduce((n, s) => n + Math.max(0, s.total - s.paid), 0);
+  const directTotal = directSales.reduce(
+    (sum, sale) => sum + Math.max(0, sale.total - sale.paid),
+    0,
+  );
+  const marketplaceTotal = marketplaceSales.reduce(
+    (sum, sale) => sum + Math.max(0, sale.total - sale.paid),
+    0,
+  );
   function recordPayment(
     s: V,
     installmentIndex: number | null,
@@ -1682,12 +1868,9 @@ function Receivables({
       </div>
       <Cards
         v={[
-          [
-            brl(total),
-            receivableView === "marketplace"
-              ? "Total Marketplace a receber"
-              : "Total a receber",
-          ],
+          [brl(directTotal), "Vendas diretas a receber"],
+          [brl(marketplaceTotal), "Marketplace a receber"],
+          [brl(directTotal + marketplaceTotal), "Total geral a receber"],
           [
             String(list.length),
             receivableView === "marketplace"
@@ -2502,6 +2685,7 @@ function ProfitControl({
   notify: (message: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [editingSale, setEditingSale] = useState<V | null>(null);
   const sales = d.sales.filter(
     (sale) => sale.status !== "cancelled" && !sale.historicalReceivable,
   );
@@ -2531,27 +2715,9 @@ function ProfitControl({
   const expenses = rows.reduce((sum, row) => sum + row.expenses, 0);
   const profit = revenue - perfumeCost - expenses;
   const margin = revenue ? (profit / revenue) * 100 : 0;
-  function setExpense(sale: V) {
-    const raw = window.prompt(
-      `Despesas extras do pedido #${orderNo(sale.id)} (frete e insumos já são calculados separadamente)`,
-      String(sale.expenses || 0).replace(".", ","),
-    );
-    if (raw === null) return;
-    const value = Number(raw.replace(",", "."));
-    if (!Number.isFinite(value) || value < 0) {
-      window.alert("Informe um valor de despesa válido.");
-      return;
-    }
-    set((state: D) => ({
-      ...state,
-      sales: state.sales.map((item) =>
-        item.id === sale.id ? { ...item, expenses: value } : item,
-      ),
-    }));
-    notify(`Despesa do pedido #${orderNo(sale.id)} atualizada.`);
-  }
   return (
-    <div className="panel profitControl">
+    <>
+      <div className="panel profitControl">
       <div className="profitControlHeader">
         <div>
           <h2>Margem e despesas por pedido</h2>
@@ -2634,7 +2800,7 @@ function ProfitControl({
                       <td>
                         <button
                           className="iconButton"
-                          onClick={() => setExpense(sale)}
+                          onClick={() => setEditingSale(sale)}
                         >
                           <Pencil /> Editar despesa
                         </button>
@@ -2647,6 +2813,225 @@ function ProfitControl({
           </div>
         </div>
       ) : null}
+      </div>
+      {editingSale ? (
+        <SaleCostEditor
+          key={editingSale.id}
+          sale={editingSale}
+          d={d}
+          close={() => setEditingSale(null)}
+          save={(updatedSale) => {
+            set((state: D) => {
+              let supplies = moveSupplyStock(state.supplies, editingSale, 1);
+              supplies = moveSupplyStock(supplies, updatedSale, -1);
+              return {
+                ...state,
+                supplies,
+                sales: state.sales.map((sale) =>
+                  sale.id === updatedSale.id ? updatedSale : sale,
+                ),
+              };
+            });
+            setEditingSale(null);
+            notify(`Custos do pedido #${orderNo(updatedSale.id)} atualizados.`);
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function SaleCostEditor({
+  sale,
+  d,
+  close,
+  save,
+}: {
+  sale: V;
+  d: D;
+  close: () => void;
+  save: (sale: V) => void;
+}) {
+  const automatic = automaticPackaging(sale);
+  const [extraExpenses, setExtraExpenses] = useState(Number(sale.expenses || 0));
+  const [marketplaceFee, setMarketplaceFee] = useState(
+    Number(sale.marketplaceFee || 0),
+  );
+  const [freightPayer, setFreightPayer] = useState<"client" | "daf">(
+    sale.shippingPaidBy || (sale.shippingCost ? "daf" : "client"),
+  );
+  const [freightCost, setFreightCost] = useState(Number(sale.shippingCost || 0));
+  const [unitCosts, setUnitCosts] = useState(
+    sale.items.map(
+      (item) =>
+        item.unitCost ??
+        d.products.find((product) => product.id === item.productId)?.cost ??
+        0,
+    ),
+  );
+  const [supplyQuantities, setSupplyQuantities] = useState<
+    Record<string, number>
+  >(
+    Object.fromEntries(
+      PACKAGING_RULES.map((name) => [
+        name,
+        sale.supplyOverrides?.[name] ?? automatic[name],
+      ]),
+    ),
+  );
+  const previewSale: V = {
+    ...sale,
+    expenses: extraExpenses,
+    marketplaceFee,
+    shippingPaidBy: freightPayer,
+    shippingCost: freightPayer === "daf" ? freightCost : 0,
+    supplyOverrides: supplyQuantities,
+    items: sale.items.map((item, index) => ({
+      ...item,
+      unitCost: Math.max(0, unitCosts[index] || 0),
+    })),
+  };
+  const perfumeCost = previewSale.items.reduce(
+    (sum, item) => sum + item.ml * Number(item.unitCost || 0),
+    0,
+  );
+  const supplyCost = packaging(previewSale, d.supplies).total;
+  const totalExpenses =
+    extraExpenses +
+    marketplaceFee +
+    previewSale.shippingCost! +
+    supplyCost;
+  const profit = previewSale.total - perfumeCost - totalExpenses;
+
+  return (
+    <div className="overlay">
+      <form
+        className="costEditor"
+        onSubmit={(event) => {
+          event.preventDefault();
+          save(previewSale);
+        }}
+      >
+        <header>
+          <div>
+            <small>CUSTOS DO PEDIDO #{orderNo(sale.id)}</small>
+            <h2>Editar despesas e margem</h2>
+          </div>
+          <button type="button" onClick={close}>
+            <X />
+          </button>
+        </header>
+        <div className="row">
+          <label>
+            <span>Despesas extras</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={extraExpenses}
+              onChange={(event) => setExtraExpenses(parseDecimal(event.target.value))}
+            />
+          </label>
+          <label>
+            <span>Taxa do marketplace</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={marketplaceFee}
+              onChange={(event) => setMarketplaceFee(parseDecimal(event.target.value))}
+              disabled={sale.channel !== "marketplace"}
+            />
+          </label>
+        </div>
+        <fieldset>
+          <legend>Frete pago pelo</legend>
+          <label>
+            <input
+              type="radio"
+              name="costFreightPayer"
+              checked={freightPayer === "client"}
+              onChange={() => setFreightPayer("client")}
+            />
+            <span>Cliente</span>
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="costFreightPayer"
+              checked={freightPayer === "daf"}
+              onChange={() => setFreightPayer("daf")}
+            />
+            <span>DAF</span>
+          </label>
+        </fieldset>
+        {freightPayer === "daf" ? (
+          <label>
+            <span>Valor do frete</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={freightCost}
+              onChange={(event) => setFreightCost(parseDecimal(event.target.value))}
+            />
+          </label>
+        ) : null}
+        <div className="costEditorSection">
+          <h3>Custo dos perfumes</h3>
+          {sale.items.map((item, index) => (
+            <label key={`${item.productId}-${index}`}>
+              <span>
+                {d.products.find((product) => product.id === item.productId)?.name ||
+                  `Perfume ${index + 1}`} — {item.ml} ml · custo por ml
+              </span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={unitCosts[index] || 0}
+                onChange={(event) =>
+                  setUnitCosts((current) => {
+                    const next = [...current];
+                    next[index] = parseDecimal(event.target.value);
+                    return next;
+                  })
+                }
+              />
+            </label>
+          ))}
+        </div>
+        <div className="costEditorSection">
+          <h3>Insumos e suprimentos</h3>
+          {PACKAGING_RULES.map((name) => (
+            <label key={name}>
+              <span>{name}</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={supplyQuantities[name] || 0}
+                onChange={(event) =>
+                  setSupplyQuantities((current) => ({
+                    ...current,
+                    [name]: Math.max(0, parseDecimal(event.target.value)),
+                  }))
+                }
+              />
+            </label>
+          ))}
+        </div>
+        <div className="costEditorSummary">
+          <span>Perfumes <b>{brl(perfumeCost)}</b></span>
+          <span>Insumos <b>{brl(supplyCost)}</b></span>
+          <span>Despesas totais <b>{brl(totalExpenses)}</b></span>
+          <span>Lucro estimado <b>{brl(profit)}</b></span>
+        </div>
+        <footer>
+          <button type="button" onClick={close}>Cancelar</button>
+          <button className="primary">Salvar custos</button>
+        </footer>
+      </form>
     </div>
   );
 }
@@ -2972,13 +3357,18 @@ function Form({
   const [installmentsCustomized, setInstallmentsCustomized] = useState(
     existingInstallments.length > 0,
   );
-  const [sellerPaysShipping, setSellerPaysShipping] = useState(
-    Number(existingSale?.shippingCost || 0) > 0,
+  const [shippingPaidBy, setShippingPaidBy] = useState<"Cliente" | "DAF">(
+    existingSale?.shippingPaidBy === "daf" || Number(existingSale?.shippingCost || 0) > 0
+      ? "DAF"
+      : "Cliente",
   );
   const [cepStatus, setCepStatus] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
 
-  async function fillAddressFromCep(rawCep: string, addressField: string) {
+  async function fillAddressFromCep(
+    rawCep: string,
+    fields: { address: string; district?: string; city?: string; state?: string },
+  ) {
     const cep = rawCep.replace(/\D/g, "");
     if (!cep) {
       setCepStatus("");
@@ -2993,20 +3383,21 @@ function Form({
       const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
       const result = await response.json();
       if (!response.ok || result.erro) throw new Error("CEP não encontrado");
-      const address = [
-        result.logradouro,
-        result.complemento,
-        result.bairro,
-        result.localidade && result.uf
-          ? `${result.localidade}/${result.uf}`
-          : result.localidade || result.uf,
-      ]
+      const address = [result.logradouro, result.complemento]
         .filter(Boolean)
         .join(" - ");
-      const input = formRef.current?.elements.namedItem(
-        addressField,
-      ) as HTMLInputElement | null;
-      if (input) input.value = address;
+      const setFieldValue = (name: string | undefined, value: string) => {
+        if (!name) return;
+        const field = formRef.current?.elements.namedItem(name) as
+          | HTMLInputElement
+          | HTMLSelectElement
+          | null;
+        if (field) field.value = value;
+      };
+      setFieldValue(fields.address, address);
+      setFieldValue(fields.district, result.bairro || "");
+      setFieldValue(fields.city, result.localidade || "");
+      setFieldValue(fields.state, result.uf || "");
       setCepStatus("Endereço preenchido. Informe apenas o número da residência.");
     } catch {
       setCepStatus("CEP não encontrado. Você ainda pode preencher manualmente.");
@@ -3261,6 +3652,9 @@ function Form({
                     label: "Principal",
                     value: address,
                     number: String(f.newAddressNumber || ""),
+                    district: String(f.newDistrict || ""),
+                    city: String(f.newCity || ""),
+                    state: String(f.newState || ""),
                   },
                 ]
               : [],
@@ -3278,7 +3672,7 @@ function Form({
             );
             return {
               productId: product?.id || Number(f["product" + i]),
-              ml: Number(f["ml" + i]),
+              ml: parseDecimal(f["ml" + i]),
               isApc: Boolean(apcLines[i]),
               unitCost: existingSale?.items[i]?.unitCost ?? product?.cost ?? 0,
             };
@@ -3323,7 +3717,10 @@ function Form({
           : undefined,
         marketplaceFee: isMarketplace ? Number(f.marketplaceFee || 0) : 0,
         shippingCost:
-          !isOldSale && sellerPaysShipping ? Number(f.shippingCost || 0) : 0,
+          !isOldSale && shippingPaidBy === "DAF"
+            ? Number(f.shippingCost || 0)
+            : 0,
+        shippingPaidBy: shippingPaidBy === "DAF" ? "daf" : "client",
         historicalReceivable: isOldSale,
         preparationTracked: isMarketplace
           ? true
@@ -3351,6 +3748,13 @@ function Form({
           apc: Math.max(0, Math.min(1, p.apc + restoredApc - soldApc)),
         };
       });
+      let supplies = x.supplies;
+      if (existingSale && existingSale.status !== "cancelled") {
+        supplies = moveSupplyStock(supplies, existingSale, 1);
+      }
+      if (sale.status !== "cancelled") {
+        supplies = moveSupplyStock(supplies, sale, -1);
+      }
       return {
         ...x,
         clients,
@@ -3358,6 +3762,7 @@ function Form({
           ? x.sales.map((v) => (v.id === sale.id ? sale : v))
           : [sale, ...x.sales],
         products,
+        supplies,
       };
     });
     close();
@@ -3456,9 +3861,35 @@ function Form({
                         l="CEP (opcional)"
                         required={false}
                         onBlur={(event) =>
-                          fillAddressFromCep(event.target.value, "newAddress")
+                          fillAddressFromCep(event.target.value, {
+                            address: "newAddress",
+                            district: "newDistrict",
+                            city: "newCity",
+                            state: "newState",
+                          })
                         }
                       />
+                    </div>
+                    <div className="row three">
+                      <Field
+                        n="newDistrict"
+                        l="Bairro (opcional)"
+                        required={false}
+                      />
+                      <Field
+                        n="newCity"
+                        l="Cidade (opcional)"
+                        required={false}
+                      />
+                      <label>
+                        <span>Estado (opcional)</span>
+                        <select name="newState" defaultValue="">
+                          <option value="">Selecione...</option>
+                          {BRAZIL_STATES.map((state) => (
+                            <option key={state}>{state}</option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
                     {cepStatus ? <small className="cepStatus">{cepStatus}</small> : null}
                   </>
@@ -3489,13 +3920,12 @@ function Form({
                   <Field
                     n={"ml" + i}
                     l="Volume (ml)"
-                    t="number"
-                    hideNumberControls
+                    decimalOnly
                     v={existingSale?.items[i]?.ml}
                     onChange={(event) =>
                       setSaleVolumes((current) => {
                         const next = [...current];
-                        next[i] = Number(event.target.value);
+                        next[i] = parseDecimal(event.target.value);
                         return next;
                       })
                     }
@@ -3556,17 +3986,15 @@ function Form({
                   setOverrides={setSupplyOverrides}
                 />
                 <div className="shippingCostBox">
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={sellerPaysShipping}
-                      onChange={(event) =>
-                        setSellerPaysShipping(event.target.checked)
-                      }
-                    />
-                    Frete por conta da DAF
-                  </label>
-                  {sellerPaysShipping ? (
+                  <Choices
+                    label="Frete pago pelo"
+                    a={["Cliente", "DAF"]}
+                    v={shippingPaidBy}
+                    set={(value) =>
+                      setShippingPaidBy(value as "Cliente" | "DAF")
+                    }
+                  />
+                  {shippingPaidBy === "DAF" ? (
                     <Field
                       n="shippingCost"
                       l="Valor do frete (R$)"
@@ -3951,6 +4379,30 @@ function Form({
                   required={false}
                 />
                 <Field
+                  n={"district" + i}
+                  l="Bairro"
+                  v={existingClient?.addresses[i]?.district}
+                  required={false}
+                />
+                <Field
+                  n={"city" + i}
+                  l="Cidade"
+                  v={existingClient?.addresses[i]?.city}
+                  required={false}
+                />
+                <label>
+                  <span>Estado</span>
+                  <select
+                    name={"state" + i}
+                    defaultValue={existingClient?.addresses[i]?.state || ""}
+                  >
+                    <option value="">Selecione...</option>
+                    {BRAZIL_STATES.map((state) => (
+                      <option key={state}>{state}</option>
+                    ))}
+                  </select>
+                </label>
+                <Field
                   n={"label" + i}
                   l="Identificação"
                   p="Casa, trabalho..."
@@ -3962,7 +4414,12 @@ function Form({
                     l="CEP"
                     v={existingClient?.cep}
                     onBlur={(event) =>
-                      fillAddressFromCep(event.target.value, "address0")
+                      fillAddressFromCep(event.target.value, {
+                        address: "address0",
+                        district: "district0",
+                        city: "city0",
+                        state: "state0",
+                      })
                     }
                   />
                 ) : (
@@ -4091,6 +4548,9 @@ const mkC = (f: any, n: number, id = Date.now()): C => ({
     label: String(f["label" + i] || ""),
     value: String(f["address" + i] || ""),
     number: String(f["addressNumber" + i] || ""),
+    district: String(f["district" + i] || ""),
+    city: String(f["city" + i] || ""),
+    state: String(f["state" + i] || ""),
   })).filter((a) => a.value),
 });
 function BrandFields({
@@ -4259,6 +4719,7 @@ function Field({
   onChange,
   onBlur,
   hideNumberControls = false,
+  decimalOnly = false,
 }: {
   n: string;
   l: string;
@@ -4269,14 +4730,17 @@ function Field({
   onChange?: (e: any) => void;
   onBlur?: (e: any) => void;
   hideNumberControls?: boolean;
+  decimalOnly?: boolean;
 }) {
   return (
     <label>
       <span>{l}</span>
       <input
         name={n}
-        type={t}
+        type={decimalOnly ? "text" : t}
         className={hideNumberControls ? "numberWithoutControls" : undefined}
+        inputMode={decimalOnly ? "decimal" : undefined}
+        pattern={decimalOnly ? "[0-9]+([,.][0-9]+)?" : undefined}
         defaultValue={v}
         placeholder={p}
         required={required}

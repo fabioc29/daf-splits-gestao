@@ -9,10 +9,12 @@ export const PACKAGING_RULES = [
   "Frascos (10ml)",
   "Caixas (decantes)",
   "Envelopes decantes",
+  "Envelope APC",
   "Papel de seda",
   "Saco organza",
   "Carta de agradecimento",
   "Cartão de visita",
+  "Sacolas DAF",
 ] as const;
 
 type SaleForPackaging = {
@@ -32,15 +34,18 @@ export function automaticPackaging(sale: SaleForPackaging) {
   );
   const boxes = Math.ceil(bottles / 8);
   const hasApc = sale.items.some((item) => item.isApc);
+  const apcItems = sale.items.filter((item) => item.isApc).length;
 
   return {
     "Frascos (10ml)": bottles,
     "Caixas (decantes)": boxes,
     "Envelopes decantes": boxes,
+    "Envelope APC": apcItems,
     "Papel de seda": hasApc ? 0 : boxes,
     "Saco organza": Math.ceil(bottles / 3),
     "Carta de agradecimento": 1,
     "Cartão de visita": 1,
+    "Sacolas DAF": 0,
   } satisfies Record<(typeof PACKAGING_RULES)[number], number>;
 }
 

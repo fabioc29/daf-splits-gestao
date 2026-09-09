@@ -321,6 +321,24 @@ td small {
   color: #e2ba55;
   font-size: 11px;
 }
+.prepareOrigin {
+  min-width: 118px;
+  border-radius: 999px;
+  padding: 8px 12px;
+  text-align: center;
+  color: white;
+  font-size: 13px;
+  font-weight: 900;
+}
+.prepareOrigin.direct {
+  background: #229b69;
+}
+.prepareOrigin.tiktok {
+  background: linear-gradient(90deg, #090909 0 50%, #e23842 50% 100%);
+}
+.prepareOrigin.shopee {
+  background: #e84a3b;
+}
 .products,
 .clients {
   display: grid;
@@ -1047,10 +1065,10 @@ button:active {
 }
 .shipping summary {
   cursor: pointer;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.45fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 22px;
 }
 .shipping summary span,
 .shipping summary small {
@@ -1063,6 +1081,35 @@ button:active {
 .shipping summary strong {
   color: var(--gold);
   font-size: 12px;
+}
+.shipping summary > .shippingMethod {
+  justify-self: center;
+  text-align: center;
+  font-size: clamp(17px, 1.35vw, 21px);
+}
+.deliveryTitle {
+  justify-self: end;
+}
+.shippingMethod {
+  white-space: nowrap;
+}
+.shippingMethod.correios {
+  color: transparent;
+  background: linear-gradient(90deg, #f3c634 0 50%, #4a9cff 50% 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+.shippingMethod.loggi {
+  color: #65c7ff;
+}
+.shippingMethod.jadlog {
+  color: #ef555c;
+}
+.shippingMethod.uber-pessoalmente {
+  color: white;
+}
+.shippingMethod.envio-nao-informado {
+  color: var(--muted);
 }
 .delivery {
   display: grid;
@@ -1095,7 +1142,7 @@ button:active {
 }
 .addressRow {
   display: grid;
-  grid-template-columns: 2fr 0.65fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 .cepStatus {
@@ -1117,6 +1164,84 @@ button:active {
   color: #647185;
   line-height: 1.4;
 }
+.shippingChoices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.shippingChoices button {
+  min-height: 48px;
+  border: 1px solid #d5aa3d;
+  border-radius: 11px;
+  background: #111a28;
+  color: #f0c451;
+  font-weight: 900;
+}
+.systemDialog {
+  width: min(560px, calc(100vw - 32px));
+  border-radius: 17px;
+  background: #f8f5ee;
+  color: #172233;
+  padding: 24px;
+  box-shadow: 0 24px 80px #0008;
+}
+.systemDialog header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #d9dde4;
+  padding-bottom: 15px;
+}
+.systemDialog header small {
+  color: #b57b00;
+  letter-spacing: 2px;
+}
+.systemDialog header h2 {
+  margin: 5px 0 0;
+}
+.systemDialog header button {
+  border: 0;
+  background: transparent;
+}
+.costEditor {
+  width: min(900px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
+  overflow: auto;
+}
+.costEditorSection {
+  display: grid;
+  gap: 9px;
+  border: 1px solid #d9dde4;
+  border-radius: 12px;
+  padding: 14px;
+}
+.costEditorSection h3 {
+  margin: 0 0 4px;
+  color: #172233;
+}
+.costEditorSection label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: center;
+  gap: 12px;
+}
+.costEditorSummary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.costEditorSummary span {
+  display: grid;
+  gap: 5px;
+  border-radius: 10px;
+  background: #eee8d9;
+  padding: 12px;
+  color: #647185;
+}
+.costEditorSummary b {
+  color: #172233;
+}
 .mobileProductSearch {
   display: none;
 }
@@ -1128,7 +1253,29 @@ button:active {
   }
   .shipping summary {
     align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+  .shipping summary > .shippingMethod,
+  .deliveryTitle {
+    justify-self: start;
+    text-align: left;
+  }
+  .prepare > div {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .prepare > div > span {
+    min-width: calc(100% - 55px);
+  }
+  .prepareOrigin {
+    margin-left: 51px;
+  }
+  .shippingChoices,
+  .costEditorSummary {
+    grid-template-columns: 1fr;
+  }
+  .costEditorSection label {
+    grid-template-columns: 1fr;
   }
 }
 .products .iconButton {
