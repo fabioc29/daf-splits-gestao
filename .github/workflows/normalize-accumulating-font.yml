@@ -1,0 +1,80 @@
+name: Normalize accumulating font
+
+on:
+  push:
+    branches:
+      - codex/ajustar-seletor-pedidos
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip-normalize-accumulating-font]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Normalize accumulating font
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          app_path = Path('src/App.tsx')
+          css_path = Path('src/index.css')
+          app = app_path.read_text(encoding='utf-8')
+          css = css_path.read_text(encoding='utf-8')
+
+          old = '''                  <select
+                    className={
+                      getPreparationStatus(s) === "accumulating"
+                        ? "longValue"
+                        : undefined
+                    }
+                    aria-label={`Situação do pedido #${orderNo(s.id)}`}
+'''
+          new = '''                  <select
+                    aria-label={`Situação do pedido #${orderNo(s.id)}`}
+'''
+          if old not in app:
+              raise SystemExit('Accumulating select class block not found')
+          app = app.replace(old, new, 1)
+
+          css_rule = '''.preparationStatus select.longValue {
+  font-size: 9px;
+}
+'''
+          if css_rule not in css:
+              raise SystemExit('longValue CSS rule not found')
+          css = css.replace(css_rule, '', 1)
+
+          app_path.write_text(app, encoding='utf-8')
+          css_path.write_text(css, encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: test-anon-key
+
+      - name: Commit changes and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/normalize-accumulating-font.yml
+          git add src/App.tsx src/index.css
+          git commit -m "Iguala fonte de Vai acumular às demais opções [skip-normalize-accumulating-font]"
+          git push origin HEAD:codex/ajustar-seletor-pedidos
