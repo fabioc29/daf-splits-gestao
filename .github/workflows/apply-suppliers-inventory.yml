@@ -1,0 +1,40 @@
+name: Apply suppliers and inventory updates
+
+on:
+  push:
+    branches:
+      - codex/ajustar-seletor-pedidos
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip-suppliers-inventory]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply requested changes
+        run: python .github/apply_suppliers_inventory.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: test-anon-key
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-suppliers-inventory.yml .github/apply_suppliers_inventory.py
+          git add src/App.tsx src/index.css src/packaging.ts
+          git commit -m "Adiciona fornecedores, lotes FIFO e insumos automáticos [skip-suppliers-inventory]"
+          git push origin HEAD:codex/ajustar-seletor-pedidos
