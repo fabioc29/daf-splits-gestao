@@ -2113,9 +2113,9 @@ aside {
 /* Compact preparation status selector */
 .preparationStatus {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: center;
-  width: auto;
+  width: 100%;
   gap: 0;
 }
 .preparationStatus select {
@@ -2123,7 +2123,15 @@ aside {
   max-width: 100%;
   min-height: 34px;
   border-radius: 8px;
-  padding: 5px 27px 5px 9px;
+  padding: 5px 26px;
   font-size: 11px;
   line-height: 1.15;
+  text-align: center;
+  text-align-last: center;
+}
+.preparationStatus select.longValue {
+  font-size: 9px;
+}
+.preparationStatus select option {
+  text-align: center;
 }
