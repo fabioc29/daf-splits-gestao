@@ -21,11 +21,11 @@ import {
   Trash2,
   Ban,
   Search,
-  ListFilter,
-  ChevronLeft,
-  ChevronRight,
   ReceiptText,
   Printer,
+  ChevronLeft,
+  ChevronRight,
+  SlidersHorizontal,
 } from "lucide-react";
 import { automaticPackaging, packaging, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
@@ -57,8 +57,18 @@ type C = {
   phone: string;
   cpf: string;
   cep: string;
+  number?: string;
+  district?: string;
+  city?: string;
+  state?: string;
   date: string;
-  addresses: { label: string; value: string; number?: string }[];
+  addresses: {
+    label: string;
+    value: string;
+    district?: string;
+    city?: string;
+    state?: string;
+  }[];
 };
 type L = { productId: number; ml: number; isApc?: boolean; unitCost?: number };
 type Installment = { date: string; amount: number; paid?: boolean };
@@ -83,9 +93,12 @@ type V = {
   channel?: "direct" | "marketplace";
   marketplace?: "TikTok Shop" | "Shopee";
   marketplaceFee?: number;
+  marketplacePayoutReceived?: boolean;
   shippingCost?: number;
-  historicalReceivable?: boolean;
-  preparationTracked?: boolean;
+  shippingPaidBy?: "client" | "daf";
+  shippingMethod?: "Correios" | "Loggi" | "Jadlog" | "Uber/Pessoalmente";
+  historical?: boolean;
+  description?: string;
 };
 type B = {
   id: number;
@@ -107,6 +120,8 @@ type D = {
   suppliers: string[];
   brands: string[];
   orderSequenceVersion?: number;
+  supplyInventoryVersion?: number;
+  marketplacePayoutDays?: { "TikTok Shop": number; Shopee: number };
 };
 type Modal = { type: string; id?: number } | null;
 
@@ -118,113 +133,82 @@ const blank: D = {
   purchases: [],
   suppliers: [],
   brands: [],
+  marketplacePayoutDays: { "TikTok Shop": 9, Shopee: 7 },
 };
-function sameRecord(a: unknown, b: unknown) {
-  return JSON.stringify(a) === JSON.stringify(b);
-}
-function mergeChangedRecords<T extends { id: number }>(
-  baseline: T[],
-  local: T[],
-  remote: T[],
-  preserveIdConflicts = false,
-) {
-  const baselineById = new Map(baseline.map((item) => [item.id, item]));
-  const localById = new Map(local.map((item) => [item.id, item]));
-  const result = new Map(remote.map((item) => [item.id, item]));
-  let nextId = Math.max(0, ...remote.map((item) => item.id));
-
-  for (const item of baseline) {
-    const changed = localById.get(item.id);
-    if (!changed) result.delete(item.id);
-    else if (!sameRecord(item, changed)) result.set(item.id, changed);
-  }
-  for (const item of local) {
-    if (baselineById.has(item.id)) continue;
-    const conflict = result.get(item.id);
-    if (preserveIdConflicts && conflict && !sameRecord(conflict, item)) {
-      result.set(++nextId, { ...item, id: nextId });
-    } else {
-      result.set(item.id, item);
-    }
-  }
-  return Array.from(result.values());
-}
-function mergeChangedStrings(
-  baseline: string[],
-  local: string[],
-  remote: string[],
-) {
-  const removed = new Set(baseline.filter((item) => !local.includes(item)));
-  return Array.from(
-    new Set([
-      ...remote.filter((item) => !removed.has(item)),
-      ...local.filter((item) => !baseline.includes(item)),
-    ]),
-  );
-}
-function mergeDataChanges(baseline: D, local: D, remote: D): D {
-  return normalizeData({
-    ...remote,
-    products: mergeChangedRecords(
-      baseline.products,
-      local.products,
-      remote.products,
-    ),
-    supplies: mergeChangedRecords(
-      baseline.supplies,
-      local.supplies,
-      remote.supplies,
-    ),
-    clients: mergeChangedRecords(
-      baseline.clients,
-      local.clients,
-      remote.clients,
-    ),
-    sales: mergeChangedRecords(
-      baseline.sales,
-      local.sales,
-      remote.sales,
-      true,
-    ),
-    purchases: mergeChangedRecords(
-      baseline.purchases,
-      local.purchases,
-      remote.purchases,
-    ),
-    suppliers: mergeChangedStrings(
-      baseline.suppliers,
-      local.suppliers,
-      remote.suppliers,
-    ),
-    brands: mergeChangedStrings(
-      baseline.brands,
-      local.brands,
-      remote.brands,
-    ),
-  });
-}
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const roundMoney = (value: number) =>
-  Math.round((value + Number.EPSILON) * 100) / 100;
-const splitMoney = (total: number, count: number) => {
-  if (count <= 0) return [];
-  const cents = Math.max(0, Math.round(total * 100));
-  const base = Math.floor(cents / count);
-  const remainder = cents - base * count;
-  return Array.from(
-    { length: count },
-    (_, index) => (base + (index < remainder ? 1 : 0)) / 100,
-  );
-};
+const parseDecimal = (value: unknown) =>
+  Number(String(value ?? "").trim().replace(",", ".")) || 0;
 const today = () => {
   const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 10);
+};
+const dateBR = (value?: string) => {
+  if (!value) return "Não informada";
+  const [year, month, day] = value.slice(0, 10).split("-");
+  return year && month && day ? `${day}/${month}/${year}` : value;
 };
 const orderNo = (id: number) => String(id).padStart(5, "0");
+const BRAZIL_STATES = [
+  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT",
+  "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO",
+  "RR", "SC", "SP", "SE", "TO",
+];
+const isMarketplaceSale = (sale: V) =>
+  sale.channel === "marketplace" || Boolean(sale.marketplace);
+const isHistoricalSale = (sale: V) =>
+  Boolean(sale.historical) ||
+  (!isMarketplaceSale(sale) && (sale.items || []).length === 0);
+const isInstallmentSale = (sale: V) =>
+  sale.payment === "À prazo" ||
+  Boolean(sale.dueDate) ||
+  Boolean(sale.installments?.length);
+const isInstallmentSettled = (sale: V) => {
+  const installments = (sale.installments || []).filter(
+    (installment) => installment.amount > 0,
+  );
+  return installments.length
+    ? installments.every((installment) => installment.paid)
+    : sale.paid >= sale.total;
+};
+const isSaleSettled = (sale: V) =>
+  isInstallmentSale(sale)
+    ? isInstallmentSettled(sale)
+    : sale.paid >= sale.total;
+const marketplacePending = (sale: V) =>
+  isMarketplaceSale(sale) && !sale.marketplacePayoutReceived;
+const amountDue = (sale: V) =>
+  marketplacePending(sale)
+    ? Math.max(0, sale.total)
+    : Math.max(0, sale.total - sale.paid);
+const shippingClass = (method?: string) =>
+  (method || "não informado")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z]+/g, "-");
+const supplyStockKey = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+function moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {
+  if (isHistoricalSale(sale)) return supplies;
+  const usage = packaging(sale, supplies).lines;
+  return supplies.map((supply) => {
+    const line = usage.find(
+      (item) => supplyStockKey(item.name) === supplyStockKey(supply.name),
+    );
+    return line
+      ? {
+          ...supply,
+          stock: supply.stock + direction * line.qty,
+        }
+      : supply;
+  });
+}
 const saleCustomer = (sale: V, data: D) =>
   sale.customerName ||
   data.clients.find((client) => client.id === sale.clientId)?.name ||
@@ -271,14 +255,11 @@ export default function App() {
 }
 
 function System({ session }: { session: Session }) {
-  const [data, setDataState] = useState<D>(() => readLocal()),
+  const [data, setData] = useState<D>(() => readLocal()),
     [ready, setReady] = useState(false),
     [sync, setSync] = useState<"loading" | "saved" | "error">("loading");
-  const dataRef = useRef(data);
-  const lastSyncedRef = useRef("");
-  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const saveRevisionRef = useRef(0);
-  const saveInFlightRef = useRef(false);
+  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const saveVersion = useRef(0);
   const [page, setPage] = useState("dashboard"),
     [modal, setModal] = useState<Modal>(null),
     [history, setHistory] = useState(0),
@@ -287,29 +268,9 @@ function System({ session }: { session: Session }) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2600);
   }
-  function setData(update: D | ((current: D) => D)) {
-    setDataState((current) => {
-      const next = typeof update === "function" ? update(current) : update;
-      dataRef.current = next;
-      localStorage.setItem("daf-v4", JSON.stringify(next));
-      localStorage.setItem("daf-v4-pending", "1");
-      return next;
-    });
-  }
-  function retryPendingSave() {
-    if (
-      localStorage.getItem("daf-v4-pending") === "1" &&
-      !saveInFlightRef.current
-    ) {
-      setDataState((current) => ({ ...current }));
-    }
-  }
   useEffect(() => {
     let active = true;
     (async () => {
-      const local = readLocal();
-      const hasPendingLocalChanges =
-        localStorage.getItem("daf-v4-pending") === "1";
       const { data: remote, error } = await supabase
         .from("app_state")
         .select("data")
@@ -317,49 +278,21 @@ function System({ session }: { session: Session }) {
         .maybeSingle();
       if (!active) return;
       if (error) {
-        dataRef.current = local;
-        setDataState(local);
-        setReady(true);
         setSync("error");
         return;
       }
-      const remoteData =
-        remote?.data && Object.keys(remote.data).length
-          ? normalizeData(remote.data)
-          : null;
-      let storedBaseline: D | null = null;
-      try {
-        const rawBaseline = localStorage.getItem("daf-v4-baseline");
-        storedBaseline = rawBaseline
-          ? normalizeData(JSON.parse(rawBaseline))
-          : null;
-      } catch {
-        storedBaseline = null;
-      }
-      const chosen = hasPendingLocalChanges
-        ? remoteData && storedBaseline
-          ? mergeDataChanges(storedBaseline, local, remoteData)
-          : local
-        : remoteData || local;
-      if (hasPendingLocalChanges || !remoteData) {
+      if (remote?.data && Object.keys(remote.data).length) {
+        setData(normalizeData(remote.data));
+      } else {
+        const local = readLocal();
         const { error: saveError } = await supabase
           .from("app_state")
-          .upsert({ user_id: session.user.id, data: chosen });
+          .upsert({ user_id: session.user.id, data: local });
         if (saveError) {
-          dataRef.current = chosen;
-          setDataState(chosen);
-          setReady(true);
           setSync("error");
           return;
         }
-        localStorage.removeItem("daf-v4-pending");
       }
-      const serialized = JSON.stringify(chosen);
-      dataRef.current = chosen;
-      lastSyncedRef.current = serialized;
-      localStorage.setItem("daf-v4", serialized);
-      localStorage.setItem("daf-v4-baseline", serialized);
-      setDataState(chosen);
       setReady(true);
       setSync("saved");
     })();
@@ -368,141 +301,60 @@ function System({ session }: { session: Session }) {
     };
   }, [session.user.id]);
   useEffect(() => {
-    dataRef.current = data;
-    const serialized = JSON.stringify(data);
-    localStorage.setItem("daf-v4", serialized);
+    localStorage.setItem("daf-v4", JSON.stringify(data));
     if (!ready) return;
-    if (serialized === lastSyncedRef.current) return;
-    const revision = ++saveRevisionRef.current;
-    const baseline = lastSyncedRef.current
-      ? normalizeData(JSON.parse(lastSyncedRef.current))
-      : data;
-    localStorage.setItem("daf-v4-pending", "1");
+    const version = ++saveVersion.current;
     setSync("loading");
-    saveInFlightRef.current = true;
-    saveQueueRef.current = saveQueueRef.current.catch(() => undefined).then(async () => {
-      const { data: latestRow, error: readError } = await supabase
-        .from("app_state")
-        .select("data")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      if (readError) {
-        if (revision === saveRevisionRef.current) {
-          setSync("error");
-          notify("Não foi possível salvar. O sistema tentará novamente.");
+    saveQueue.current = saveQueue.current
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          const { error } = await supabase
+            .from("app_state")
+            .upsert({ user_id: session.user.id, data });
+          if (version === saveVersion.current) {
+            setSync(error ? "error" : "saved");
+          }
+        } catch {
+          if (version === saveVersion.current) setSync("error");
         }
-        return;
-      }
-      const payload = latestRow?.data
-        ? mergeDataChanges(baseline, data, normalizeData(latestRow.data))
-        : data;
-      const { error } = await supabase
-        .from("app_state")
-        .upsert({ user_id: session.user.id, data: payload });
-      if (error) {
-        if (revision === saveRevisionRef.current) {
-          setSync("error");
-          notify("Não foi possível salvar. O sistema tentará novamente.");
-        }
-        return;
-      }
-      if (revision === saveRevisionRef.current) {
-        const saved = JSON.stringify(payload);
-        lastSyncedRef.current = saved;
-        dataRef.current = payload;
-        localStorage.setItem("daf-v4", saved);
-        localStorage.setItem("daf-v4-baseline", saved);
-        localStorage.removeItem("daf-v4-pending");
-        setDataState(payload);
-        setSync("saved");
-      }
-    }).catch(() => {
-      if (revision === saveRevisionRef.current) {
-        setSync("error");
-        notify("Não foi possível salvar. O sistema tentará novamente.");
-      }
-    }).finally(() => {
-      saveInFlightRef.current = false;
-    });
+      });
   }, [data, ready, session.user.id]);
-  useEffect(() => {
-    if (!ready) return;
-    let active = true;
-    async function refreshFromCloud() {
-      if (
-        !active ||
-        document.hidden ||
-        localStorage.getItem("daf-v4-pending") === "1"
-      )
-        return;
-      const { data: remote, error } = await supabase
-        .from("app_state")
-        .select("data")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      if (!active || error || !remote?.data) return;
-      const incoming = normalizeData(remote.data);
-      const serialized = JSON.stringify(incoming);
-      if (serialized === lastSyncedRef.current) return;
-      lastSyncedRef.current = serialized;
-      dataRef.current = incoming;
-      localStorage.setItem("daf-v4", serialized);
-      localStorage.setItem("daf-v4-baseline", serialized);
-      setDataState(incoming);
-      setSync("saved");
-    }
-    function handleFocus() {
-      if (localStorage.getItem("daf-v4-pending") === "1") {
-        retryPendingSave();
-      } else {
-        void refreshFromCloud();
-      }
-    }
-    const interval = window.setInterval(handleFocus, 5000);
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("online", retryPendingSave);
-    document.addEventListener("visibilitychange", handleFocus);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("online", retryPendingSave);
-      document.removeEventListener("visibilitychange", handleFocus);
-    };
-  }, [ready, session.user.id]);
   const totals = useMemo(
-    () => {
-      const active = data.sales.filter(
-        (s) => s.status !== "cancelled" && !isNoCost(s),
-      );
-      const currentMonth = today().slice(0, 7);
-      const currentSales = active.filter(
-        (s) => !s.historicalReceivable && s.date.startsWith(currentMonth),
-      );
-      return {
-        gross: currentSales.reduce((sum, sale) => sum + sale.total, 0),
-        paid: currentSales.reduce((sum, sale) => sum + sale.paid, 0),
-        receivable: currentSales.reduce(
-          (sum, sale) => sum + Math.max(0, sale.total - sale.paid),
-          0,
+    () =>
+      data.sales
+        .filter(
+          (s) =>
+            s.status !== "cancelled" &&
+            !isNoCost(s) &&
+            !isHistoricalSale(s),
+        )
+        .reduce(
+          (a, s) => ({ gross: a.gross + s.total, paid: a.paid + s.paid }),
+          { gross: 0, paid: 0 },
         ),
-      };
-    },
     [data.sales],
   );
   const navAlerts: Record<string, number> = {
     receivables: data.sales.filter(
       (s) =>
         s.status !== "cancelled" &&
-        s.channel !== "marketplace" &&
         !isNoCost(s) &&
+        !isMarketplaceSale(s) &&
         s.paid < s.total,
     ).length,
     prepare: data.sales.filter(
-      (sale) => sale.status !== "cancelled" && !sale.prepared,
+      (sale) =>
+        sale.status !== "cancelled" &&
+        !sale.prepared &&
+        !isHistoricalSale(sale),
     ).length,
     shipping: data.sales.filter(
-      (sale) => sale.status !== "cancelled" && sale.prepared && !sale.sent,
+      (sale) =>
+        sale.status !== "cancelled" &&
+        sale.prepared &&
+        !sale.sent &&
+        !isHistoricalSale(sale),
     ).length,
   };
   const action =
@@ -572,11 +424,7 @@ function System({ session }: { session: Session }) {
             <small>PAINEL ADMINISTRATIVO</small>
             <h1>{nav.find((n) => n[0] === page)?.[1]}</h1>
           </div>
-          <div
-            className={`headerActions ${
-              page === "sales" ? "salesHeaderActions" : ""
-            }`}
-          >
+          <div className="headerActions">
             {page === "dashboard" || page === "finance" ? (
               <button
                 className="secondary reportButton"
@@ -612,7 +460,7 @@ function System({ session }: { session: Session }) {
         </header>
         <section className="content">
           {page === "dashboard" ? (
-            <Dash d={data} totals={totals} />
+            <Dash d={data} />
           ) : page === "sales" ? (
             <Sales
               d={data}
@@ -713,65 +561,77 @@ function normalizeData(stored: any): D {
       .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
       .forEach((sale, index) => sequentialIds.set(sale.id, index + 1));
   }
+  const normalizedSales = rawSales.map((s: V) => {
+    const marketplaceSale = isMarketplaceSale(s);
+    const linkedCustomer = merged.clients.find(
+      (client: C) => client.id === s.clientId,
+    );
+    return {
+      ...s,
+      id: needsSequentialIds ? sequentialIds.get(s.id) || s.id : s.id,
+      clientId: marketplaceSale ? 0 : s.clientId,
+      customerName:
+        s.customerName || (marketplaceSale ? linkedCustomer?.name : undefined),
+      payment: marketplaceSale ? "À prazo" : s.payment,
+      sent: Boolean(s.sent),
+      status: s.status || "active",
+      expenses: Number(s.expenses || 0),
+      supplyOverrides: Object.fromEntries(
+        Object.entries(s.supplyOverrides || {}).map(([name, qty]) => [
+          name,
+          Math.max(0, Number(qty) || 0),
+        ]),
+      ),
+      channel: s.channel || "direct",
+      marketplaceFee: Number(s.marketplaceFee || 0),
+      marketplacePayoutReceived: Boolean(s.marketplacePayoutReceived),
+      shippingCost: Number(s.shippingCost || 0),
+      shippingPaidBy:
+        s.shippingPaidBy || (Number(s.shippingCost || 0) > 0 ? "daf" : "client"),
+      historical:
+        Boolean(s.historical) ||
+        (!marketplaceSale && (s.items || []).length === 0),
+      items: (s.items || []).map((item: L) => ({
+        ...item,
+        isApc: Boolean(item.isApc),
+        unitCost:
+          item.unitCost ??
+          products.find((p: P) => p.id === item.productId)?.cost ??
+          0,
+      })),
+      installments: s.installments?.length
+        ? s.installments
+        : s.dueDate
+          ? [
+              {
+                date: s.dueDate,
+                amount: s.installment || Math.max(0, s.total - s.paid),
+              },
+            ]
+          : [],
+    } as V;
+  });
+  let normalizedSupplies = (merged.supplies || []).map((s: S) => ({
+    ...s,
+    attachCost: Boolean(s.attachCost),
+  }));
+  if (!merged.supplyInventoryVersion) {
+    normalizedSales.forEach((sale) => {
+      normalizedSupplies = moveSupplyStock(normalizedSupplies, sale, -1);
+    });
+  }
   return {
     ...merged,
     products,
     orderSequenceVersion: 1,
-    supplies: (merged.supplies || []).map((s: S) => ({
-      ...s,
-      attachCost: Boolean(s.attachCost),
-    })),
+    supplyInventoryVersion: 1,
+    marketplacePayoutDays: {
+      "TikTok Shop": Number(merged.marketplacePayoutDays?.["TikTok Shop"] || 9),
+      Shopee: Number(merged.marketplacePayoutDays?.Shopee || 7),
+    },
+    supplies: normalizedSupplies,
     brands,
-    sales: rawSales.map((s: V) => {
-      const marketplaceSale = s.channel === "marketplace";
-      const linkedCustomer = merged.clients.find(
-        (client: C) => client.id === s.clientId,
-      );
-      return {
-        ...s,
-        id: needsSequentialIds ? sequentialIds.get(s.id) || s.id : s.id,
-        clientId: marketplaceSale ? 0 : s.clientId,
-        customerName:
-          s.customerName ||
-          (marketplaceSale ? linkedCustomer?.name : undefined),
-        payment: marketplaceSale ? "À prazo" : s.payment,
-        sent: Boolean(s.sent),
-        status: s.status || "active",
-        expenses: Number(s.expenses || 0),
-        supplyOverrides: Object.fromEntries(
-          Object.entries(s.supplyOverrides || {}).map(([name, qty]) => [
-            name,
-            Math.max(0, Number(qty) || 0),
-          ]),
-        ),
-        channel: s.channel || "direct",
-        marketplaceFee: Number(s.marketplaceFee || 0),
-        shippingCost: Number(s.shippingCost || 0),
-        prepared:
-          marketplaceSale && !s.preparationTracked
-            ? false
-            : Boolean(s.prepared),
-        preparationTracked: marketplaceSale ? true : s.preparationTracked,
-        items: (s.items || []).map((item: L) => ({
-          ...item,
-          isApc: Boolean(item.isApc),
-          unitCost:
-            item.unitCost ??
-            products.find((p: P) => p.id === item.productId)?.cost ??
-            0,
-        })),
-        installments: s.installments?.length
-          ? s.installments
-          : s.dueDate
-            ? [
-                {
-                  date: s.dueDate,
-                  amount: s.installment || Math.max(0, s.total - s.paid),
-                },
-              ]
-            : [],
-      };
-    }),
+    sales: normalizedSales,
   };
 }
 function readLocal(): D {
@@ -849,26 +709,46 @@ function Cards({ v }: { v: [string, string][] }) {
   );
 }
 
-function Dash({
-  d,
-  totals,
-}: {
-  d: D;
-  totals: { gross: number; paid: number; receivable: number };
-}) {
-  const activeSales = d.sales.filter(
-    (s) =>
-      s.status !== "cancelled" &&
-      !isNoCost(s) &&
-      !s.historicalReceivable,
-  );
+function Dash({ d }: { d: D }) {
   const now = new Date(),
+    monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+    monthSales = d.sales.filter((sale) => sale.date.startsWith(monthKey)),
+    activeSales = monthSales.filter(
+      (sale) =>
+        sale.status !== "cancelled" &&
+        !isNoCost(sale) &&
+        !isHistoricalSale(sale),
+    ),
     days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
     day = now.getDate();
+  const monthTotals = activeSales.reduce(
+    (acc, sale) => ({
+      gross: acc.gross + sale.total,
+      paid: acc.paid + Math.min(sale.total, Math.max(0, sale.paid)),
+    }),
+    { gross: 0, paid: 0 },
+  );
+  const estimatedProfit = activeSales.reduce((sum, sale) => {
+    const perfumeCost = sale.items.reduce(
+      (cost, item) =>
+        cost +
+        item.ml *
+          (item.unitCost ??
+            d.products.find((product) => product.id === item.productId)?.cost ??
+            0),
+      0,
+    );
+    const expenses =
+      Number(sale.expenses || 0) +
+      Number(sale.marketplaceFee || 0) +
+      Number(sale.shippingCost || 0) +
+      packaging(sale, d.supplies).total;
+    return sum + sale.total - perfumeCost - expenses;
+  }, 0);
   const daily = Array.from({ length: days }, (_, i) =>
     activeSales
       .filter((s) => new Date(s.date + "T12:00").getDate() === i + 1)
-      .reduce((n, s) => n + s.total, 0),
+      .reduce((n, s) => n + Math.max(0, s.paid), 0),
   );
   const avg = daily.slice(0, day).reduce((n, v) => n + v, 0) / Math.max(1, day),
     max = Math.max(avg, ...daily, 1);
@@ -882,28 +762,52 @@ function Dash({
           (x) =>
             d.products.find((p) => p.id === x.productId)?.category === category,
         )
-          .reduce((n, x) => n + x.ml, 0),
+        .reduce((n, x) => n + x.ml, 0),
       0,
     ),
   }));
   const catTotal = categories.reduce((n, x) => n + x.value, 0),
     catMax = Math.max(1, ...categories.map((x) => x.value));
-  const paid = activeSales.filter((s) => s.paid >= s.total).length,
-    partial = activeSales.filter((s) => s.paid > 0 && s.paid < s.total).length,
-    pending = activeSales.filter((s) => !s.paid).length,
-    count = paid + partial + pending;
+  const paid = activeSales.filter(isSaleSettled).length,
+    open = activeSales.filter((sale) => !isSaleSettled(sale)).length,
+    cancelled = monthSales.filter(
+      (s) => s.status === "cancelled" && !isHistoricalSale(s),
+    ).length,
+    count = paid + open + cancelled;
   const a = count ? (paid / count) * 360 : 0,
-    b = count ? ((paid + partial) / count) * 360 : 0;
+    b = count ? ((paid + open) / count) * 360 : 0;
   return (
     <>
-      <Cards
-        v={[
-          [brl(totals.gross), "Faturamento mensal"],
-          [brl(totals.paid), "Total recebido"],
-          [brl(totals.receivable), "A receber"],
-          [brl(totals.gross / (activeSales.length || 1)), "Ticket médio"],
-        ]}
-      />
+      <div className="cards dashboardCards">
+        <div>
+          <span>Faturamento mensal</span>
+          <b>{brl(monthTotals.gross)}</b>
+        </div>
+        <div className="splitCard">
+          <div>
+            <span>Total recebido</span>
+            <b>{brl(monthTotals.paid)}</b>
+          </div>
+          <div>
+            <span>A receber</span>
+            <b>{brl(Math.max(0, monthTotals.gross - monthTotals.paid))}</b>
+          </div>
+        </div>
+        <div>
+          <span>Lucro estimado</span>
+          <b>{brl(estimatedProfit)}</b>
+        </div>
+        <div className="splitCard">
+          <div>
+            <span>Ticket médio</span>
+            <b>{brl(monthTotals.gross / (activeSales.length || 1))}</b>
+          </div>
+          <div>
+            <span>Pedidos no mês</span>
+            <b>{activeSales.length}</b>
+          </div>
+        </div>
+      </div>
       <div className="grid">
         <div className="dashboardMain">
           <div className="panel chart">
@@ -943,7 +847,11 @@ function Dash({
               }}
             >
               <span>
-                <b>{Math.round((totals.paid / (totals.gross || 1)) * 100)}%</b>
+                <b>
+                  {Math.round(
+                    (monthTotals.paid / (monthTotals.gross || 1)) * 100,
+                  )}%
+                </b>
                 <small>recebido</small>
               </span>
             </div>
@@ -951,10 +859,10 @@ function Dash({
               Pagos <b>{paid}</b>
             </p>
             <p className="yellow">
-              Parciais <b>{partial}</b>
+              Pendentes e parciais <b>{open}</b>
             </p>
             <p className="red">
-              Pendentes <b>{pending}</b>
+              Cancelados <b>{cancelled}</b>
             </p>
           </div>
           <div className="panel categories">
@@ -990,13 +898,13 @@ function Dash({
 }
 
 function MarketplaceSummary({ sales }: { sales: V[] }) {
-  const gross = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const gross = sales.reduce((sum, sale) => sum + Math.max(0, sale.paid), 0);
   const tiktok = sales
     .filter((sale) => sale.marketplace === "TikTok Shop")
-    .reduce((sum, sale) => sum + sale.total, 0);
+    .reduce((sum, sale) => sum + Math.max(0, sale.paid), 0);
   const shopee = sales
     .filter((sale) => sale.marketplace === "Shopee")
-    .reduce((sum, sale) => sum + sale.total, 0);
+    .reduce((sum, sale) => sum + Math.max(0, sale.paid), 0);
   return (
     <div className="panel marketplaceSummary">
       <div>
@@ -1047,44 +955,46 @@ function Sales({
   set?: any;
   notify?: (s: string) => void;
 }) {
-  const [salesQuery, setSalesQuery] = useState("");
-  const [showSalesFilters, setShowSalesFilters] = useState(false);
-  const [salesDay, setSalesDay] = useState("");
-  const [salesOrigin, setSalesOrigin] = useState("Todos");
-  const [salesStatus, setSalesStatus] = useState("Todos");
-  const currentSalesMonth = today().slice(0, 7);
-  const [salesMonth, setSalesMonth] = useState(currentSalesMonth);
-  const [salesYear, salesMonthNumber] = salesMonth.split("-").map(Number);
-  const salesMonthLabel = new Intl.DateTimeFormat("pt-BR", {
+  const [query, setQuery] = useState("");
+  const [month, setMonth] = useState(today().slice(0, 7));
+  const [showFilters, setShowFilters] = useState(false);
+  const [saleDay, setSaleDay] = useState("");
+  const [origin, setOrigin] = useState("all");
+  const [saleStatus, setSaleStatus] = useState("all");
+  const monthLabel = new Intl.DateTimeFormat("pt-BR", {
     month: "long",
     year: "numeric",
-  }).format(new Date(salesYear, salesMonthNumber - 1, 1));
-  function changeSalesMonth(offset: number) {
-    const date = new Date(salesYear, salesMonthNumber - 1 + offset, 1);
-    setSalesMonth(
-      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`,
-    );
-    setSalesDay("");
+  }).format(new Date(`${month}-01T12:00:00`));
+  function shiftMonth(delta: number) {
+    const base = new Date(`${month}-01T12:00:00`);
+    base.setMonth(base.getMonth() + delta);
+    setMonth(`${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}`);
+    setSaleDay("");
   }
-  const normalizedQuery = salesQuery
-    .trim()
-    .toLocaleLowerCase("pt-BR")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
   const filteredSales = d.sales.filter((sale) => {
-    const customer = saleCustomer(sale, d)
-      .toLocaleLowerCase("pt-BR")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
+    if (isHistoricalSale(sale)) return false;
+    const customer = saleCustomer(sale, d).toLowerCase();
+    const matchesStatus =
+      saleStatus === "all" ||
+      (saleStatus === "paid" &&
+        sale.status !== "cancelled" &&
+        sale.paid >= sale.total) ||
+      (saleStatus === "open" &&
+        sale.status !== "cancelled" &&
+        !isMarketplaceSale(sale) &&
+        sale.paid < sale.total) ||
+      (saleStatus === "marketplace" &&
+        sale.status !== "cancelled" &&
+        isMarketplaceSale(sale)) ||
+      (saleStatus === "cancelled" && sale.status === "cancelled");
     return (
-      (!normalizedQuery || customer.includes(normalizedQuery)) &&
-      (!salesDay || sale.date === salesDay) &&
-      (!salesMonth || sale.date.startsWith(salesMonth)) &&
-      (salesOrigin === "Todos" ||
-        (salesOrigin === "Marketplace"
-          ? sale.channel === "marketplace"
-          : sale.channel !== "marketplace")) &&
-      (salesStatus === "Todos" || saleStatus(sale) === salesStatus)
+      customer.includes(query.trim().toLowerCase()) &&
+      sale.date.startsWith(month) &&
+      (!saleDay || sale.date === saleDay) &&
+      (origin === "all" ||
+        (origin === "marketplace" && isMarketplaceSale(sale)) ||
+        (origin === "direct" && !isMarketplaceSale(sale))) &&
+      matchesStatus
     );
   });
   function restoreStock(x: D, s: V) {
@@ -1112,6 +1022,7 @@ function Sales({
     set((x: D) => ({
       ...x,
       products: restoreStock(x, s),
+      supplies: moveSupplyStock(x.supplies, s, 1),
       sales: x.sales.map((v) =>
         v.id === s.id ? { ...v, status: "cancelled" } : v,
       ),
@@ -1127,6 +1038,10 @@ function Sales({
     set((x: D) => ({
       ...x,
       products: s.status === "cancelled" ? x.products : restoreStock(x, s),
+      supplies:
+        s.status === "cancelled"
+          ? x.supplies
+          : moveSupplyStock(x.supplies, s, 1),
       sales: x.sales.filter((v) => v.id !== s.id),
     }));
     notify?.("Venda excluída.");
@@ -1134,113 +1049,66 @@ function Sales({
   return (
     <div className="panel table">
       <h2>Vendas</h2>
-      {edit ? (
-        <div className="salesFilterArea">
-          <div className="salesSearchRow">
-            <label>
-              <Search />
-              <input
-                value={salesQuery}
-                onChange={(event) => setSalesQuery(event.target.value)}
-                placeholder="Pesquisar pelo nome do cliente"
-                aria-label="Pesquisar vendas pelo nome do cliente"
-              />
-            </label>
-            <div className="salesMonthFilter salesMonthFilterAlways">
-              <span>Mês</span>
-              <div className="salesMonthPicker">
-                <button
-                  type="button"
-                  onClick={() => changeSalesMonth(-1)}
-                  aria-label="Mês anterior"
-                >
-                  <ChevronLeft />
-                </button>
-                <b>{salesMonthLabel}</b>
-                <button
-                  type="button"
-                  onClick={() => changeSalesMonth(1)}
-                  aria-label="Próximo mês"
-                >
-                  <ChevronRight />
-                </button>
-              </div>
-            </div>
-            <button
-              type="button"
-              className={
-                salesDay ||
-                salesMonth !== currentSalesMonth ||
-                salesOrigin !== "Todos" ||
-                salesStatus !== "Todos"
-                  ? "active"
-                  : ""
-              }
-              onClick={() => setShowSalesFilters((visible) => !visible)}
-              aria-expanded={showSalesFilters}
-            >
-              <ListFilter />
-              Filtrar
-            </button>
-          </div>
-          {showSalesFilters ? (
-            <div className="salesDateFilters">
-              <label>
-                <span>Dia</span>
-                <input
-                  type="date"
-                  value={salesDay}
-                  onChange={(event) => {
-                    const selectedDay = event.target.value;
-                    setSalesDay(selectedDay);
-                    if (selectedDay) setSalesMonth(selectedDay.slice(0, 7));
-                  }}
-                />
-              </label>
-              <label>
-                <span>Origem da venda</span>
-                <select
-                  value={salesOrigin}
-                  onChange={(event) => setSalesOrigin(event.target.value)}
-                >
-                  <option>Todos</option>
-                  <option>Venda direta</option>
-                  <option>Marketplace</option>
-                </select>
-              </label>
-              <label>
-                <span>Status da venda</span>
-                <select
-                  value={salesStatus}
-                  onChange={(event) => setSalesStatus(event.target.value)}
-                >
-                  <option>Todos</option>
-                  <option>Pago</option>
-                  <option>À prazo</option>
-                  <option>Marketplace</option>
-                  <option>Sem custo</option>
-                  <option>Cancelada</option>
-                </select>
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  setSalesDay("");
-                  setSalesMonth(currentSalesMonth);
-                  setSalesOrigin("Todos");
-                  setSalesStatus("Todos");
-                }}
-                disabled={
-                  !salesDay &&
-                  salesMonth === currentSalesMonth &&
-                  salesOrigin === "Todos" &&
-                  salesStatus === "Todos"
-                }
-              >
-                Limpar filtros
-              </button>
-            </div>
-          ) : null}
+      <div className="salesToolbar">
+        <label className="salesSearch">
+          <Search />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Pesquisar pelo nome do cliente"
+          />
+        </label>
+        <div className="monthPicker" aria-label="Mês das vendas">
+          <button type="button" onClick={() => shiftMonth(-1)} aria-label="Mês anterior">
+            <ChevronLeft />
+          </button>
+          <b>{monthLabel}</b>
+          <button type="button" onClick={() => shiftMonth(1)} aria-label="Próximo mês">
+            <ChevronRight />
+          </button>
+        </div>
+        <button
+          type="button"
+          className="filterButton"
+          onClick={() => setShowFilters((visible) => !visible)}
+        >
+          <SlidersHorizontal /> Filtrar
+        </button>
+      </div>
+      {showFilters ? (
+        <div className="salesFilters">
+          <label>
+            <span>Dia</span>
+            <input
+              type="date"
+              value={saleDay}
+              onChange={(event) => {
+                setSaleDay(event.target.value);
+                if (event.target.value) setMonth(event.target.value.slice(0, 7));
+              }}
+            />
+          </label>
+          <label>
+            <span>Origem</span>
+            <select value={origin} onChange={(event) => setOrigin(event.target.value)}>
+              <option value="all">Todas</option>
+              <option value="direct">Venda direta</option>
+              <option value="marketplace">Marketplace</option>
+            </select>
+          </label>
+          <label>
+            <span>Status</span>
+            <select value={saleStatus} onChange={(event) => setSaleStatus(event.target.value)}>
+              <option value="all">Todos</option>
+              <option value="paid">Pago</option>
+              <option value="open">A prazo</option>
+              <option value="marketplace">Marketplace</option>
+              <option value="cancelled">Cancelada</option>
+            </select>
+          </label>
+          <button type="button" onClick={() => { setSaleDay(""); setOrigin("all"); setSaleStatus("all"); }}>
+            Limpar filtros
+          </button>
         </div>
       ) : null}
       <table>
@@ -1264,36 +1132,28 @@ function Sales({
             >
               <td>
                 #{orderNo(s.id)}
-                <small>{s.date}</small>
+                <small>{dateBR(s.date)}</small>
                 {s.status === "cancelled" ? <em>Cancelada</em> : null}
               </td>
               <td>{saleCustomer(s, d)}</td>
               <td>
-                {s.items.length ? (
-                  s.items.map((x, i) => (
-                    <small key={i}>
-                      {d.products.find((p) => p.id === x.productId)?.name} —{" "}
-                      {x.ml} ml{x.isApc ? " · APC" : ""}
-                    </small>
-                  ))
-                ) : (
-                  <small>{s.paymentNote || "Venda antiga"}</small>
-                )}
+                {s.items.map((x, i) => (
+                  <small key={i}>
+                    {d.products.find((p) => p.id === x.productId)?.name} —{" "}
+                    {x.ml} ml{x.isApc ? " · APC" : ""}
+                  </small>
+                ))}
               </td>
               <td>
                 {s.payment}
                 {s.dueDate ? (
                   <small>
-                    {s.dueDate} · {brl(s.installment || 0)}
+                    {dateBR(s.dueDate)} · {brl(s.installment || 0)}
                   </small>
                 ) : null}
               </td>
               <td>
-                {s.channel === "marketplace" ? (
-                  <span className="marketplaceBadge">{s.marketplace}</span>
-                ) : (
-                  "Venda direta"
-                )}
+                {isMarketplaceSale(s) ? s.marketplace || "Marketplace" : "Venda direta"}
                 {s.marketplaceFee ? (
                   <small>Taxa: {brl(s.marketplaceFee)}</small>
                 ) : null}
@@ -1301,9 +1161,6 @@ function Sales({
               <td>
                 {brl(s.total)}
                 <small>Insumos: {brl(packaging(s, d.supplies).total)}</small>
-                {s.shippingCost ? (
-                  <small>Frete DAF: {brl(s.shippingCost)}</small>
-                ) : null}
               </td>
               <td>{saleBadge(s)}</td>
               {edit ? (
@@ -1341,9 +1198,7 @@ function Sales({
           ))}
         </tbody>
       </table>
-      {!filteredSales.length ? (
-        <p className="empty">Nenhuma venda encontrada com esses filtros.</p>
-      ) : null}
+      {!filteredSales.length ? <p className="empty">Nenhuma venda encontrada.</p> : null}
     </div>
   );
 }
@@ -1351,19 +1206,17 @@ const standardPayments = ["Pix", "Cartão de Crédito", "Dinheiro", "À prazo"];
 function isNoCost(s: V) {
   return s.payment === "Outro" || !standardPayments.includes(s.payment);
 }
-function saleStatus(s: V) {
-  return s.status === "cancelled"
-    ? "Cancelada"
-    : s.channel === "marketplace"
-      ? "Marketplace"
+function saleBadge(s: V) {
+  const label =
+    s.status === "cancelled"
+      ? "Cancelada"
+      : isMarketplaceSale(s)
+        ? "Marketplace"
       : isNoCost(s)
         ? "Sem custo"
-        : s.paid >= s.total
+        : isSaleSettled(s)
           ? "Pago"
-          : "À prazo";
-}
-function saleBadge(s: V) {
-  const label = saleStatus(s);
+          : "A prazo";
   return (
     <span
       className={`saleBadge ${label
@@ -1376,6 +1229,16 @@ function saleBadge(s: V) {
   );
 }
 
+function saleOriginBadge(s: V) {
+  const label = isMarketplaceSale(s) ? s.marketplace || "Marketplace" : "Venda direta";
+  const css = isMarketplaceSale(s)
+    ? s.marketplace === "TikTok Shop"
+      ? "tiktok"
+      : "shopee"
+    : "direct";
+  return <strong className={`prepareOrigin ${css}`}>{label}</strong>;
+}
+
 function Prepare({
   d,
   set,
@@ -1386,9 +1249,12 @@ function Prepare({
   notify: (s: string) => void;
 }) {
   const [tab, setTab] = useState("pending");
+  const [shippingSale, setShippingSale] = useState<V | null>(null);
   const list = d.sales.filter(
     (s) =>
-      s.status !== "cancelled" && (tab === "done" ? s.prepared : !s.prepared),
+      s.status !== "cancelled" &&
+      !isHistoricalSale(s) &&
+      (tab === "done" ? s.prepared : !s.prepared),
   );
   function toggle(s: V) {
     const done = !s.prepared;
@@ -1406,7 +1272,21 @@ function Prepare({
         : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
     );
   }
+  function finishWithShipping(method: V["shippingMethod"]) {
+    if (!shippingSale || !method) return;
+    set((state: D) => ({
+      ...state,
+      sales: state.sales.map((sale) =>
+        sale.id === shippingSale.id
+          ? { ...sale, prepared: true, sent: false, shippingMethod: method }
+          : sale,
+      ),
+    }));
+    notify(`Pedido #${orderNo(shippingSale.id)} finalizado para envio por ${method}.`);
+    setShippingSale(null);
+  }
   return (
+    <>
     <div className="panel">
       <h2>Pedidos para preparar</h2>
       <p>Lista alimentada exclusivamente pelas vendas.</p>
@@ -1430,7 +1310,7 @@ function Prepare({
             <button
               className="checkButton"
               aria-label={s.prepared ? "Reabrir pedido" : "Finalizar pedido"}
-              onClick={() => toggle(s)}
+              onClick={() => (s.prepared ? toggle(s) : setShippingSale(s))}
             >
               {s.prepared ? <Check /> : null}
             </button>
@@ -1443,12 +1323,34 @@ function Prepare({
                 </small>
               ))}
             </span>
-            <em>{s.prepared ? "Finalizado" : "A preparar"}</em>
+            <span className="prepareMeta">
+              {saleOriginBadge(s)}
+              <em>{s.prepared ? "Finalizado" : "A preparar"}</em>
+            </span>
           </div>
         ))}
         {!list.length ? <p>Nenhum pedido nesta lista.</p> : null}
       </div>
     </div>
+    {shippingSale ? (
+      <div className="overlay">
+        <div className="systemDialog">
+          <header>
+            <div><small>FORMA DE ENVIO</small><h2>Como o pedido será enviado?</h2></div>
+            <button type="button" onClick={() => setShippingSale(null)}><X /></button>
+          </header>
+          <p>Pedido #{orderNo(shippingSale.id)} · {saleCustomer(shippingSale, d)}</p>
+          <div className="shippingChoices">
+            {(["Correios", "Loggi", "Jadlog", "Uber/Pessoalmente"] as const).map((method) => (
+              <button type="button" key={method} onClick={() => finishWithShipping(method)}>
+                {method}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }
 
@@ -1466,6 +1368,7 @@ function Shipping({
     (s) =>
       s.status !== "cancelled" &&
       s.prepared &&
+      !isHistoricalSale(s) &&
       (tab === "sent" ? s.sent : !s.sent),
   );
   function toggle(s: V) {
@@ -1479,6 +1382,15 @@ function Shipping({
         ? `Pedido #${orderNo(s.id)} movido para Enviados.`
         : `Pedido #${orderNo(s.id)} voltou para A enviar.`,
     );
+  }
+  function changeShippingMethod(saleId: number, shippingMethod: V["shippingMethod"]) {
+    set((state: D) => ({
+      ...state,
+      sales: state.sales.map((sale) =>
+        sale.id === saleId ? { ...sale, shippingMethod } : sale,
+      ),
+    }));
+    notify("Forma de envio atualizada.");
   }
   return (
     <div className="panel">
@@ -1514,7 +1426,7 @@ function Shipping({
               </button>
               <details>
                 <summary>
-                  <span>
+                  <span className="shippingCustomer">
                     <b>
                       Pedido #{orderNo(s.id)} · {saleCustomer(s, d)}
                     </b>
@@ -1527,9 +1439,30 @@ function Shipping({
                         .join(" · ")}
                     </small>
                   </span>
-                  <strong>Informações de entrega</strong>
+                  <strong className={`shippingMethod ${shippingClass(s.shippingMethod)}`}>
+                    {s.shippingMethod || "Envio não informado"}
+                  </strong>
+                  <strong className="deliveryTitle">Informações de entrega</strong>
                 </summary>
                 <div className="delivery">
+                  <label>
+                    <span>Forma de envio</span>
+                    <select
+                      value={s.shippingMethod || ""}
+                      onChange={(event) =>
+                        changeShippingMethod(
+                          s.id,
+                          event.target.value as V["shippingMethod"],
+                        )
+                      }
+                    >
+                      <option value="" disabled>Selecione...</option>
+                      <option>Correios</option>
+                      <option>Loggi</option>
+                      <option>Jadlog</option>
+                      <option>Uber/Pessoalmente</option>
+                    </select>
+                  </label>
                   <FieldView label="Nome" value={saleCustomer(s, d)} />
                   <FieldView label="CPF" value={c?.cpf} />
                   <FieldView label="Telefone" value={c?.phone} />
@@ -1539,12 +1472,18 @@ function Shipping({
                       {c?.addresses.map((a, i) => (
                         <option key={i} value={a.value}>
                           {a.label ? `${a.label} — ` : ""}
-                          {a.value}{a.number ? `, nº ${a.number}` : ""}
+                          {a.value}
                         </option>
                       ))}
                     </select>
                   </label>
                   <FieldView label="CEP" value={c?.cep} />
+                  <FieldView label="Número" value={c?.number} />
+                  <FieldView label="Bairro" value={c?.district} />
+                  <FieldView
+                    label="Cidade / Estado"
+                    value={[c?.city, c?.state].filter(Boolean).join(" / ")}
+                  />
                 </div>
               </details>
             </div>
@@ -1575,144 +1514,140 @@ function Receivables({
   edit: (id: number) => void;
   notify: (message: string) => void;
 }) {
-  const [paymentSale, setPaymentSale] = useState<V | null>(null);
-  const [receivableView, setReceivableView] = useState<
-    "direct" | "marketplace"
-  >("direct");
-  const pendingSales = d.sales
-    .filter((s) => s.status !== "cancelled" && !isNoCost(s) && s.paid < s.total)
+  const [receivableTab, setReceivableTab] = useState<"direct" | "marketplace">(
+    "direct",
+  );
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const allPendingSales = d.sales
+    .filter(
+      (s) =>
+        s.status !== "cancelled" &&
+        !isNoCost(s) &&
+        (marketplacePending(s) || (!isMarketplaceSale(s) && s.paid < s.total)),
+    );
+  const pendingSales = allPendingSales.filter(
+      (sale) =>
+        !overdueOnly ||
+        ((sale.installments || []).length
+          ? (sale.installments || []).some(
+              (installment) =>
+                !installment.paid &&
+                Boolean(installment.date) &&
+                installment.date < today(),
+            )
+          : Boolean(sale.dueDate) && sale.dueDate! < today()),
+    )
     .sort((a, b) => a.date.localeCompare(b.date));
-  const directSales = pendingSales.filter(
-    (sale) => sale.channel !== "marketplace",
-  );
-  const marketplaceSales = pendingSales.filter(
-    (sale) => sale.channel === "marketplace",
-  );
-  const list = receivableView === "marketplace" ? marketplaceSales : directSales;
-  const total = list.reduce((n, s) => n + Math.max(0, s.total - s.paid), 0);
-  function recordPayment(
-    s: V,
-    installmentIndex: number | null,
-    requested: number,
-  ) {
-    const balance = Math.max(0, s.total - s.paid);
-    const amount = Math.min(balance, roundMoney(requested));
-    if (!Number.isFinite(amount) || amount <= 0) return;
+  const directList = pendingSales.filter((sale) => !isMarketplaceSale(sale));
+  const marketplaceList = pendingSales.filter(isMarketplaceSale);
+  const list = receivableTab === "marketplace" ? marketplaceList : directList;
+  const directTotal = allPendingSales
+    .filter((sale) => !isMarketplaceSale(sale))
+    .reduce((sum, sale) => sum + amountDue(sale), 0);
+  const marketplaceTotal = allPendingSales
+    .filter(isMarketplaceSale)
+    .reduce((sum, sale) => sum + amountDue(sale), 0);
+  function recordPayment(s: V) {
+    if (isMarketplaceSale(s)) {
+      set((x: D) => ({
+        ...x,
+        sales: x.sales.map((sale) =>
+          sale.id === s.id
+            ? { ...sale, marketplacePayoutReceived: true }
+            : sale,
+        ),
+      }));
+      notify(`Repasse do pedido #${orderNo(s.id)} confirmado.`);
+      return;
+    }
+    const raw = window.prompt(
+      `Quanto o cliente pagou agora?\nSaldo atual: ${brl(s.total - s.paid)}`,
+    );
+    if (raw === null) return;
+    const amount = Number(raw.replace(",", "."));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      window.alert("Informe um valor de pagamento válido.");
+      return;
+    }
     set((x: D) => ({
       ...x,
       sales: x.sales.map((sale) => {
         if (sale.id !== s.id) return sale;
-        const paid = Math.min(sale.total, roundMoney(sale.paid + amount));
-        const installments = (sale.installments || []).map((installment) => ({
-          ...installment,
-        }));
-        if (installmentIndex !== null && installments[installmentIndex]) {
-          let remainingPayment = amount;
-          const order = [
-            installmentIndex,
-            ...installments
-              .map((_, index) => index)
-              .filter(
-                (index) =>
-                  index !== installmentIndex && !installments[index].paid,
-              ),
-          ];
-          for (const index of order) {
-            if (remainingPayment <= 0.001) break;
-            const installment = installments[index];
-            if (installment.paid) continue;
-            if (remainingPayment + 0.001 >= installment.amount) {
-              remainingPayment = roundMoney(
-                remainingPayment - installment.amount,
-              );
-              installment.paid = true;
-            } else {
-              installment.amount = roundMoney(
-                installment.amount - remainingPayment,
-              );
-              remainingPayment = 0;
-            }
-          }
-        }
-        if (paid + 0.001 >= sale.total) {
-          installments.forEach((installment) => {
-            installment.paid = true;
-          });
-        }
-        const nextInstallment = installments.find(
-          (installment) => !installment.paid,
+        const paid = Math.min(sale.total, sale.paid + amount);
+        const scheduleTotal = (sale.installments || []).reduce(
+          (n, installment) => n + installment.amount,
+          0,
         );
-        return {
-          ...sale,
-          paid,
-          installments,
-          dueDate: nextInstallment?.date,
-          installment: nextInstallment?.amount,
-        };
+        const paidTowardSchedule = Math.max(
+          0,
+          paid - Math.max(0, sale.total - scheduleTotal),
+        );
+        let accumulated = 0;
+        const installments = (sale.installments || []).map((installment) => {
+          accumulated += installment.amount;
+          return {
+            ...installment,
+            paid: accumulated <= paidTowardSchedule + 0.01,
+          };
+        });
+        return { ...sale, paid, installments };
       }),
     }));
-    setPaymentSale(null);
     notify(
-      amount >= balance
+      amount >= s.total - s.paid
         ? `Pedido #${orderNo(s.id)} quitado.`
         : `Pagamento de ${brl(amount)} lançado no pedido #${orderNo(s.id)}.`,
     );
   }
   return (
     <>
-      <div className="segmented receivableTabs" role="tablist">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={receivableView === "direct"}
-          className={receivableView === "direct" ? "active" : ""}
-          onClick={() => setReceivableView("direct")}
-        >
-          Vendas diretas ({directSales.length})
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={receivableView === "marketplace"}
-          className={receivableView === "marketplace" ? "active marketplace" : "marketplace"}
-          onClick={() => setReceivableView("marketplace")}
-        >
-          Marketplace ({marketplaceSales.length})
-        </button>
-      </div>
       <Cards
         v={[
-          [
-            brl(total),
-            receivableView === "marketplace"
-              ? "Total Marketplace a receber"
-              : "Total a receber",
-          ],
-          [
-            String(list.length),
-            receivableView === "marketplace"
-              ? "Vendas Marketplace pendentes"
-              : "Vendas pendentes",
-          ],
+          [brl(directTotal), "Vendas diretas a receber"],
+          [brl(marketplaceTotal), "Marketplace a receber"],
+          [brl(directTotal + marketplaceTotal), "Total geral a receber"],
+          [String(list.length), "Vendas pendentes"],
         ]}
       />
       <div className="panel table">
-        <h2>
-          {receivableView === "marketplace"
-            ? "Marketplace a receber"
-            : "Vendas a receber"}
-        </h2>
-        <p>
-          {receivableView === "marketplace"
-            ? "Vendas pendentes do TikTok Shop e da Shopee."
-            : "Inclui vendas diretas pendentes de qualquer mês."}
-        </p>
+        <div className="receivableHeader">
+          <div>
+            <h2>Vendas a receber</h2>
+            <p>Inclui vendas pendentes de qualquer mês.</p>
+          </div>
+          <div className="receivableTabs" role="tablist" aria-label="Tipo de venda">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={receivableTab === "direct"}
+              className={receivableTab === "direct" ? "active" : ""}
+              onClick={() => setReceivableTab("direct")}
+            >
+              Vendas diretas <b>{directList.length}</b>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={receivableTab === "marketplace"}
+              className={receivableTab === "marketplace" ? "active" : ""}
+              onClick={() => setReceivableTab("marketplace")}
+            >
+              Marketplace <b>{marketplaceList.length}</b>
+            </button>
+          </div>
+          <button
+            type="button"
+            className={overdueOnly ? "overdueFilter active" : "overdueFilter"}
+            onClick={() => setOverdueOnly((current) => !current)}
+          >
+            <SlidersHorizontal /> {overdueOnly ? "Mostrando vencidas" : "Filtrar vencidas"}
+          </button>
+        </div>
         <table>
           <thead>
             <tr>
               <th>Pedido</th>
               <th>Cliente</th>
-              <th>Referente a</th>
               <th>Data da venda</th>
               <th>Falta pagar</th>
               <th>Próximos pagamentos</th>
@@ -1723,29 +1658,17 @@ function Receivables({
             {list.map((s) => (
               <tr key={s.id}>
                 <td>#{orderNo(s.id)}</td>
-                <td>{saleCustomer(s, d)}</td>
                 <td>
-                  {s.channel === "marketplace" ? (
-                    <span className="receivableMarketplace">
-                      {s.marketplace === "Shopee" ? "Shopee" : "TikTok"}
-                    </span>
-                  ) : (
-                    s.paymentNote ||
-                    s.items
-                      .map(
-                        (item) =>
-                          d.products.find(
-                            (product) => product.id === item.productId,
-                          )?.name,
-                      )
-                      .filter(Boolean)
-                      .join(", ") ||
-                    "Não informado"
-                  )}
+                  {saleCustomer(s, d)}
+                  {isMarketplaceSale(s) ? (
+                    <small className="marketplaceReceivableLabel">
+                      {s.marketplace || "Marketplace"}
+                    </small>
+                  ) : null}
                 </td>
-                <td>{s.date}</td>
+                <td>{dateBR(s.date)}</td>
                 <td>
-                  <b>{brl(Math.max(0, s.total - s.paid))}</b>
+                  <b>{brl(amountDue(s))}</b>
                 </td>
                 <td>
                   {s.installments?.length ? (
@@ -1753,7 +1676,7 @@ function Receivables({
                       .filter((p) => !p.paid)
                       .map((p, i) => (
                         <small key={i}>
-                          {p.date || "Sem data"} — {brl(p.amount)}
+                          {p.date ? dateBR(p.date) : "Sem data"} — {brl(p.amount)}
                         </small>
                       ))
                   ) : (
@@ -1764,7 +1687,7 @@ function Receivables({
                   <div className="tableActions">
                     <button
                       className="iconButton payButton"
-                      onClick={() => setPaymentSale(s)}
+                      onClick={() => recordPayment(s)}
                     >
                       <Wallet /> Dar baixa
                     </button>
@@ -1779,141 +1702,11 @@ function Receivables({
         </table>
         {!list.length ? (
           <p className="empty">
-            {receivableView === "marketplace"
-              ? "Nenhuma venda de Marketplace pendente."
-              : "Nenhuma venda direta pendente."}
+            Nenhuma venda pendente nesta categoria.
           </p>
         ) : null}
       </div>
-      {paymentSale ? (
-        <InstallmentPaymentModal
-          key={paymentSale.id}
-          sale={paymentSale}
-          customer={saleCustomer(paymentSale, d)}
-          close={() => setPaymentSale(null)}
-          confirm={(installmentIndex, amount) =>
-            recordPayment(paymentSale, installmentIndex, amount)
-          }
-        />
-      ) : null}
     </>
-  );
-}
-
-function InstallmentPaymentModal({
-  sale,
-  customer,
-  close,
-  confirm,
-}: {
-  sale: V;
-  customer: string;
-  close: () => void;
-  confirm: (installmentIndex: number | null, amount: number) => void;
-}) {
-  const unpaid = (sale.installments || [])
-    .map((installment, index) => ({ installment, index }))
-    .filter(({ installment }) => !installment.paid);
-  const initialIndex = unpaid[0]?.index ?? null;
-  const balance = Math.max(0, sale.total - sale.paid);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(initialIndex);
-  const [amount, setAmount] = useState(
-    initialIndex === null
-      ? balance
-      : Math.min(balance, unpaid[0].installment.amount),
-  );
-  const [error, setError] = useState("");
-
-  function choose(index: number) {
-    setSelectedIndex(index);
-    setAmount(Math.min(balance, sale.installments?.[index]?.amount || balance));
-    setError("");
-  }
-
-  function submit(event: React.FormEvent) {
-    event.preventDefault();
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setError("Informe um valor de pagamento válido.");
-      return;
-    }
-    if (amount > balance + 0.001) {
-      setError(`O pagamento não pode ultrapassar o saldo de ${brl(balance)}.`);
-      return;
-    }
-    confirm(selectedIndex, amount);
-  }
-
-  return (
-    <div className="overlay paymentOverlay">
-      <form onSubmit={submit}>
-        <header>
-          <div>
-            <small>BAIXA DE PAGAMENTO</small>
-            <h2>Dar baixa em parcela</h2>
-          </div>
-          <button type="button" onClick={close} aria-label="Fechar">
-            <X />
-          </button>
-        </header>
-        <div className="paymentContext">
-          <span>
-            <small>Cliente</small>
-            <b>{customer}</b>
-          </span>
-          <span>
-            <small>Saldo a receber</small>
-            <b>{brl(balance)}</b>
-          </span>
-        </div>
-        {unpaid.length ? (
-          <fieldset className="installmentChoices">
-            <legend>Selecione a parcela que está sendo paga</legend>
-            {unpaid.map(({ installment, index }, position) => (
-              <label key={index}>
-                <input
-                  type="radio"
-                  name="paymentInstallment"
-                  checked={selectedIndex === index}
-                  onChange={() => choose(index)}
-                />
-                <span>
-                  <b>Parcela {position + 1}</b>
-                  <small>{installment.date || "Sem data"}</small>
-                  <strong>{brl(installment.amount)}</strong>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-        ) : (
-          <p className="paymentWithoutSchedule">
-            Esta venda não possui parcelas cadastradas. A baixa será aplicada ao
-            saldo total.
-          </p>
-        )}
-        <label>
-          <span>Valor recebido agora</span>
-          <input
-            type="number"
-            min="0.01"
-            max={balance}
-            step="0.01"
-            value={amount}
-            onChange={(event) => {
-              setAmount(Number(event.target.value));
-              setError("");
-            }}
-            autoFocus
-          />
-        </label>
-        {error ? <small className="formError">{error}</small> : null}
-        <footer>
-          <button type="button" onClick={close}>
-            Cancelar
-          </button>
-          <button className="primary">Confirmar baixa</button>
-        </footer>
-      </form>
-    </div>
   );
 }
 
@@ -1939,9 +1732,17 @@ function Stock({
     [brand, setBrand] = useState("Todas"),
     [query, setQuery] = useState("");
   const brands = Array.from(new Set(d.products.map((p) => p.brand))).sort();
+  const perfumeInventoryValue = d.products.reduce(
+    (total, product) => total + Math.max(0, product.stock) * product.cost,
+    0,
+  );
   const filtered = d.products.filter(
     (p) =>
-      (view === "out" ? p.stock <= 0 : p.stock > 0) &&
+      (view === "out"
+        ? p.stock <= 0
+        : view === "apc"
+          ? p.apc > 0
+          : p.stock > 0) &&
       (category === "Todos" || p.category === category) &&
       (brand === "Todas" || p.brand === brand) &&
       `${p.brand} ${p.name}`.toLowerCase().includes(query.toLowerCase()),
@@ -1973,7 +1774,7 @@ function Stock({
       </div>
       <div className="segmented stockSwitch">
         <button
-          className={view === "perfumes" ? "active" : ""}
+          className={view !== "supplies" ? "active" : ""}
           onClick={() => setView("perfumes")}
         >
           Perfumes
@@ -1987,6 +1788,12 @@ function Stock({
       </div>
       {view !== "supplies" ? (
         <div className="segmented">
+          <button
+            className={view === "apc" ? "active" : ""}
+            onClick={() => setView("apc")}
+          >
+            APC's disponíveis ({d.products.filter((p) => p.apc > 0).length})
+          </button>
           <button
             className={view === "out" ? "active" : ""}
             onClick={() => setView("out")}
@@ -2005,6 +1812,7 @@ function Stock({
                 d.products.reduce((n, p) => n + p.stock, 0) + " ml",
                 "Volume disponível",
               ],
+              [brl(perfumeInventoryValue), "Valor em estoque"],
             ]}
           />
           <div className="stockFilters">
@@ -2140,20 +1948,20 @@ function Purchases({
     <>
       <Cards
         v={[
-          [brl(spent), "Gasto em compras/despesas neste mês"],
-          [String(monthly.length), "Registros no mês"],
+          [brl(spent), "Gasto em compras neste mês"],
+          [String(monthly.length), "Compras no mês"],
         ]}
       />
       <div className="panel table">
-        <h2>Histórico de compras e despesas</h2>
+        <h2>Histórico de compras</h2>
         <div className="purchaseFilters">
           <label>
             <Search />
             <input
               value={purchaseQuery}
               onChange={(event) => setPurchaseQuery(event.target.value)}
-              placeholder="Pesquisar compra, despesa, item ou fornecedor"
-              aria-label="Pesquisar no histórico de compras e despesas"
+              placeholder="Pesquisar compra, item ou fornecedor"
+              aria-label="Pesquisar no histórico de compras"
             />
           </label>
           <select
@@ -2182,19 +1990,13 @@ function Purchases({
           <tbody>
             {filteredPurchases.map((p) => (
               <tr key={p.id}>
-                <td>{p.date}</td>
+                <td>{dateBR(p.date)}</td>
                 <td>{p.supplier}</td>
                 <td>{p.type}</td>
                 <td>{p.description}</td>
                 <td>
-                  {p.type === "Outro" ? (
-                    "—"
-                  ) : (
-                    <>
-                      {p.qty}
-                      {p.mlPerBottle ? ` × ${p.mlPerBottle} ml` : ""}
-                    </>
-                  )}
+                  {p.qty}
+                  {p.mlPerBottle ? ` × ${p.mlPerBottle} ml` : ""}
                 </td>
                 <td>{brl(p.total)}</td>
                 <td>
@@ -2215,7 +2017,7 @@ function Purchases({
           </tbody>
         </table>
         {!filteredPurchases.length ? (
-          <p className="empty">Nenhuma compra ou despesa encontrada.</p>
+          <p className="empty">Nenhuma compra encontrada.</p>
         ) : null}
       </div>
     </>
@@ -2251,6 +2053,7 @@ function Clients({
   }
   return (
     <>
+      <Cards v={[[String(d.clients.length), "Clientes cadastrados"]]} />
       <div className="clientSearch">
         <Search />
         <input
@@ -2294,23 +2097,11 @@ function Clients({
   );
 }
 function PaymentBreakdown({ d }: { d: D }) {
-  function paymentKind(sale: V) {
-    if (sale.channel === "marketplace") return "Marketplace";
-    if (sale.paid < sale.total) return "À prazo";
-    const payment = sale.payment
-      .trim()
-      .toLocaleLowerCase("pt-BR")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
-    if (payment.includes("prazo")) return "À prazo";
-    if (payment.includes("cartao")) return "Cartão de Crédito";
-    return payment === "pix" ? "Pix" : sale.payment;
-  }
   const payments = [
-    { name: "Pix", color: "#22a66f" },
-    { name: "Cartão de Crédito", color: "#2f80ed" },
-    { name: "À prazo", color: "#e0b43c" },
-    { name: "Marketplace", color: "#8b5cf6" },
+    { name: "Pix", color: "#22a66f", matches: (sale: V) => !isMarketplaceSale(sale) && ((isInstallmentSale(sale) && isInstallmentSettled(sale)) || (!isInstallmentSale(sale) && sale.payment === "Pix")) },
+    { name: "Cartão de Crédito", color: "#2f80ed", matches: (sale: V) => !isMarketplaceSale(sale) && !isInstallmentSale(sale) && sale.payment === "Cartão de Crédito" },
+    { name: "À prazo", color: "#e0b43c", matches: (sale: V) => !isMarketplaceSale(sale) && isInstallmentSale(sale) && !isInstallmentSettled(sale) },
+    { name: "Marketplace", color: "#8b5cf6", matches: (sale: V) => isMarketplaceSale(sale) },
   ].map((x) => ({
     ...x,
     value: d.sales
@@ -2318,10 +2109,10 @@ function PaymentBreakdown({ d }: { d: D }) {
         (s) =>
           s.status !== "cancelled" &&
           !isNoCost(s) &&
-          !s.historicalReceivable &&
-          paymentKind(s) === x.name,
+          !isHistoricalSale(s) &&
+          x.matches(s),
       )
-      .reduce((n, s) => n + s.total, 0),
+      .reduce((n, s) => n + Math.max(0, s.total), 0),
   }));
   const total = payments.reduce((n, x) => n + x.value, 0);
   let cursor = 0;
@@ -2338,10 +2129,7 @@ function PaymentBreakdown({ d }: { d: D }) {
     <div className="panel financeChart">
       <div>
         <h2>Vendas por forma de pagamento</h2>
-        <p>
-          Distribuição do faturamento entre Pix, cartão, vendas a prazo e
-          Marketplace.
-        </p>
+        <p>Distribuição do faturamento recebido por forma e origem do pagamento.</p>
         <div className="paymentDonut" style={{ background: gradient }}>
           <span>
             <small>Total vendido</small>
@@ -2366,62 +2154,6 @@ function PaymentBreakdown({ d }: { d: D }) {
     </div>
   );
 }
-
-function FinanceCategoryBreakdown({ d }: { d: D }) {
-  const activeSales = d.sales.filter(
-    (sale) =>
-      sale.status !== "cancelled" &&
-      !isNoCost(sale) &&
-      !sale.historicalReceivable,
-  );
-  const categories = ["Nicho", "Árabe", "Designer"].map((category) => ({
-    category,
-    value: activeSales.reduce(
-      (total, sale) =>
-        total +
-        sale.items
-          .filter(
-            (item) =>
-              d.products.find((product) => product.id === item.productId)
-                ?.category === category,
-          )
-          .reduce((sum, item) => sum + item.ml, 0),
-      0,
-    ),
-  }));
-  const total = categories.reduce((sum, item) => sum + item.value, 0);
-  const maximum = Math.max(1, ...categories.map((item) => item.value));
-  return (
-    <div className="panel financeCategoryChart categories">
-      <h2>Vendas por categoria</h2>
-      <p>Distribuição do volume vendido entre nichos, árabes e designers.</p>
-      <div
-        className="categoryDonut"
-        style={{ background: categoryGradient(categories, total) }}
-      />
-      <div className="categoryLegend">
-        {categories.map((item) => (
-          <div
-            key={item.category}
-            className={item.category
-              .toLowerCase()
-              .normalize("NFD")
-              .replace(/[\u0300-\u036f]/g, "")}
-          >
-            <span>
-              {item.category}
-              <b>{item.value.toLocaleString("pt-BR")} ml</b>
-            </span>
-            <i>
-              <b style={{ width: `${(item.value / maximum) * 100}%` }} />
-            </i>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function Finance({
   d,
   totals,
@@ -2429,66 +2161,192 @@ function Finance({
   notify,
 }: {
   d: D;
-  totals: { gross: number; paid: number; receivable: number };
+  totals: { gross: number; paid: number };
   set: any;
   notify: (message: string) => void;
 }) {
-  const currentMonth = today().slice(0, 7);
-  const monthlyPurchasesAndExpenses = d.purchases
-    .filter((purchase) => purchase.date.startsWith(currentMonth))
-    .reduce((sum, purchase) => sum + purchase.total, 0);
-  const monthlySales = d.sales.filter(
-    (sale) =>
-      sale.status !== "cancelled" &&
-      !sale.historicalReceivable &&
-      !isNoCost(sale) &&
-      sale.date.startsWith(currentMonth),
-  );
-  const monthlyPerfumeCost = monthlySales.reduce(
-    (total, sale) =>
-      total +
-      sale.items.reduce(
-        (saleTotal, item) =>
-          saleTotal +
-          item.ml *
-            (item.unitCost ??
-              d.products.find((product) => product.id === item.productId)
-                ?.cost ??
-              0),
-        0,
-      ),
+  const balanceCosts = d.sales
+    .filter(
+      (sale) =>
+        sale.status !== "cancelled" &&
+        !isNoCost(sale) &&
+        !isHistoricalSale(sale),
+    )
+    .reduce(
+      (sum, sale) =>
+        sum +
+        sale.items.reduce(
+          (itemSum, item) =>
+            itemSum +
+            item.ml *
+              (item.unitCost ??
+                d.products.find((product) => product.id === item.productId)?.cost ??
+                0),
+          0,
+        ) +
+        Number(sale.expenses || 0) +
+        Number(sale.marketplaceFee || 0) +
+        Number(sale.shippingCost || 0) +
+        packaging(sale, d.supplies).total,
+      0,
+    );
+  const purchaseExpenses = d.purchases.reduce(
+    (sum, purchase) => sum + Number(purchase.total || 0),
     0,
   );
-  const monthlyFeesAndExpenses = monthlySales.reduce(
-    (total, sale) =>
-      total +
+  const balance = totals.gross - balanceCosts - purchaseExpenses;
+  return (
+    <>
+      <Cards
+        v={[
+          [brl(totals.paid), "Faturamento"],
+          [brl(totals.gross), "Total vendido"],
+          [brl(totals.gross - totals.paid), "A receber"],
+          [brl(balance), "Saldo"],
+        ]}
+      />
+      <PaymentBreakdown d={d} />
+      <ProfitControl d={d} set={set} notify={notify} />
+      <InventoryProjection d={d} />
+      <MarketplaceForecast d={d} set={set} notify={notify} />
+    </>
+  );
+}
+
+function InventoryProjection({ d }: { d: D }) {
+  const inventoryCost = d.products.reduce(
+    (sum, product) => sum + Math.max(0, product.stock) * product.cost,
+    0,
+  );
+  const sales = d.sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      !isHistoricalSale(sale),
+  );
+  const revenue = sales.reduce((sum, sale) => sum + sale.total, 0);
+  const costs = sales.reduce(
+    (sum, sale) =>
+      sum +
+      sale.items.reduce(
+        (itemSum, item) =>
+          itemSum +
+          item.ml *
+            (item.unitCost ??
+              d.products.find((product) => product.id === item.productId)?.cost ??
+              0),
+        0,
+      ) +
       Number(sale.expenses || 0) +
       Number(sale.marketplaceFee || 0) +
       Number(sale.shippingCost || 0) +
       packaging(sale, d.supplies).total,
     0,
   );
-  const balance =
-    totals.gross -
-    monthlyPerfumeCost -
-    monthlyFeesAndExpenses -
-    monthlyPurchasesAndExpenses;
+  const margin = revenue ? Math.max(0, Math.min(0.9, (revenue - costs) / revenue)) : 0;
+  const projectedRevenue = margin ? inventoryCost / (1 - margin) : inventoryCost;
   return (
-    <>
-      <Cards
-        v={[
-          [brl(totals.gross), "Faturamento"],
-          [brl(totals.paid), "Recebido"],
-          [brl(totals.receivable), "A receber"],
-          [brl(balance), "Saldo"],
-        ]}
-      />
-      <div className="financeChartsGrid">
-        <PaymentBreakdown d={d} />
-        <FinanceCategoryBreakdown d={d} />
+    <div className="panel inventoryProjection">
+      <div>
+        <span>Valor atual do estoque de perfumes</span>
+        <b>{brl(inventoryCost)}</b>
+        <small>Custo dos ml ainda disponíveis</small>
       </div>
-      <ProfitControl d={d} set={set} notify={notify} />
-    </>
+      <div>
+        <span>Projeção de vendas</span>
+        <b>{brl(projectedRevenue)}</b>
+        <small>Com base na margem média de {(margin * 100).toFixed(1).replace(".", ",")}%</small>
+      </div>
+      <div>
+        <span>Lucro projetado do estoque</span>
+        <b>{brl(Math.max(0, projectedRevenue - inventoryCost))}</b>
+        <small>Estimativa, antes de novas despesas</small>
+      </div>
+    </div>
+  );
+}
+
+function MarketplaceForecast({
+  d,
+  set,
+  notify,
+}: {
+  d: D;
+  set: any;
+  notify: (message: string) => void;
+}) {
+  const terms = d.marketplacePayoutDays || { "TikTok Shop": 9, Shopee: 7 };
+  const [editingTerms, setEditingTerms] = useState(false);
+  const pending = d.sales
+    .filter(
+      (sale) =>
+        isMarketplaceSale(sale) &&
+        sale.status !== "cancelled" &&
+        marketplacePending(sale),
+    )
+    .map((sale) => {
+      const platform = sale.marketplace || "Shopee";
+      const expected = (() => {
+        const date = new Date(`${sale.date}T12:00:00`);
+        date.setDate(date.getDate() + terms[platform]);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      })();
+      return { sale, platform, expected };
+    })
+    .sort((a, b) => a.expected.localeCompare(b.expected));
+  function saveTerms(event: any) {
+    event.preventDefault();
+    const form = Object.fromEntries(new FormData(event.currentTarget));
+    const next = { Shopee: Number(form.shopee), "TikTok Shop": Number(form.tiktok) };
+    if (!Number.isFinite(next.Shopee) || !Number.isFinite(next["TikTok Shop"]) || next.Shopee < 0 || next["TikTok Shop"] < 0) {
+      window.alert("Informe prazos válidos em dias.");
+      return;
+    }
+    set((state: D) => ({ ...state, marketplacePayoutDays: next }));
+    setEditingTerms(false);
+    notify("Prazos de repasse atualizados.");
+  }
+  return (
+    <div className="panel marketplaceForecast">
+      <div className="forecastHead">
+        <div>
+          <h2>Previsão de recebimento de marketplaces</h2>
+          <p>Shopee: {terms.Shopee} dias · TikTok Shop: {terms["TikTok Shop"]} dias</p>
+        </div>
+        <button type="button" className="iconButton" onClick={() => setEditingTerms(true)}>
+          <Pencil /> Editar prazos
+        </button>
+      </div>
+      <div className="forecastList">
+        {pending.map(({ sale, platform, expected }) => (
+          <div key={sale.id}>
+            <span>#{orderNo(sale.id)} · {platform}</span>
+            <b>{brl(amountDue(sale))}</b>
+            <small>Previsão: {dateBR(expected)}</small>
+          </div>
+        ))}
+        {!pending.length ? <p className="empty">Nenhum repasse pendente.</p> : null}
+      </div>
+      {editingTerms ? (
+        <div className="overlay nestedOverlay">
+          <form onSubmit={saveTerms}>
+            <header>
+              <div><small>CONFIGURAÇÃO</small><h2>Editar prazos de repasse</h2></div>
+              <button type="button" onClick={() => setEditingTerms(false)}><X /></button>
+            </header>
+            <Field n="shopee" l="Prazo da Shopee (dias)" t="number" v={terms.Shopee} />
+            <Field n="tiktok" l="Prazo do TikTok Shop (dias)" t="number" v={terms["TikTok Shop"]} />
+            <footer>
+              <button type="button" onClick={() => setEditingTerms(false)}>Cancelar</button>
+              <button className="primary">Salvar prazos</button>
+            </footer>
+          </form>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -2501,9 +2359,10 @@ function ProfitControl({
   set: any;
   notify: (message: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [showOrders, setShowOrders] = useState(false);
+  const [editingSale, setEditingSale] = useState<V | null>(null);
   const sales = d.sales.filter(
-    (sale) => sale.status !== "cancelled" && !sale.historicalReceivable,
+    (sale) => sale.status !== "cancelled" && !isHistoricalSale(sale),
   );
   const rows = sales.map((sale) => {
     const perfumeCost = sale.items.reduce(
@@ -2531,44 +2390,14 @@ function ProfitControl({
   const expenses = rows.reduce((sum, row) => sum + row.expenses, 0);
   const profit = revenue - perfumeCost - expenses;
   const margin = revenue ? (profit / revenue) * 100 : 0;
-  function setExpense(sale: V) {
-    const raw = window.prompt(
-      `Despesas extras do pedido #${orderNo(sale.id)} (frete e insumos já são calculados separadamente)`,
-      String(sale.expenses || 0).replace(".", ","),
-    );
-    if (raw === null) return;
-    const value = Number(raw.replace(",", "."));
-    if (!Number.isFinite(value) || value < 0) {
-      window.alert("Informe um valor de despesa válido.");
-      return;
-    }
-    set((state: D) => ({
-      ...state,
-      sales: state.sales.map((item) =>
-        item.id === sale.id ? { ...item, expenses: value } : item,
-      ),
-    }));
-    notify(`Despesa do pedido #${orderNo(sale.id)} atualizada.`);
-  }
   return (
+    <>
     <div className="panel profitControl">
-      <div className="profitControlHeader">
-        <div>
-          <h2>Margem e despesas por pedido</h2>
-          <p>
-            Calculado pelo preço vendido, custo por ml do perfume e despesas
-            lançadas.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="secondary"
-          onClick={() => setExpanded((current) => !current)}
-          aria-expanded={expanded}
-        >
-          {expanded ? "Ocultar pedidos" : "Ver pedidos"}
-        </button>
-      </div>
+      <h2>Margem e despesas por pedido</h2>
+      <p>
+        Calculado pelo preço vendido, custo por ml do perfume e despesas
+        lançadas.
+      </p>
       <Cards
         v={[
           [brl(perfumeCost), "Custo dos perfumes"],
@@ -2580,81 +2409,134 @@ function ProfitControl({
       <div className="marginTrack">
         <i style={{ width: `${Math.max(0, Math.min(100, margin))}%` }} />
       </div>
-      {expanded ? (
-        <div className="profitControlDetails">
-          <div className="table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Pedido</th>
-                  <th>Venda</th>
-                  <th>Custo perfume</th>
-                  <th>Despesas</th>
-                  <th>Lucro</th>
-                  <th>Ação</th>
+      <button
+        type="button"
+        className="iconButton profitOrdersToggle"
+        onClick={() => setShowOrders((visible) => !visible)}
+      >
+        {showOrders ? "Ocultar pedidos" : "Ver pedidos"}
+      </button>
+      {showOrders ? <div className="table">
+        <table>
+          <thead>
+            <tr>
+              <th>Pedido</th>
+              <th>Venda</th>
+              <th>Custo perfume</th>
+              <th>Despesas</th>
+              <th>Lucro</th>
+              <th>Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(
+              ({
+                sale,
+                perfumeCost: cost,
+                expenses: expense,
+                profit: rowProfit,
+              }) => (
+                <tr key={sale.id}>
+                  <td>#{orderNo(sale.id)}</td>
+                  <td>{brl(sale.total)}</td>
+                  <td>{brl(cost)}</td>
+                  <td>
+                    {brl(expense)}
+                    <details>
+                      <summary>Ver insumos</summary>
+                      {packaging(sale, d.supplies).lines.map((line) => (
+                        <small key={line.name}>
+                          {line.qty} × {line.name}:{" "}
+                          {line.missing
+                            ? "Custo não cadastrado"
+                            : brl(line.total)}
+                        </small>
+                      ))}
+                    </details>
+                  </td>
+                  <td>{brl(rowProfit)}</td>
+                  <td>
+                    <button
+                      className="iconButton"
+                      onClick={() => setEditingSale(sale)}
+                    >
+                      <Pencil /> Editar despesa
+                    </button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {rows.map(
-                  ({
-                    sale,
-                    perfumeCost: cost,
-                    expenses: expense,
-                    profit: rowProfit,
-                  }) => (
-                    <tr key={sale.id}>
-                      <td>#{orderNo(sale.id)}</td>
-                      <td>{brl(sale.total)}</td>
-                      <td>{brl(cost)}</td>
-                      <td>
-                        {brl(expense)}
-                        <details>
-                          <summary>Ver insumos</summary>
-                          {packaging(sale, d.supplies).lines.map((line) => (
-                            <small key={line.name}>
-                              {line.qty} × {line.name}:{" "}
-                              {line.missing
-                                ? "Custo não cadastrado"
-                                : brl(line.total)}
-                            </small>
-                          ))}
-                          {sale.marketplaceFee ? (
-                            <small>
-                              Taxa do marketplace: {brl(sale.marketplaceFee)}
-                            </small>
-                          ) : null}
-                          {sale.shippingCost ? (
-                            <small>
-                              Frete por conta da DAF: {brl(sale.shippingCost)}
-                            </small>
-                          ) : null}
-                        </details>
-                      </td>
-                      <td>{brl(rowProfit)}</td>
-                      <td>
-                        <button
-                          className="iconButton"
-                          onClick={() => setExpense(sale)}
-                        >
-                          <Pencil /> Editar despesa
-                        </button>
-                      </td>
-                    </tr>
-                  ),
-                )}
-              </tbody>
-            </table>
-          </div>
+              ),
+            )}
+          </tbody>
+        </table>
+      </div> : null}
+    </div>
+    {editingSale ? (
+      <SaleCostEditor
+        key={editingSale.id}
+        sale={editingSale}
+        d={d}
+        close={() => setEditingSale(null)}
+        save={(updatedSale) => {
+          set((state: D) => {
+            let supplies = moveSupplyStock(state.supplies, editingSale, 1);
+            supplies = moveSupplyStock(supplies, updatedSale, -1);
+            return {
+              ...state,
+              supplies,
+              sales: state.sales.map((sale) => sale.id === updatedSale.id ? updatedSale : sale),
+            };
+          });
+          setEditingSale(null);
+          notify(`Custos do pedido #${orderNo(updatedSale.id)} atualizados.`);
+        }}
+      />
+    ) : null}
+    </>
+  );
+}
+
+function SaleCostEditor({ sale, d, close, save }: { sale: V; d: D; close: () => void; save: (sale: V) => void }) {
+  const automatic = automaticPackaging(sale);
+  const [extraExpenses, setExtraExpenses] = useState(Number(sale.expenses || 0));
+  const [marketplaceFee, setMarketplaceFee] = useState(Number(sale.marketplaceFee || 0));
+  const [freightPayer, setFreightPayer] = useState<"client" | "daf">(sale.shippingPaidBy || (sale.shippingCost ? "daf" : "client"));
+  const [freightCost, setFreightCost] = useState(Number(sale.shippingCost || 0));
+  const [unitCosts, setUnitCosts] = useState(sale.items.map((item) => item.unitCost ?? d.products.find((product) => product.id === item.productId)?.cost ?? 0));
+  const [supplyQuantities, setSupplyQuantities] = useState<Record<string, number>>(Object.fromEntries(PACKAGING_RULES.map((name) => [name, sale.supplyOverrides?.[name] ?? automatic[name]])));
+  const previewSale: V = {
+    ...sale,
+    expenses: extraExpenses,
+    marketplaceFee,
+    shippingPaidBy: freightPayer,
+    shippingCost: freightPayer === "daf" ? freightCost : 0,
+    supplyOverrides: supplyQuantities,
+    items: sale.items.map((item, index) => ({ ...item, unitCost: Math.max(0, unitCosts[index] || 0) })),
+  };
+  const perfumeCost = previewSale.items.reduce((sum, item) => sum + item.ml * Number(item.unitCost || 0), 0);
+  const supplyCost = packaging(previewSale, d.supplies).total;
+  const totalExpenses = extraExpenses + marketplaceFee + Number(previewSale.shippingCost || 0) + supplyCost;
+  const profit = previewSale.total - perfumeCost - totalExpenses;
+  return (
+    <div className="overlay">
+      <form className="costEditor" onSubmit={(event) => { event.preventDefault(); save(previewSale); }}>
+        <header><div><small>CUSTOS DO PEDIDO #{orderNo(sale.id)}</small><h2>Editar despesas e margem</h2></div><button type="button" onClick={close}><X /></button></header>
+        <div className="row">
+          <label><span>Despesas extras</span><input type="number" min="0" step="0.01" value={extraExpenses} onChange={(e) => setExtraExpenses(parseDecimal(e.target.value))} /></label>
+          <label><span>Taxa do marketplace</span><input type="number" min="0" step="0.01" value={marketplaceFee} onChange={(e) => setMarketplaceFee(parseDecimal(e.target.value))} disabled={!isMarketplaceSale(sale)} /></label>
         </div>
-      ) : null}
+        <Choices label="Frete pago pelo" a={["Cliente", "DAF"]} v={freightPayer === "daf" ? "DAF" : "Cliente"} set={(value) => setFreightPayer(value === "DAF" ? "daf" : "client")} />
+        {freightPayer === "daf" ? <label><span>Valor do frete</span><input type="number" min="0" step="0.01" value={freightCost} onChange={(e) => setFreightCost(parseDecimal(e.target.value))} /></label> : null}
+        <div className="costEditorSection"><h3>Custo dos perfumes</h3>{sale.items.map((item, index) => <label key={`${item.productId}-${index}`}><span>{d.products.find((product) => product.id === item.productId)?.name || `Perfume ${index + 1}`} — {item.ml} ml · custo por ml</span><input type="number" min="0" step="0.01" value={unitCosts[index] || 0} onChange={(e) => setUnitCosts((current) => { const next = [...current]; next[index] = parseDecimal(e.target.value); return next; })} /></label>)}</div>
+        <div className="costEditorSection"><h3>Insumos e suprimentos</h3>{PACKAGING_RULES.map((name) => <label key={name}><span>{name}</span><input type="number" min="0" step="1" value={supplyQuantities[name] || 0} onChange={(e) => setSupplyQuantities((current) => ({ ...current, [name]: Math.max(0, parseDecimal(e.target.value)) }))} /></label>)}</div>
+        <div className="costEditorSummary"><span>Perfumes <b>{brl(perfumeCost)}</b></span><span>Insumos <b>{brl(supplyCost)}</b></span><span>Despesas totais <b>{brl(totalExpenses)}</b></span><span>Lucro estimado <b>{brl(profit)}</b></span></div>
+        <footer><button type="button" onClick={close}>Cancelar</button><button className="primary">Salvar custos</button></footer>
+      </form>
     </div>
   );
 }
 
 function PackagingSummary({ d }: { d: D }) {
-  const active = d.sales.filter(
-    (s) => s.status !== "cancelled" && !s.historicalReceivable,
-  );
+  const active = d.sales.filter((s) => s.status !== "cancelled");
   const cost = active.reduce((n, s) => n + packaging(s, d.supplies).total, 0);
   const missing = [
     ...new Set(active.flatMap((s) => packaging(s, d.supplies).missing)),
@@ -2694,8 +2576,8 @@ function PackagingSummary({ d }: { d: D }) {
         ]}
       />
       <p>
-        Insumos calculados pelos preços unitários atuais, incluindo vendas
-        antigas. Não altera retroativamente o saldo físico dos suprimentos.
+        Insumos calculados pelos preços unitários atuais e baixados
+        automaticamente do estoque em cada pedido.
       </p>
       {missing.length ? (
         <p>Custos incompletos: confira {missing.join(", ")}.</p>
@@ -2750,7 +2632,7 @@ function InventoryEdit({
         ),
       }));
     } else if (purchase) {
-      const qty = purchase.type === "Outro" ? 1 : Number(f.qty),
+      const qty = Number(f.qty),
         total = Number(f.total),
         ml = purchase.type === "Perfume" ? Number(f.ml) : undefined;
       if (
@@ -2773,7 +2655,7 @@ function InventoryEdit({
           purchase.description.trim().toLowerCase(),
       );
       const target = purchase.type === "Perfume" ? product : item;
-      if (purchase.type !== "Outro" && !target) {
+      if (!target) {
         setError(
           "O item original não foi encontrado no estoque. Restaure o nome original antes de editar esta compra.",
         );
@@ -2782,7 +2664,7 @@ function InventoryEdit({
       const before = purchase.qty * (purchase.mlPerBottle || 1),
         after = qty * (ml || 1),
         delta = after - before;
-      if (target && target.stock + delta < 0) {
+      if (target.stock + delta < 0) {
         setError(
           "A correção deixaria o estoque negativo. Confira as vendas e a quantidade da compra.",
         );
@@ -2797,10 +2679,6 @@ function InventoryEdit({
                 ...p,
                 date: String(f.date),
                 supplier: String(f.supplier),
-                description:
-                  purchase.type === "Outro"
-                    ? String(f.description)
-                    : p.description,
                 qty,
                 total,
                 mlPerBottle: ml,
@@ -2808,12 +2686,12 @@ function InventoryEdit({
             : p,
         ),
         products: x.products.map((p) =>
-          purchase.type !== "Outro" && product && p.id === product.id
+          product && p.id === product.id
             ? { ...p, stock: p.stock + delta, cost: newCost }
             : p,
         ),
         supplies: x.supplies.map((s) =>
-          item && purchase.type === "Suprimento / insumo" && s.id === item.id
+          item && purchase.type !== "Perfume" && s.id === item.id
             ? { ...s, stock: s.stock + delta, cost: newCost }
             : s,
         ),
@@ -2825,7 +2703,7 @@ function InventoryEdit({
     <div className="overlay">
       <form onSubmit={save}>
         <header>
-          <h2>{supply ? "Editar suprimento" : "Editar compra/despesa"}</h2>
+          <h2>{supply ? "Editar suprimento" : "Editar compra"}</h2>
           <button type="button" onClick={close}>
             <X />
           </button>
@@ -2850,20 +2728,10 @@ function InventoryEdit({
           </>
         ) : purchase ? (
           <>
-            {purchase.type === "Outro" ? (
-              <Field
-                n="description"
-                l="Descrição da despesa"
-                v={purchase.description}
-              />
-            ) : (
-              <p>{purchase.description}</p>
-            )}
+            <p>{purchase.description}</p>
             <Field n="date" l="Data" t="date" v={purchase.date} />
             <Field n="supplier" l="Fornecedor" v={purchase.supplier} />
-            {purchase.type !== "Outro" ? (
-              <Field n="qty" l="Quantidade" t="number" v={purchase.qty} />
-            ) : null}
+            <Field n="qty" l="Quantidade" t="number" v={purchase.qty} />
             {purchase.type === "Perfume" ? (
               <Field
                 n="ml"
@@ -2873,14 +2741,10 @@ function InventoryEdit({
               />
             ) : null}
             <Field n="total" l="Total pago" t="number" v={purchase.total} />
-            {purchase.type !== "Outro" ? (
-              <p>
-                A quantidade altera o estoque pela diferença. O preço unitário
-                será atualizado para o valor desta compra corrigida.
-              </p>
-            ) : (
-              <p>Este registro não movimenta o estoque.</p>
-            )}
+            <p>
+              A quantidade altera o estoque pela diferença. O preço unitário
+              será atualizado para o valor desta compra corrigida.
+            </p>
           </>
         ) : null}
         {error ? <p role="alert">{error}</p> : null}
@@ -2910,8 +2774,7 @@ function Form({
     existingSale = d.sales.find((s) => s.id === modal!.id),
     existingClient = d.clients.find((c) => c.id === modal!.id),
     existingProduct = d.products.find((p) => p.id === modal!.id);
-  const isOldSale =
-    type === "oldSale" || Boolean(existingSale?.historicalReceivable);
+  const isOldSale = type === "oldSale";
   const isSale = type === "sale" || type === "marketplace" || isOldSale;
   const isMarketplace =
     type === "marketplace" || existingSale?.channel === "marketplace";
@@ -2928,9 +2791,7 @@ function Form({
         ]
       : [];
   const [pay, setPay] = useState(
-      isMarketplace || isOldSale
-        ? "À prazo"
-        : existingSale?.payment || "Pix",
+      isMarketplace ? "À prazo" : existingSale?.payment || "Pix",
     ),
     [lines, setLines] = useState(existingSale?.items.length || 1),
     [apcLines, setApcLines] = useState<boolean[]>(
@@ -2954,131 +2815,92 @@ function Form({
       total: existingSale?.total || 0,
       paid: existingSale?.paid || 0,
     });
-  const [installmentAmounts, setInstallmentAmounts] = useState<number[]>(
-    existingInstallments.length
-      ? existingInstallments.map((installment) => installment.amount)
-      : [Math.max(0, (existingSale?.total || 0) - (existingSale?.paid || 0))],
-  );
-  const [installmentDates, setInstallmentDates] = useState<string[]>(
-    existingInstallments.length
-      ? existingInstallments.map((installment) => installment.date)
-      : [""],
-  );
-  const [installmentPaid, setInstallmentPaid] = useState<boolean[]>(
-    existingInstallments.length
-      ? existingInstallments.map((installment) => Boolean(installment.paid))
-      : [false],
-  );
-  const [installmentsCustomized, setInstallmentsCustomized] = useState(
-    existingInstallments.length > 0,
-  );
-  const [sellerPaysShipping, setSellerPaysShipping] = useState(
-    Number(existingSale?.shippingCost || 0) > 0,
-  );
-  const [cepStatus, setCepStatus] = useState("");
-  const formRef = useRef<HTMLFormElement>(null);
-
-  async function fillAddressFromCep(rawCep: string, addressField: string) {
-    const cep = rawCep.replace(/\D/g, "");
-    if (!cep) {
-      setCepStatus("");
-      return;
-    }
-    if (cep.length !== 8) {
-      setCepStatus("Informe um CEP com 8 números.");
-      return;
-    }
-    setCepStatus("Buscando endereço...");
-    try {
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const result = await response.json();
-      if (!response.ok || result.erro) throw new Error("CEP não encontrado");
-      const address = [
-        result.logradouro,
-        result.complemento,
-        result.bairro,
-        result.localidade && result.uf
-          ? `${result.localidade}/${result.uf}`
-          : result.localidade || result.uf,
-      ]
-        .filter(Boolean)
-        .join(" - ");
-      const input = formRef.current?.elements.namedItem(
-        addressField,
-      ) as HTMLInputElement | null;
-      if (input) input.value = address;
-      setCepStatus("Endereço preenchido. Informe apenas o número da residência.");
-    } catch {
-      setCepStatus("CEP não encontrado. Você ainda pode preencher manualmente.");
-    }
-  }
-  const outstandingAmount = Math.max(
-    0,
-    saleAmounts.total - saleAmounts.paid,
-  );
-  const scheduledAmount = Array.from(
-    { length: installmentLines },
-    (_, index) => (installmentPaid[index] ? 0 : installmentAmounts[index] || 0),
-  ).reduce((total, amount) => total + amount, 0);
-  const scheduleDifference = outstandingAmount - scheduledAmount;
-  useEffect(() => {
-    if (installmentsCustomized) return;
-    setInstallmentAmounts(splitMoney(outstandingAmount, installmentLines));
-  }, [installmentLines, installmentsCustomized, outstandingAmount]);
-  function changeInstallmentAmount(index: number, requestedAmount: number) {
-    const amount = Math.min(outstandingAmount, Math.max(0, requestedAmount));
-    setInstallmentsCustomized(true);
-    setInstallmentAmounts((values) => {
-      const next = Array.from(
-        { length: installmentLines },
-        (_, current) => values[current] || 0,
-      );
-      next[index] = roundMoney(amount);
-      const redistributable = next
-        .map((_, current) => current)
-        .filter((current) => current !== index && !installmentPaid[current]);
-      const portions = splitMoney(
-        Math.max(0, outstandingAmount - next[index]),
-        redistributable.length,
-      );
-      redistributable.forEach((current, portionIndex) => {
-        next[current] = portions[portionIndex];
-      });
-      return next;
-    });
-  }
   const [saleVolumes, setSaleVolumes] = useState<number[]>(
     existingSale?.items.map((item) => item.ml) || [],
   );
-  const [removedLines, setRemovedLines] = useState<Set<number>>(new Set());
+  const [clientDraft, setClientDraft] = useState({
+    name: existingClient?.name || "",
+    phone: existingClient?.phone || "",
+    cpf: existingClient?.cpf || "",
+    cep: existingClient?.cep || "",
+    address: existingClient?.addresses[0]?.value || "",
+    number: existingClient?.number || "",
+    district: existingClient?.district || "",
+    city: existingClient?.city || "",
+    state: existingClient?.state || "",
+    label: existingClient?.addresses[0]?.label || "Principal",
+  });
+  const [clientLookupMessage, setClientLookupMessage] = useState("");
   const [supplyOverrides, setSupplyOverrides] = useState<
     Record<string, number>
   >(existingSale?.supplyOverrides || {});
-  const activeLineIndexes = Array.from({ length: lines }, (_, index) => index).filter(
-    (index) => !removedLines.has(index),
+  const [shippingPaidBy, setShippingPaidBy] = useState<"Cliente" | "DAF">(
+    existingSale?.shippingPaidBy === "daf" || Number(existingSale?.shippingCost || 0) > 0
+      ? "DAF"
+      : "Cliente",
   );
+  function findClientByCpf(value: string) {
+    const cpf = value.replace(/\D/g, "");
+    if (cpf.length !== 11) return;
+    const found = d.clients.find(
+      (client) =>
+        client.id !== existingClient?.id &&
+        client.cpf.replace(/\D/g, "") === cpf,
+    );
+    if (!found) return;
+    setClientDraft({
+      name: found.name,
+      phone: found.phone,
+      cpf: found.cpf,
+      cep: found.cep,
+      address: found.addresses[0]?.value || "",
+      number: found.number || "",
+      district: found.district || "",
+      city: found.city || "",
+      state: found.state || "",
+      label: found.addresses[0]?.label || "Principal",
+    });
+    setClientLookupMessage(`Cliente encontrado: ${found.name}`);
+  }
+  async function fillAddressFromCep(value: string) {
+    const cep = value.replace(/\D/g, "");
+    if (cep.length !== 8) return;
+    setClientLookupMessage("Consultando CEP...");
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const address = await response.json();
+      if (!response.ok || address.erro) throw new Error("CEP não encontrado");
+      setClientDraft((current) => ({
+        ...current,
+        cep: address.cep || current.cep,
+        address: address.logradouro || current.address,
+        district: address.bairro || "",
+        city: address.localidade || "",
+        state: address.uf || "",
+      }));
+      setClientLookupMessage("Endereço preenchido pelo CEP.");
+    } catch {
+      setClientLookupMessage("Não foi possível localizar este CEP.");
+    }
+  }
   function submit(e: any) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
     if (isSale && !isOldSale) {
-      const invalid = activeLineIndexes.map((i) =>
-        String(f["mobileProductName" + i] || f["productName" + i] || ""),
+      const invalid = Array.from({ length: lines }, (_, i) =>
+        String(f["productName" + i] || ""),
       ).find(
         (typed) => !d.products.some((p) => `${p.brand} ${p.name}` === typed),
       );
-      if (invalid !== undefined) {
+      if (invalid) {
         window.alert(
-          invalid
-            ? `O perfume “${invalid}” não foi encontrado no estoque. Selecione uma opção da busca.`
-            : "Selecione um perfume do estoque.",
+          `O perfume “${invalid}” não foi encontrado no estoque. Selecione uma opção da busca.`,
         );
         return;
       }
-      const apcProducts = activeLineIndexes.map((i) => {
+      const apcProducts = Array.from({ length: lines }, (_, i) => {
         if (!apcLines[i]) return null;
-        const typed = String(
-          f["mobileProductName" + i] || f["productName" + i] || "",
-        );
+        const typed = String(f["productName" + i] || "");
         return d.products.find((p) => `${p.brand} ${p.name}` === typed);
       }).filter(Boolean) as P[];
       if (new Set(apcProducts.map((p) => p.id)).size !== apcProducts.length) {
@@ -3135,20 +2957,65 @@ function Form({
             : [...x.clients, c],
         };
       }
+      if (isOldSale) {
+        let clientId = Number(f.clientId);
+        let clients = x.clients;
+        if (newClient) {
+          clientId = Date.now();
+          const address = String(f.newAddress || "");
+          clients = [
+            ...clients,
+            {
+              id: clientId,
+              name: String(f.newName),
+              phone: String(f.newPhone || ""),
+              cpf: String(f.newCpf || ""),
+              cep: String(f.newCep || ""),
+              number: String(f.newNumber || ""),
+              date: String(f.date),
+              addresses: address ? [{ label: "Principal", value: address }] : [],
+            },
+          ];
+        }
+        const installments = Array.from(
+          { length: installmentLines },
+          (_, index) => ({
+            date: String(f["due" + index] || ""),
+            amount: Number(f["installment" + index] || 0),
+          }),
+        ).filter((installment) => installment.date || installment.amount);
+        const sale: V = {
+          id: x.sales.reduce((max, current) => Math.max(max, current.id), 0) + 1,
+          date: String(f.date),
+          clientId,
+          items: [],
+          total: Number(f.total),
+          paid: 0,
+          payment: "À prazo",
+          description: String(f.description || "Venda antiga"),
+          dueDate: installments[0]?.date,
+          installment: installments[0]?.amount,
+          installments,
+          prepared: true,
+          sent: true,
+          status: "active",
+          channel: "direct",
+          historical: true,
+        };
+        return { ...x, clients, sales: [sale, ...x.sales] };
+      }
       if (type === "purchase") {
         const supplier = newSupplier
             ? String(f.newSupplier)
             : String(f.supplier),
-          qty = kind === "Outro" ? 1 : Number(f.qty),
+          qty = Number(f.qty || 1),
           mlPerBottle = kind === "Perfume" ? Number(f.mlPerBottle) : undefined,
           total = Number(f.total),
           brand = newBrand ? String(f.newBrand) : String(f.brand || ""),
           description =
             kind === "Perfume"
               ? `${brand} ${String(f.productName)}`.trim()
-              : kind === "Suprimento / insumo"
-                ? String(f.description)
-                : String(f.otherDescription);
+              : String(f.description);
         const purchase: B = {
           id: Date.now(),
           date: String(f.date),
@@ -3254,41 +3121,38 @@ function Form({
             phone: String(f.newPhone),
             cpf: String(f.newCpf || ""),
             cep: String(f.newCep || ""),
+            number: String(f.newNumber || ""),
+            district: String(f.newDistrict || ""),
+            city: String(f.newCity || ""),
+            state: String(f.newState || ""),
             date: String(f.date),
-            addresses: address
-              ? [
-                  {
-                    label: "Principal",
-                    value: address,
-                    number: String(f.newAddressNumber || ""),
-                  },
-                ]
-              : [],
+            addresses: address ? [{
+              label: "Principal",
+              value: address,
+              district: String(f.newDistrict || ""),
+              city: String(f.newCity || ""),
+              state: String(f.newState || ""),
+            }] : [],
           },
         ];
       }
-      const items = isOldSale
-        ? []
-        : activeLineIndexes.map((i) => {
-            const typed = String(
-              f["mobileProductName" + i] || f["productName" + i] || "",
-            );
-            const product = x.products.find(
-              (p) => `${p.brand} ${p.name}` === typed,
-            );
-            return {
-              productId: product?.id || Number(f["product" + i]),
-              ml: Number(f["ml" + i]),
-              isApc: Boolean(apcLines[i]),
-              unitCost: existingSale?.items[i]?.unitCost ?? product?.cost ?? 0,
-            };
-          });
+      const items = Array.from({ length: lines }, (_, i) => {
+        const typed = String(f["productName" + i] || "");
+        const product = x.products.find(
+          (p) => `${p.brand} ${p.name}` === typed,
+        );
+        return {
+          productId: product?.id || Number(f["product" + i]),
+          ml: parseDecimal(f["ml" + i]),
+          isApc: Boolean(apcLines[i]),
+          unitCost: existingSale?.items[i]?.unitCost ?? product?.cost ?? 0,
+        };
+      });
       const installments =
         pay === "À prazo"
           ? Array.from({ length: installmentLines }, (_, i) => ({
-              date: installmentDates[i] || "",
-              amount: Number(installmentAmounts[i] || 0),
-              paid: installmentPaid[i] || false,
+              date: String(f["due" + i] || ""),
+              amount: Number(f["installment" + i] || 0),
             })).filter((p) => p.date || p.amount)
           : [];
       const sale: V = {
@@ -3302,32 +3166,25 @@ function Form({
           : undefined,
         items,
         total: Number(f.total),
-        paid: isOldSale ? existingSale?.paid || 0 : Number(f.paid),
-        payment: isOldSale ? "À prazo" : pay,
-        paymentNote: isOldSale
-          ? String(f.oldSaleDescription || "")
-          : pay === "Outro"
-            ? String(f.other)
-            : undefined,
+        paid: Number(f.paid),
+        payment: pay,
+        paymentNote: pay === "Outro" ? String(f.other) : undefined,
         dueDate: installments[0]?.date,
         installment: installments[0]?.amount,
         installments,
-        prepared: isOldSale ? true : existingSale?.prepared || false,
-        sent: isOldSale ? true : existingSale?.sent || false,
+        prepared: existingSale?.prepared || false,
+        sent: existingSale?.sent || false,
         status: existingSale?.status || "active",
         expenses: existingSale?.expenses || 0,
-        supplyOverrides: isOldSale ? {} : supplyOverrides,
+        supplyOverrides,
         channel: isMarketplace ? "marketplace" : "direct",
         marketplace: isMarketplace
           ? (String(f.marketplace) as "TikTok Shop" | "Shopee")
           : undefined,
         marketplaceFee: isMarketplace ? Number(f.marketplaceFee || 0) : 0,
         shippingCost:
-          !isOldSale && sellerPaysShipping ? Number(f.shippingCost || 0) : 0,
-        historicalReceivable: isOldSale,
-        preparationTracked: isMarketplace
-          ? true
-          : existingSale?.preparationTracked,
+          shippingPaidBy === "DAF" ? parseDecimal(f.shippingCost) : 0,
+        shippingPaidBy: shippingPaidBy === "DAF" ? "daf" : "client",
       };
       const products = x.products.map((p) => {
         const restored =
@@ -3351,6 +3208,11 @@ function Form({
           apc: Math.max(0, Math.min(1, p.apc + restoredApc - soldApc)),
         };
       });
+      let supplies = x.supplies;
+      if (existingSale && existingSale.status !== "cancelled") {
+        supplies = moveSupplyStock(supplies, existingSale, 1);
+      }
+      supplies = moveSupplyStock(supplies, sale, -1);
       return {
         ...x,
         clients,
@@ -3358,20 +3220,19 @@ function Form({
           ? x.sales.map((v) => (v.id === sale.id ? sale : v))
           : [sale, ...x.sales],
         products,
+        supplies,
       };
     });
     close();
   }
   const title = isSale
-    ? existingSale
-      ? isOldSale
-        ? "Editar venda antiga"
-        : "Editar venda"
-      : isOldSale
-        ? "Cadastrar venda antiga"
-        : isMarketplace
-          ? "Lançar venda Marketplace"
-          : "Lançar venda"
+    ? isOldSale
+      ? "Cadastrar venda antiga a receber"
+      : existingSale
+      ? "Editar venda"
+      : isMarketplace
+        ? "Lançar venda Marketplace"
+        : "Lançar venda"
     : type === "client"
       ? existingClient
         ? "Editar cliente"
@@ -3385,7 +3246,7 @@ function Form({
           : "Registrar compra/despesa";
   return (
     <div className="overlay">
-      <form ref={formRef} onSubmit={submit}>
+      <form onSubmit={submit}>
         <header>
           <div>
             <small>{modal!.id ? "EDIÇÃO" : "NOVO REGISTRO"}</small>
@@ -3395,7 +3256,63 @@ function Form({
             <X />
           </button>
         </header>
-        {isSale ? (
+        {isOldSale ? (
+          <>
+            <label className="check">
+              <input
+                type="checkbox"
+                onChange={(event) => setNewClient(event.target.checked)}
+              />
+              Cadastrar cliente nesta venda
+            </label>
+            {newClient ? (
+              <>
+                <div className="row three">
+                  <Field n="newName" l="Nome" />
+                  <Field n="newPhone" l="WhatsApp (opcional)" required={false} />
+                  <Field n="newCpf" l="CPF (opcional)" required={false} />
+                </div>
+                <div className="row">
+                  <Field n="newAddress" l="Endereço (opcional)" required={false} />
+                  <Field n="newNumber" l="Número (opcional)" required={false} />
+                  <Field n="newCep" l="CEP (opcional)" required={false} />
+                </div>
+              </>
+            ) : (
+              <Select n="clientId" l="Cliente" o={d.clients.map((client) => [client.id, client.name])} />
+            )}
+            <div className="row">
+              <Field n="date" l="Data da venda antiga" t="date" v={today()} />
+              <Field
+                n="total"
+                l="Valor da venda"
+                t="number"
+                onChange={(event) =>
+                  setSaleAmounts((current) => ({ ...current, total: Number(event.target.value) }))
+                }
+              />
+            </div>
+            <Field n="description" l="Do que se trata a venda" />
+            <div className="installmentSummary">
+              <span>Total a distribuir <b>{brl(saleAmounts.total)}</b></span>
+              <span>{installmentLines} parcela(s)</span>
+            </div>
+            {Array.from({ length: installmentLines }, (_, index) => (
+              <div className="row installmentRow" key={index}>
+                <Field n={"due" + index} l={`Data da parcela ${index + 1}`} t="date" />
+                <Field
+                  n={"installment" + index}
+                  l={`Valor da parcela ${index + 1}`}
+                  t="number"
+                  v={(saleAmounts.total / installmentLines).toFixed(2)}
+                />
+              </div>
+            ))}
+            <button type="button" className="add" onClick={() => setInstallmentLines((count) => count + 1)}>
+              <Plus /> Adicionar nova parcela
+            </button>
+          </>
+        ) : isSale ? (
           <>
             {isMarketplace ? (
               <div className="marketplaceFields">
@@ -3432,35 +3349,21 @@ function Form({
                 {newClient ? (
                   <>
                     <div className="row three">
-                      <Field n="newName" l="Nome" />
-                      <Field
-                        n="newPhone"
-                        l="WhatsApp (opcional)"
-                        required={false}
-                      />
-                      <Field n="newCpf" l="CPF (opcional)" required={false} />
+                      <label><span>Nome</span><input name="newName" value={clientDraft.name} onChange={(e) => setClientDraft((c) => ({ ...c, name: e.target.value }))} required /></label>
+                      <label><span>WhatsApp (opcional)</span><input name="newPhone" value={clientDraft.phone} onChange={(e) => setClientDraft((c) => ({ ...c, phone: e.target.value }))} /></label>
+                      <label><span>CPF (opcional)</span><input name="newCpf" value={clientDraft.cpf} onChange={(e) => setClientDraft((c) => ({ ...c, cpf: e.target.value }))} onBlur={(e) => findClientByCpf(e.target.value)} /></label>
+                    </div>
+                    <div className="row">
+                      <label><span>Endereço (opcional)</span><input name="newAddress" value={clientDraft.address} onChange={(e) => setClientDraft((c) => ({ ...c, address: e.target.value }))} /></label>
+                      <label><span>CEP (opcional)</span><input name="newCep" value={clientDraft.cep} onChange={(e) => setClientDraft((c) => ({ ...c, cep: e.target.value }))} onBlur={(e) => fillAddressFromCep(e.target.value)} /></label>
+                      <label><span>Número (opcional)</span><input name="newNumber" value={clientDraft.number} onChange={(e) => setClientDraft((c) => ({ ...c, number: e.target.value }))} /></label>
                     </div>
                     <div className="row three">
-                      <Field
-                        n="newAddress"
-                        l="Endereço (opcional)"
-                        required={false}
-                      />
-                      <Field
-                        n="newAddressNumber"
-                        l="Número (opcional)"
-                        required={false}
-                      />
-                      <Field
-                        n="newCep"
-                        l="CEP (opcional)"
-                        required={false}
-                        onBlur={(event) =>
-                          fillAddressFromCep(event.target.value, "newAddress")
-                        }
-                      />
+                      <label><span>Bairro (opcional)</span><input name="newDistrict" value={clientDraft.district} onChange={(e) => setClientDraft((c) => ({ ...c, district: e.target.value }))} /></label>
+                      <label><span>Cidade (opcional)</span><input name="newCity" value={clientDraft.city} onChange={(e) => setClientDraft((c) => ({ ...c, city: e.target.value }))} /></label>
+                      <label><span>Estado (opcional)</span><select name="newState" value={clientDraft.state} onChange={(e) => setClientDraft((c) => ({ ...c, state: e.target.value }))}><option value="">Selecione...</option>{BRAZIL_STATES.map((state) => <option key={state}>{state}</option>)}</select></label>
                     </div>
-                    {cepStatus ? <small className="cepStatus">{cepStatus}</small> : null}
+                    {clientLookupMessage ? <small className="cepStatus">{clientLookupMessage}</small> : null}
                   </>
                 ) : (
                   <Select
@@ -3472,9 +3375,7 @@ function Form({
                 )}
               </>
             )}{" "}
-            {!isOldSale ? (
-              <>
-                {activeLineIndexes.map((i) => (
+            {Array.from({ length: lines }, (_, i) => (
               <div className="row item" key={i}>
                 <ProductSearch
                   index={i}
@@ -3489,13 +3390,12 @@ function Form({
                   <Field
                     n={"ml" + i}
                     l="Volume (ml)"
-                    t="number"
-                    hideNumberControls
+                    decimalOnly
                     v={existingSale?.items[i]?.ml}
                     onChange={(event) =>
                       setSaleVolumes((current) => {
                         const next = [...current];
-                        next[i] = Number(event.target.value);
+                        next[i] = parseDecimal(event.target.value);
                         return next;
                       })
                     }
@@ -3515,77 +3415,36 @@ function Form({
                     APC
                   </button>
                 </div>
-                {activeLineIndexes.length > 1 ? (
-                  <button
-                    type="button"
-                    className="removeSaleItem"
-                    onClick={() => {
-                      setRemovedLines((current) => new Set(current).add(i));
-                      setSaleVolumes((current) => {
-                        const next = [...current];
-                        next[i] = 0;
-                        return next;
-                      });
-                      setApcLines((current) => {
-                        const next = [...current];
-                        next[i] = false;
-                        return next;
-                      });
-                    }}
-                  >
-                    <X /> Remover perfume
-                  </button>
-                ) : null}
               </div>
-                ))}
-                <button
-                  type="button"
-                  className="add"
-                  onClick={() => setLines((n) => n + 1)}
-                >
-                  <Plus />
-                  Adicionar outro perfume
-                </button>
-                <SaleSupplyPicker
-                  items={activeLineIndexes.map((index) => ({
-                    ml: saleVolumes[index] || 0,
-                    isApc: Boolean(apcLines[index]),
-                  }))}
-                  supplies={d.supplies}
-                  overrides={supplyOverrides}
-                  setOverrides={setSupplyOverrides}
-                />
-                <div className="shippingCostBox">
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={sellerPaysShipping}
-                      onChange={(event) =>
-                        setSellerPaysShipping(event.target.checked)
-                      }
-                    />
-                    Frete por conta da DAF
-                  </label>
-                  {sellerPaysShipping ? (
-                    <Field
-                      n="shippingCost"
-                      l="Valor do frete (R$)"
-                      t="number"
-                      v={existingSale?.shippingCost || 0}
-                    />
-                  ) : null}
-                  <small>
-                    Quando informado, o frete entra nas despesas e reduz o lucro
-                    e a margem do pedido.
-                  </small>
-                </div>
-              </>
-            ) : (
-              <div className="oldSaleNotice">
-                Esta venda será registrada somente em vendas a receber, sem
-                alterar o estoque de perfumes ou insumos.
-              </div>
-            )}
+            ))}
+            <button
+              type="button"
+              className="add"
+              onClick={() => setLines((n) => n + 1)}
+            >
+              <Plus />
+              Adicionar outro perfume
+            </button>
+            <SaleSupplyPicker
+              items={Array.from({ length: lines }, (_, index) => ({
+                ml: saleVolumes[index] || 0,
+                isApc: Boolean(apcLines[index]),
+              }))}
+              supplies={d.supplies}
+              overrides={supplyOverrides}
+              setOverrides={setSupplyOverrides}
+            />
+            <div className="shippingCostBox">
+              <Choices
+                label="Frete pago pelo"
+                a={["Cliente", "DAF"]}
+                v={shippingPaidBy}
+                set={(value) => setShippingPaidBy(value as "Cliente" | "DAF")}
+              />
+              {shippingPaidBy === "DAF" ? (
+                <Field n="shippingCost" l="Valor do frete (R$)" t="number" v={existingSale?.shippingCost || 0} />
+              ) : null}
+            </div>
             <div className="row">
               <Field
                 n="date"
@@ -3606,28 +3465,16 @@ function Form({
                 }
               />
             </div>
-            {isOldSale ? (
-              <Field
-                n="oldSaleDescription"
-                l="Referente a"
-                p="Ex.: venda de decantes realizada anteriormente"
-                v={existingSale?.paymentNote}
-              />
-            ) : (
-              <Field
-                n="paid"
-                l="Valor recebido"
-                t="number"
-                v={existingSale?.paid}
-                onChange={(e) =>
-                  setSaleAmounts((v) => ({
-                    ...v,
-                    paid: Number(e.target.value),
-                  }))
-                }
-              />
-            )}
-            {isMarketplace || isOldSale ? (
+            <Field
+              n="paid"
+              l="Valor recebido"
+              t="number"
+              v={existingSale?.paid}
+              onChange={(e) =>
+                setSaleAmounts((v) => ({ ...v, paid: Number(e.target.value) }))
+              }
+            />
+            {isMarketplace ? (
               <div className="fixedPayment">
                 <span>Forma de pagamento</span>
                 <b>À prazo</b>
@@ -3645,91 +3492,47 @@ function Form({
                 <div className="installmentSummary">
                   <span>
                     Restante a pagar{" "}
-                    <b>{brl(outstandingAmount)}</b>
+                    <b>
+                      {brl(Math.max(0, saleAmounts.total - saleAmounts.paid))}
+                    </b>
                   </span>
                   <span>
-                    Total das {installmentLines} parcela(s):{" "}
-                    <b>{brl(scheduledAmount)}</b>
-                  </span>
-                  <span>
-                    {Math.abs(scheduleDifference) < 0.01
-                      ? "Valores conferem"
-                      : scheduleDifference > 0
-                        ? `Falta distribuir ${brl(scheduleDifference)}`
-                        : `Excede o restante em ${brl(Math.abs(scheduleDifference))}`}
+                    {installmentLines} parcela(s) de{" "}
+                    <b>
+                      {brl(
+                        Math.max(0, saleAmounts.total - saleAmounts.paid) /
+                          installmentLines,
+                      )}
+                    </b>
                   </span>
                 </div>
                 {Array.from({ length: installmentLines }, (_, i) => (
                   <div className="row installmentRow" key={i}>
-                    <label>
-                      <span>{`Data da parcela ${i + 1}`}</span>
-                      <input
-                        name={"due" + i}
-                        type="date"
-                        required
-                        value={installmentDates[i] || ""}
-                        onChange={(event) =>
-                          setInstallmentDates((dates) => {
-                            const next = [...dates];
-                            next[i] = event.target.value;
-                            return next;
-                          })
-                        }
-                      />
-                    </label>
+                    <Field
+                      n={"due" + i}
+                      l={`Data da parcela ${i + 1}`}
+                      t="date"
+                      v={existingInstallments[i]?.date}
+                    />
                     <label>
                       <span>{`Valor da parcela ${i + 1}`}</span>
                       <input
                         name={"installment" + i}
                         type="number"
                         step="0.01"
-                        min="0"
-                        value={installmentAmounts[i] ?? 0}
-                        readOnly={installmentPaid[i]}
-                        onChange={(event) =>
-                          changeInstallmentAmount(
-                            i,
-                            Number(event.target.value || 0),
-                          )
-                        }
+                        readOnly
+                        value={(
+                          Math.max(0, saleAmounts.total - saleAmounts.paid) /
+                          installmentLines
+                        ).toFixed(2)}
                       />
                     </label>
-                    {installmentLines > 1 ? (
-                      <button
-                        type="button"
-                        className="cancelInstallment"
-                        onClick={() => {
-                          setInstallmentAmounts(() =>
-                            splitMoney(outstandingAmount, installmentLines - 1),
-                          );
-                          setInstallmentDates((dates) =>
-                            dates.filter((_, index) => index !== i),
-                          );
-                          setInstallmentPaid((states) =>
-                            states.filter((_, index) => index !== i),
-                          );
-                          setInstallmentsCustomized(true);
-                          setInstallmentLines((count) => count - 1);
-                        }}
-                        aria-label={`Cancelar parcela ${i + 1}`}
-                      >
-                        <X /> Cancelar parcela
-                      </button>
-                    ) : null}
                   </div>
                 ))}
                 <button
                   type="button"
                   className="add"
-                  onClick={() => {
-                    setInstallmentAmounts(
-                      splitMoney(outstandingAmount, installmentLines + 1),
-                    );
-                    setInstallmentsCustomized(true);
-                    setInstallmentDates((dates) => [...dates, ""]);
-                    setInstallmentPaid((states) => [...states, false]);
-                    setInstallmentLines((n) => n + 1);
-                  }}
+                  onClick={() => setInstallmentLines((n) => n + 1)}
                 >
                   <Plus />
                   Adicionar nova parcela
@@ -3816,7 +3619,7 @@ function Form({
                 o={d.suppliers.map((s) => [s, s])}
               />
             )}
-            <Field n="date" l="Data da compra/despesa" t="date" v={today()} />
+            <Field n="date" l="Data da compra" t="date" v={today()} />
             <Choices
               label="Item comprado"
               a={["Perfume", "Suprimento / insumo", "Outro"]}
@@ -3904,16 +3707,9 @@ function Form({
               </>
             ) : (
               <>
-                <Field
-                  n="otherDescription"
-                  l="Especifique a compra ou despesa"
-                  p="Ex.: anúncio, manutenção, material de escritório..."
-                />
+                <Field n="description" l="Especifique a compra/despesa" />
                 <Field n="total" l="Valor total" t="number" />
-                <p className="oldSaleNotice">
-                  Este registro será contabilizado como despesa e não criará
-                  nenhum item no estoque.
-                </p>
+                <input type="hidden" name="qty" value="1" />
               </>
             )}
           </>
@@ -3921,7 +3717,17 @@ function Form({
         {type === "client" ? (
           <>
             <div className="row">
-              <Field n="name" l="Nome completo" v={existingClient?.name} />
+              <label>
+                <span>Nome completo</span>
+                <input
+                  name="name"
+                  value={clientDraft.name}
+                  onChange={(event) =>
+                    setClientDraft((current) => ({ ...current, name: event.target.value }))
+                  }
+                  required
+                />
+              </label>
               <Field
                 n="date"
                 l="Data do cadastro"
@@ -3930,14 +3736,105 @@ function Form({
               />
             </div>
             <div className="row">
-              <Field
-                n="phone"
-                l="Telefone/WhatsApp"
-                v={existingClient?.phone}
-              />
-              <Field n="cpf" l="CPF" v={existingClient?.cpf} />
+              <label>
+                <span>Telefone/WhatsApp</span>
+                <input
+                  name="phone"
+                  value={clientDraft.phone}
+                  onChange={(event) =>
+                    setClientDraft((current) => ({ ...current, phone: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                <span>CPF</span>
+                <input
+                  name="cpf"
+                  value={clientDraft.cpf}
+                  onChange={(event) => {
+                    setClientDraft((current) => ({ ...current, cpf: event.target.value }));
+                    setClientLookupMessage("");
+                  }}
+                  onBlur={(event) => findClientByCpf(event.target.value)}
+                  required
+                />
+              </label>
             </div>
-            {Array.from({ length: addressCount }, (_, i) => (
+            <div className="addressLookup">
+              <label>
+                <span>CEP</span>
+                <input
+                  name="cep"
+                  value={clientDraft.cep}
+                  onChange={(event) =>
+                    setClientDraft((current) => ({ ...current, cep: event.target.value }))
+                  }
+                  onBlur={(event) => fillAddressFromCep(event.target.value)}
+                  required
+                />
+              </label>
+              <button
+                type="button"
+                className="iconButton"
+                onClick={() => fillAddressFromCep(clientDraft.cep)}
+              >
+                Buscar CEP
+              </button>
+            </div>
+            <div className="addressRow clientAddressRow">
+              <label>
+                <span>Endereço</span>
+                <input
+                  name="address0"
+                  value={clientDraft.address}
+                  onChange={(event) =>
+                    setClientDraft((current) => ({ ...current, address: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                <span>Número</span>
+                <input
+                  name="number"
+                  value={clientDraft.number}
+                  onChange={(event) =>
+                    setClientDraft((current) => ({ ...current, number: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label>
+                <span>Identificação</span>
+                <input
+                  name="label0"
+                  value={clientDraft.label}
+                  onChange={(event) =>
+                    setClientDraft((current) => ({ ...current, label: event.target.value }))
+                  }
+                  placeholder="Casa, trabalho..."
+                />
+              </label>
+            </div>
+            <div className="row three">
+              <label>
+                <span>Bairro</span>
+                <input name="district" value={clientDraft.district} onChange={(event) => setClientDraft((current) => ({ ...current, district: event.target.value }))} />
+              </label>
+              <label>
+                <span>Cidade</span>
+                <input name="city" value={clientDraft.city} onChange={(event) => setClientDraft((current) => ({ ...current, city: event.target.value }))} />
+              </label>
+              <label>
+                <span>Estado</span>
+                <input name="state" value={clientDraft.state} onChange={(event) => setClientDraft((current) => ({ ...current, state: event.target.value }))} />
+              </label>
+            </div>
+            {clientLookupMessage ? <p className="lookupMessage">{clientLookupMessage}</p> : null}
+            {Array.from({ length: Math.max(0, addressCount - 1) }, (_, offset) => {
+              const i = offset + 1;
+              return (
               <div className="addressRow" key={i}>
                 <Field
                   n={"address" + i}
@@ -3945,32 +3842,15 @@ function Form({
                   v={existingClient?.addresses[i]?.value}
                 />
                 <Field
-                  n={"addressNumber" + i}
-                  l="Número"
-                  v={existingClient?.addresses[i]?.number}
-                  required={false}
-                />
-                <Field
                   n={"label" + i}
                   l="Identificação"
                   p="Casa, trabalho..."
                   v={existingClient?.addresses[i]?.label}
                 />
-                {i === 0 ? (
-                  <Field
-                    n="cep"
-                    l="CEP"
-                    v={existingClient?.cep}
-                    onBlur={(event) =>
-                      fillAddressFromCep(event.target.value, "address0")
-                    }
-                  />
-                ) : (
-                  <span />
-                )}
+                <span />
               </div>
-            ))}
-            {cepStatus ? <small className="cepStatus">{cepStatus}</small> : null}
+              );
+            })}
             <button
               type="button"
               className="add"
@@ -4086,11 +3966,14 @@ const mkC = (f: any, n: number, id = Date.now()): C => ({
   phone: String(f.phone),
   cpf: String(f.cpf),
   cep: String(f.cep),
+  number: String(f.number || ""),
+  district: String(f.district || ""),
+  city: String(f.city || ""),
+  state: String(f.state || ""),
   date: String(f.date),
   addresses: Array.from({ length: n }, (_, i) => ({
     label: String(f["label" + i] || ""),
     value: String(f["address" + i] || ""),
-    number: String(f["addressNumber" + i] || ""),
   })).filter((a) => a.value),
 });
 function BrandFields({
@@ -4183,14 +4066,14 @@ function ProductSearch({
 }) {
   const selected = products.find((p) => p.id === value);
   return (
-    <label className="productSearch">
+    <label>
       <span>Perfume {index + 1}</span>
       <input
-        className="desktopProductSearch"
         name={"productName" + index}
         list={"products" + index}
         defaultValue={selected ? `${selected.brand} ${selected.name}` : ""}
         placeholder="Digite para buscar..."
+        required
       />
       <datalist id={"products" + index}>
         {products.map((p) => (
@@ -4200,20 +4083,6 @@ function ProductSearch({
           </option>
         ))}
       </datalist>
-      <select
-        className="mobileProductSearch"
-        name={"mobileProductName" + index}
-        defaultValue={selected ? `${selected.brand} ${selected.name}` : ""}
-      >
-        <option value="" disabled>
-          Selecione o perfume...
-        </option>
-        {products.map((p) => (
-          <option key={p.id} value={`${p.brand} ${p.name}`}>
-            {p.brand} {p.name} · {p.stock} ml · APC {p.apc ? "sim" : "não"}
-          </option>
-        ))}
-      </select>
     </label>
   );
 }
@@ -4257,8 +4126,7 @@ function Field({
   p,
   required = true,
   onChange,
-  onBlur,
-  hideNumberControls = false,
+  decimalOnly = false,
 }: {
   n: string;
   l: string;
@@ -4267,27 +4135,21 @@ function Field({
   p?: string;
   required?: boolean;
   onChange?: (e: any) => void;
-  onBlur?: (e: any) => void;
-  hideNumberControls?: boolean;
+  decimalOnly?: boolean;
 }) {
   return (
     <label>
       <span>{l}</span>
       <input
         name={n}
-        type={t}
-        className={hideNumberControls ? "numberWithoutControls" : undefined}
+        type={decimalOnly ? "text" : t}
+        inputMode={decimalOnly ? "decimal" : undefined}
+        pattern={decimalOnly ? "[0-9]+([,.][0-9]+)?" : undefined}
         defaultValue={v}
         placeholder={p}
         required={required}
         step={t === "number" ? "0.01" : undefined}
         onChange={onChange}
-        onBlur={onBlur}
-        onWheel={
-          hideNumberControls
-            ? (event) => event.currentTarget.blur()
-            : undefined
-        }
       />
     </label>
   );
@@ -4333,7 +4195,7 @@ function History({ id, d, close }: { id: number; d: D; close: () => void }) {
         <p>CEP: {c?.cep}</p>
         {c?.addresses.map((a, i) => (
           <p key={i}>
-            <b>{a.label}</b> {a.value}{a.number ? `, nº ${a.number}` : ""}
+            <b>{a.label}</b> {a.value}
           </p>
         ))}
         <Sales d={{ ...d, sales: d.sales.filter((s) => s.clientId === id) }} />
