@@ -1,0 +1,70 @@
+name: Compact sidebar and dedupe suppliers
+
+on:
+  push:
+    branches:
+      - codex/ajustar-seletor-pedidos
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip-sidebar-supplier-dedupe]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply requested changes
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          app_path = Path('src/App.tsx')
+          css_path = Path('src/index.css')
+          app = app_path.read_text(encoding='utf-8')
+          css = css_path.read_text(encoding='utf-8')
+
+          old_suppliers = '''  const suppliers = Array.from(\n    new Set([\n      ...(merged.suppliers || []),\n      ...(merged.purchases || []).map((purchase: B) => purchase.supplier).filter(Boolean),\n    ]),\n  ) as string[];\n  const rawSales = (merged.sales || []) as V[];'''
+          new_suppliers = '''  const cleanSupplierName = (value: unknown) =>\n    String(value || "")\n      .trim()\n      .replace(/\\s+/g, " ");\n  const supplierKey = (value: unknown) =>\n    cleanSupplierName(value)\n      .normalize("NFD")\n      .replace(/[\\u0300-\\u036f]/g, "")\n      .toLowerCase();\n  const supplierByKey = new Map<string, string>();\n  [\n    ...(merged.suppliers || []),\n    ...(merged.purchases || []).map((purchase: B) => purchase.supplier),\n  ]\n    .map(cleanSupplierName)\n    .filter(Boolean)\n    .forEach((name) => {\n      const key = supplierKey(name);\n      if (!supplierByKey.has(key)) supplierByKey.set(key, name);\n    });\n  const suppliers = [...supplierByKey.values()];\n  const purchases = (merged.purchases || []).map((purchase: B) => {\n    const cleaned = cleanSupplierName(purchase.supplier);\n    return {\n      ...purchase,\n      supplier: supplierByKey.get(supplierKey(cleaned)) || cleaned,\n    };\n  });\n  const rawSales = (merged.sales || []) as V[];'''
+          if old_suppliers not in app:
+              raise SystemExit('supplier normalization block not found')
+          app = app.replace(old_suppliers, new_suppliers, 1)
+
+          old_return = '''    supplies: normalizedSupplies,\n    suppliers,\n    brands,\n    sales: normalizedSales,'''
+          new_return = '''    purchases,\n    supplies: normalizedSupplies,\n    suppliers,\n    brands,\n    sales: normalizedSales,'''
+          if old_return not in app:
+              raise SystemExit('normalize return block not found')
+          app = app.replace(old_return, new_return, 1)
+
+          old_sidebar = '''aside {\n  overflow-y: auto;\n}\n'''
+          new_sidebar = '''@media (min-width: 721px) {\n  aside {\n    overflow: hidden;\n    padding: 18px 16px;\n  }\n  aside > img {\n    width: 158px;\n    height: 66px;\n    margin: 0 10px 16px;\n  }\n  aside nav {\n    gap: 3px;\n  }\n  aside nav button {\n    min-height: 43px;\n    padding: 0 12px;\n  }\n  .sync {\n    margin-top: 8px;\n  }\n  aside > footer {\n    padding-top: 12px;\n  }\n}\n'''
+          if old_sidebar not in css:
+              raise SystemExit('scrollable aside block not found')
+          css = css.replace(old_sidebar, new_sidebar, 1)
+
+          app_path.write_text(app, encoding='utf-8')
+          css_path.write_text(css, encoding='utf-8')
+          PY
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: test-anon-key
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/compact-sidebar-dedupe-suppliers.yml
+          git add src/App.tsx src/index.css
+          git commit -m "Compacta menu e consolida fornecedores duplicados [skip-sidebar-supplier-dedupe]"
+          git push origin HEAD:codex/ajustar-seletor-pedidos
