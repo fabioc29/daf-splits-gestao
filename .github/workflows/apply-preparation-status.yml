@@ -1,0 +1,169 @@
+name: Apply preparation status adjustment
+
+on:
+  push:
+    branches:
+      - codex/ajustar-seletor-pedidos
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip-preparation-patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply requested UI and status changes
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import re
+
+          app_path = Path("src/App.tsx")
+          css_path = Path("src/index.css")
+          app = app_path.read_text(encoding="utf-8")
+          css = css_path.read_text(encoding="utf-8")
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one {label}, found {count}")
+              return text.replace(old, new, 1)
+
+          app = replace_once(
+              app,
+              '  accumulatingDecants?: boolean;\n',
+              '  accumulatingDecants?: boolean;\n  preparationStatus?: "preparing" | "accumulating" | "waiting";\n',
+              "sale preparation status type",
+          )
+
+          app = replace_once(
+              app,
+              'const amountDue = (sale: V) =>\n  marketplacePending(sale)\n    ? Math.max(0, sale.total)\n    : Math.max(0, sale.total - sale.paid);\n',
+              'const amountDue = (sale: V) =>\n  marketplacePending(sale)\n    ? Math.max(0, sale.total)\n    : Math.max(0, sale.total - sale.paid);\nconst getPreparationStatus = (sale: V) =>\n  sale.preparationStatus ||\n  (sale.accumulatingDecants ? "accumulating" : "preparing");\n',
+              "preparation status helper anchor",
+          )
+
+          function_pattern = re.compile(
+              r'  function setPreparationStatus\(s: V, accumulatingDecants: boolean\) \{.*?\n  \}\n  return \(',
+              re.S,
+          )
+          function_replacement = '''  function setPreparationStatus(
+    s: V,
+    preparationStatus: "preparing" | "accumulating" | "waiting",
+  ) {
+    set((state: D) => ({
+      ...state,
+      sales: state.sales.map((sale) =>
+        sale.id === s.id
+          ? {
+              ...sale,
+              preparationStatus,
+              accumulatingDecants: preparationStatus === "accumulating",
+            }
+          : sale,
+      ),
+    }));
+    notify(
+      preparationStatus === "accumulating"
+        ? `Pedido #${orderNo(s.id)} marcado para acumular mais decantes.`
+        : preparationStatus === "waiting"
+          ? `Pedido #${orderNo(s.id)} marcado como Vai esperar.`
+          : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
+    );
+  }
+  return ('''
+          app, count = function_pattern.subn(function_replacement, app, count=1)
+          if count != 1:
+              raise SystemExit(f"Expected one setPreparationStatus block, found {count}")
+
+          old_selector = '''                <label className="preparationStatus">
+                  <span>Situação do pedido</span>
+                  <select
+                    aria-label={`Situação do pedido #${orderNo(s.id)}`}
+                    value={s.accumulatingDecants ? "accumulating" : "preparing"}
+                    onChange={(event) =>
+                      setPreparationStatus(
+                        s,
+                        event.target.value === "accumulating",
+                      )
+                    }
+                  >
+                    <option value="preparing">A preparar</option>
+                    <option value="accumulating">Vai acumular mais decantes</option>
+                  </select>
+                </label>'''
+          new_selector = '''                <label className="preparationStatus">
+                  <select
+                    aria-label={`Situação do pedido #${orderNo(s.id)}`}
+                    value={getPreparationStatus(s)}
+                    onChange={(event) =>
+                      setPreparationStatus(
+                        s,
+                        event.target.value as
+                          | "preparing"
+                          | "accumulating"
+                          | "waiting",
+                      )
+                    }
+                  >
+                    <option value="preparing">A preparar</option>
+                    <option value="accumulating">Vai acumular mais decantes</option>
+                    <option value="waiting">Vai esperar</option>
+                  </select>
+                </label>'''
+          app = replace_once(app, old_selector, new_selector, "preparation status selector")
+
+          marker = "/* Compact preparation status selector */"
+          if marker not in css:
+              css += '''\n\n/* Compact preparation status selector */
+.preparationStatus {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: auto;
+  gap: 0;
+}
+.preparationStatus select {
+  width: 205px;
+  max-width: 100%;
+  min-height: 34px;
+  border-radius: 8px;
+  padding: 5px 27px 5px 9px;
+  font-size: 11px;
+  line-height: 1.15;
+}
+'''
+
+          app_path.write_text(app, encoding="utf-8")
+          css_path.write_text(css, encoding="utf-8")
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: test-anon-key
+
+      - name: Commit patch and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-preparation-status.yml
+          git add src/App.tsx src/index.css
+          git commit -m "Ajusta seletor de situação do pedido [skip-preparation-patch]"
+          git push origin HEAD:codex/ajustar-seletor-pedidos
