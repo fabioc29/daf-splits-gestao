@@ -25,129 +25,8 @@ jobs:
       - name: Apply requested UI and status changes
         shell: bash
         run: |
-          python <<'PY'
-          from pathlib import Path
-          import re
-
-          app_path = Path("src/App.tsx")
-          css_path = Path("src/index.css")
-          app = app_path.read_text(encoding="utf-8")
-          css = css_path.read_text(encoding="utf-8")
-
-          def replace_once(text, old, new, label):
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f"Expected exactly one {label}, found {count}")
-              return text.replace(old, new, 1)
-
-          app = replace_once(
-              app,
-              '  accumulatingDecants?: boolean;\n',
-              '  accumulatingDecants?: boolean;\n  preparationStatus?: "preparing" | "accumulating" | "waiting";\n',
-              "sale preparation status type",
-          )
-
-          app = replace_once(
-              app,
-              'const amountDue = (sale: V) =>\n  marketplacePending(sale)\n    ? Math.max(0, sale.total)\n    : Math.max(0, sale.total - sale.paid);\n',
-              'const amountDue = (sale: V) =>\n  marketplacePending(sale)\n    ? Math.max(0, sale.total)\n    : Math.max(0, sale.total - sale.paid);\nconst getPreparationStatus = (sale: V) =>\n  sale.preparationStatus ||\n  (sale.accumulatingDecants ? "accumulating" : "preparing");\n',
-              "preparation status helper anchor",
-          )
-
-          function_pattern = re.compile(
-              r'  function setPreparationStatus\(s: V, accumulatingDecants: boolean\) \{.*?\n  \}\n  return \(',
-              re.S,
-          )
-          function_replacement = '''  function setPreparationStatus(
-    s: V,
-    preparationStatus: "preparing" | "accumulating" | "waiting",
-  ) {
-    set((state: D) => ({
-      ...state,
-      sales: state.sales.map((sale) =>
-        sale.id === s.id
-          ? {
-              ...sale,
-              preparationStatus,
-              accumulatingDecants: preparationStatus === "accumulating",
-            }
-          : sale,
-      ),
-    }));
-    notify(
-      preparationStatus === "accumulating"
-        ? `Pedido #${orderNo(s.id)} marcado para acumular mais decantes.`
-        : preparationStatus === "waiting"
-          ? `Pedido #${orderNo(s.id)} marcado como Vai esperar.`
-          : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
-    );
-  }
-  return ('''
-          app, count = function_pattern.subn(function_replacement, app, count=1)
-          if count != 1:
-              raise SystemExit(f"Expected one setPreparationStatus block, found {count}")
-
-          old_selector = '''                <label className="preparationStatus">
-                  <span>Situação do pedido</span>
-                  <select
-                    aria-label={`Situação do pedido #${orderNo(s.id)}`}
-                    value={s.accumulatingDecants ? "accumulating" : "preparing"}
-                    onChange={(event) =>
-                      setPreparationStatus(
-                        s,
-                        event.target.value === "accumulating",
-                      )
-                    }
-                  >
-                    <option value="preparing">A preparar</option>
-                    <option value="accumulating">Vai acumular mais decantes</option>
-                  </select>
-                </label>'''
-          new_selector = '''                <label className="preparationStatus">
-                  <select
-                    aria-label={`Situação do pedido #${orderNo(s.id)}`}
-                    value={getPreparationStatus(s)}
-                    onChange={(event) =>
-                      setPreparationStatus(
-                        s,
-                        event.target.value as
-                          | "preparing"
-                          | "accumulating"
-                          | "waiting",
-                      )
-                    }
-                  >
-                    <option value="preparing">A preparar</option>
-                    <option value="accumulating">Vai acumular mais decantes</option>
-                    <option value="waiting">Vai esperar</option>
-                  </select>
-                </label>'''
-          app = replace_once(app, old_selector, new_selector, "preparation status selector")
-
-          marker = "/* Compact preparation status selector */"
-          if marker not in css:
-              css += '''\n\n/* Compact preparation status selector */
-.preparationStatus {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  width: auto;
-  gap: 0;
-}
-.preparationStatus select {
-  width: 205px;
-  max-width: 100%;
-  min-height: 34px;
-  border-radius: 8px;
-  padding: 5px 27px 5px 9px;
-  font-size: 11px;
-  line-height: 1.15;
-}
-'''
-
-          app_path.write_text(app, encoding="utf-8")
-          css_path.write_text(css, encoding="utf-8")
-          PY
+          echo 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCByZQoKYXBwX3BhdGggPSBQYXRoKCJzcmMvQXBwLnRzeCIpCmNzc19wYXRoID0gUGF0aCgic3JjL2luZGV4LmNzcyIpCmFwcCA9IGFwcF9wYXRoLnJlYWRfdGV4dChlbmNvZGluZz0idXRmLTgiKQpjc3MgPSBjc3NfcGF0aC5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKCmRlZiByZXBsYWNlX29uY2UodGV4dCwgb2xkLCBuZXcsIGxhYmVsKToKICAgIGNvdW50ID0gdGV4dC5jb3VudChvbGQpCiAgICBpZiBjb3VudCAhPSAxOgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoZiJFeHBlY3RlZCBleGFjdGx5IG9uZSB7bGFiZWx9LCBmb3VuZCB7Y291bnR9IikKICAgIHJldHVybiB0ZXh0LnJlcGxhY2Uob2xkLCBuZXcsIDEpCgphcHAgPSByZXBsYWNlX29uY2UoCiAgICBhcHAsCiAgICAnICBhY2N1bXVsYXRpbmdEZWNhbnRzPzogYm9vbGVhbjtcbicsCiAgICAnICBhY2N1bXVsYXRpbmdEZWNhbnRzPzogYm9vbGVhbjtcbiAgcHJlcGFyYXRpb25TdGF0dXM/OiAicHJlcGFyaW5nIiB8ICJhY2N1bXVsYXRpbmciIHwgIndhaXRpbmciO1xuJywKICAgICJzYWxlIHByZXBhcmF0aW9uIHN0YXR1cyB0eXBlIiwKKQoKYXBwID0gcmVwbGFjZV9vbmNlKAogICAgYXBwLAogICAgJ2NvbnN0IGFtb3VudER1ZSA9IChzYWxlOiBWKSA9PlxuICBtYXJrZXRwbGFjZVBlbmRpbmcoc2FsZSlcbiAgICA/IE1hdGgubWF4KDAsIHNhbGUudG90YWwpXG4gICAgOiBNYXRoLm1heCgwLCBzYWxlLnRvdGFsIC0gc2FsZS5wYWlkKTtcbicsCiAgICAnY29uc3QgYW1vdW50RHVlID0gKHNhbGU6IFYpID0+XG4gIG1hcmtldHBsYWNlUGVuZGluZyhzYWxlKVxuICAgID8gTWF0aC5tYXgoMCwgc2FsZS50b3RhbClcbiAgICA6IE1hdGgubWF4KDAsIHNhbGUudG90YWwgLSBzYWxlLnBhaWQpO1xuY29uc3QgZ2V0UHJlcGFyYXRpb25TdGF0dXMgPSAoc2FsZTogVikgPT5cbiAgc2FsZS5wcmVwYXJhdGlvblN0YXR1cyB8fFxuICAoc2FsZS5hY2N1bXVsYXRpbmdEZWNhbnRzID8gImFjY3VtdWxhdGluZyIgOiAicHJlcGFyaW5nIik7XG4nLAogICAgInByZXBhcmF0aW9uIHN0YXR1cyBoZWxwZXIgYW5jaG9yIiwKKQoKZnVuY3Rpb25fcGF0dGVybiA9IHJlLmNvbXBpbGUoCiAgICByJyAgZnVuY3Rpb24gc2V0UHJlcGFyYXRpb25TdGF0dXNcKHM6IFYsIGFjY3VtdWxhdGluZ0RlY2FudHM6IGJvb2xlYW5cKSBcey4qP1xuICBcfVxuICByZXR1cm4gXCgnLAogICAgcmUuUywKKQpmdW5jdGlvbl9yZXBsYWNlbWVudCA9ICcnJyAgZnVuY3Rpb24gc2V0UHJlcGFyYXRpb25TdGF0dXMoCiAgICBzOiBWLAogICAgcHJlcGFyYXRpb25TdGF0dXM6ICJwcmVwYXJpbmciIHwgImFjY3VtdWxhdGluZyIgfCAid2FpdGluZyIsCiAgKSB7CiAgICBzZXQoKHN0YXRlOiBEKSA9PiAoewogICAgICAuLi5zdGF0ZSwKICAgICAgc2FsZXM6IHN0YXRlLnNhbGVzLm1hcCgoc2FsZSkgPT4KICAgICAgICBzYWxlLmlkID09PSBzLmlkCiAgICAgICAgICA/IHsKICAgICAgICAgICAgICAuLi5zYWxlLAogICAgICAgICAgICAgIHByZXBhcmF0aW9uU3RhdHVzLAogICAgICAgICAgICAgIGFjY3VtdWxhdGluZ0RlY2FudHM6IHByZXBhcmF0aW9uU3RhdHVzID09PSAiYWNjdW11bGF0aW5nIiwKICAgICAgICAgICAgfQogICAgICAgICAgOiBzYWxlLAogICAgICApLAogICAgfSkpOwogICAgbm90aWZ5KAogICAgICBwcmVwYXJhdGlvblN0YXR1cyA9PT0gImFjY3VtdWxhdGluZyIKICAgICAgICA/IGBQZWRpZG8gIyR7b3JkZXJObyhzLmlkKX0gbWFyY2FkbyBwYXJhIGFjdW11bGFyIG1haXMgZGVjYW50ZXMuYAogICAgICAgIDogcHJlcGFyYXRpb25TdGF0dXMgPT09ICJ3YWl0aW5nIgogICAgICAgICAgPyBgUGVkaWRvICMke29yZGVyTm8ocy5pZCl9IG1hcmNhZG8gY29tbyBWYWkgZXNwZXJhci5gCiAgICAgICAgICA6IGBQZWRpZG8gIyR7b3JkZXJObyhzLmlkKX0gdm9sdG91IHBhcmEgQSBwcmVwYXJhci5gLAogICAgKTsKICB9CiAgcmV0dXJuICgnJycKYXBwLCBjb3VudCA9IGZ1bmN0aW9uX3BhdHRlcm4uc3VibihmdW5jdGlvbl9yZXBsYWNlbWVudCwgYXBwLCBjb3VudD0xKQppZiBjb3VudCAhPSAxOgogICAgcmFpc2UgU3lzdGVtRXhpdChmIkV4cGVjdGVkIG9uZSBzZXRQcmVwYXJhdGlvblN0YXR1cyBibG9jaywgZm91bmQge2NvdW50fSIpCgpvbGRfc2VsZWN0b3IgPSAnJycgICAgICAgICAgICAgICAgPGxhYmVsIGNsYXNzTmFtZT0icHJlcGFyYXRpb25TdGF0dXMiPgogICAgICAgICAgICAgICAgICA8c3Bhbj5TaXR1YcOnw6NvIGRvIHBlZGlkbzwvc3Bhbj4KICAgICAgICAgICAgICAgICAgPHNlbGVjdAogICAgICAgICAgICAgICAgICAgIGFyaWEtbGFiZWw9e2BTaXR1YcOnw6NvIGRvIHBlZGlkbyAjJHtvcmRlck5vKHMuaWQpfWB9CiAgICAgICAgICAgICAgICAgICAgdmFsdWU9e3MuYWNjdW11bGF0aW5nRGVjYW50cyA/ICJhY2N1bXVsYXRpbmciIDogInByZXBhcmluZyJ9CiAgICAgICAgICAgICAgICAgICAgb25DaGFuZ2U9eyhldmVudCkgPT4KICAgICAgICAgICAgICAgICAgICAgIHNldFByZXBhcmF0aW9uU3RhdHVzKAogICAgICAgICAgICAgICAgICAgICAgICBzLAogICAgICAgICAgICAgICAgICAgICAgICBldmVudC50YXJnZXQudmFsdWUgPT09ICJhY2N1bXVsYXRpbmciLAogICAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgPgogICAgICAgICAgICAgICAgICAgIDxvcHRpb24gdmFsdWU9InByZXBhcmluZyI+QSBwcmVwYXJhcjwvb3B0aW9uPgogICAgICAgICAgICAgICAgICAgIDxvcHRpb24gdmFsdWU9ImFjY3VtdWxhdGluZyI+VmFpIGFjdW11bGFyIG1haXMgZGVjYW50ZXM8L29wdGlvbj4KICAgICAgICAgICAgICAgICAgPC9zZWxlY3Q+CiAgICAgICAgICAgICAgICA8L2xhYmVsPicnJwpuZXdfc2VsZWN0b3IgPSAnJycgICAgICAgICAgICAgICAgPGxhYmVsIGNsYXNzTmFtZT0icHJlcGFyYXRpb25TdGF0dXMiPgogICAgICAgICAgICAgICAgICA8c2VsZWN0CiAgICAgICAgICAgICAgICAgICAgYXJpYS1sYWJlbD17YFNpdHVhw6fDo28gZG8gcGVkaWRvICMke29yZGVyTm8ocy5pZCl9YH0KICAgICAgICAgICAgICAgICAgICB2YWx1ZT17Z2V0UHJlcGFyYXRpb25TdGF0dXMocyl9CiAgICAgICAgICAgICAgICAgICAgb25DaGFuZ2U9eyhldmVudCkgPT4KICAgICAgICAgICAgICAgICAgICAgIHNldFByZXBhcmF0aW9uU3RhdHVzKAogICAgICAgICAgICAgICAgICAgICAgICBzLAogICAgICAgICAgICAgICAgICAgICAgICBldmVudC50YXJnZXQudmFsdWUgYXMKICAgICAgICAgICAgICAgICAgICAgICAgICB8ICJwcmVwYXJpbmciCiAgICAgICAgICAgICAgICAgICAgICAgICAgfCAiYWNjdW11bGF0aW5nIgogICAgICAgICAgICAgICAgICAgICAgICAgIHwgIndhaXRpbmciLAogICAgICAgICAgICAgICAgICAgICAgKQogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgPgogICAgICAgICAgICAgICAgICAgIDxvcHRpb24gdmFsdWU9InByZXBhcmluZyI+QSBwcmVwYXJhcjwvb3B0aW9uPgogICAgICAgICAgICAgICAgICAgIDxvcHRpb24gdmFsdWU9ImFjY3VtdWxhdGluZyI+VmFpIGFjdW11bGFyIG1haXMgZGVjYW50ZXM8L29wdGlvbj4KICAgICAgICAgICAgICAgICAgICA8b3B0aW9uIHZhbHVlPSJ3YWl0aW5nIj5WYWkgZXNwZXJhcjwvb3B0aW9uPgogICAgICAgICAgICAgICAgICA8L3NlbGVjdD4KICAgICAgICAgICAgICAgIDwvbGFiZWw+JycnCmFwcCA9IHJlcGxhY2Vfb25jZShhcHAsIG9sZF9zZWxlY3RvciwgbmV3X3NlbGVjdG9yLCAicHJlcGFyYXRpb24gc3RhdHVzIHNlbGVjdG9yIikKCm1hcmtlciA9ICIvKiBDb21wYWN0IHByZXBhcmF0aW9uIHN0YXR1cyBzZWxlY3RvciAqLyIKaWYgbWFya2VyIG5vdCBpbiBjc3M6CiAgICBjc3MgKz0gJycnCgovKiBDb21wYWN0IHByZXBhcmF0aW9uIHN0YXR1cyBzZWxlY3RvciAqLwoucHJlcGFyYXRpb25TdGF0dXMgewogIGRpc3BsYXk6IGZsZXg7CiAganVzdGlmeS1jb250ZW50OiBmbGV4LWVuZDsKICBhbGlnbi1pdGVtczogY2VudGVyOwogIHdpZHRoOiBhdXRvOwogIGdhcDogMDsKfQoucHJlcGFyYXRpb25TdGF0dXMgc2VsZWN0IHsKICB3aWR0aDogMjA1cHg7CiAgbWF4LXdpZHRoOiAxMDAlOwogIG1pbi1oZWlnaHQ6IDM0cHg7CiAgYm9yZGVyLXJhZGl1czogOHB4OwogIHBhZGRpbmc6IDVweCAyN3B4IDVweCA5cHg7CiAgZm9udC1zaXplOiAxMXB4OwogIGxpbmUtaGVpZ2h0OiAxLjE1Owp9CicnJwoKYXBwX3BhdGgud3JpdGVfdGV4dChhcHAsIGVuY29kaW5nPSJ1dGYtOCIpCmNzc19wYXRoLndyaXRlX3RleHQoY3NzLCBlbmNvZGluZz0idXRmLTgiKQo=' | base64 -d > /tmp/apply_patch.py
+          python /tmp/apply_patch.py
 
       - name: Install dependencies
         run: npm ci
@@ -158,12 +37,11 @@ jobs:
           VITE_SUPABASE_URL: https://example.supabase.co
           VITE_SUPABASE_ANON_KEY: test-anon-key
 
-      - name: Commit patch and remove temporary workflow
+      - name: Commit patch
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/apply-preparation-status.yml
           git add src/App.tsx src/index.css
           git commit -m "Ajusta seletor de situação do pedido [skip-preparation-patch]"
           git push origin HEAD:codex/ajustar-seletor-pedidos
