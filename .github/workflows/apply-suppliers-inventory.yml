@@ -1,0 +1,532 @@
+name: Apply suppliers and inventory updates
+
+on:
+  push:
+    branches:
+      - codex/ajustar-seletor-pedidos
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip-suppliers-inventory]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Apply requested changes
+        shell: bash
+        run: |
+          cat > /tmp/apply_patch.py <<'PY'
+          from pathlib import Path
+
+          app_path = Path('src/App.tsx')
+          css_path = Path('src/index.css')
+          packaging_path = Path('src/packaging.ts')
+          app = app_path.read_text(encoding='utf-8')
+          css = css_path.read_text(encoding='utf-8')
+
+          def replace_once(old, new, label):
+              global app
+              if old not in app:
+                  raise SystemExit(f'Pattern not found: {label}')
+              app = app.replace(old, new, 1)
+
+          replace_once('  Users,\n  Wallet,', '  Users,\n  Building2,\n  Wallet,', 'Building2 import')
+          replace_once(
+              'import { automaticPackaging, packaging, PACKAGING_RULES } from "./packaging";',
+              'import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";',
+              'packagingOptions import',
+          )
+          replace_once(
+              '''  attachCost: boolean;\n  cost?: number;\n};''',
+              '''  attachCost: boolean;\n  cost?: number;\n  pendingLots?: {\n    purchaseId: number;\n    qty: number;\n    cost: number;\n    unit?: string;\n  }[];\n};''',
+              'pending supply lots type',
+          )
+
+          old_move = '''function moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {\n  if (isHistoricalSale(sale)) return supplies;\n  const usage = packaging(sale, supplies).lines;\n  return supplies.map((supply) => {\n    const line = usage.find(\n      (item) => supplyStockKey(item.name) === supplyStockKey(supply.name),\n    );\n    return line\n      ? {\n          ...supply,\n          stock: supply.stock + direction * line.qty,\n        }\n      : supply;\n  });\n}\n'''
+          new_move = '''function activateNextSupplyLot(supply: S): S {\n  let stock = Math.max(0, Number(supply.stock) || 0);\n  let cost = Number(supply.cost || 0);\n  const pendingLots = [...(supply.pendingLots || [])].map((lot) => ({\n    ...lot,\n    qty: Math.max(0, Number(lot.qty) || 0),\n    cost: Math.max(0, Number(lot.cost) || 0),\n  }));\n  while (stock <= 0 && pendingLots.length) {\n    const next = pendingLots.shift()!;\n    if (next.qty <= 0) continue;\n    stock = next.qty;\n    cost = next.cost;\n  }\n  return { ...supply, stock, cost, pendingLots };\n}\nfunction consumeSupplyStock(supply: S, quantity: number): S {\n  let current = activateNextSupplyLot(supply);\n  let stock = current.stock;\n  let cost = Number(current.cost || 0);\n  const pendingLots = [...(current.pendingLots || [])];\n  let remaining = Math.max(0, quantity);\n  while (remaining > 0) {\n    if (stock <= 0) {\n      const next = pendingLots.shift();\n      if (!next) break;\n      stock = Math.max(0, Number(next.qty) || 0);\n      cost = Math.max(0, Number(next.cost) || 0);\n      continue;\n    }\n    const used = Math.min(stock, remaining);\n    stock -= used;\n    remaining -= used;\n  }\n  if (stock <= 0) {\n    while (pendingLots.length) {\n      const next = pendingLots.shift()!;\n      if (next.qty <= 0) continue;\n      stock = next.qty;\n      cost = next.cost;\n      break;\n    }\n  }\n  return { ...current, stock, cost, pendingLots };\n}\nfunction moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {\n  if (isHistoricalSale(sale)) return supplies;\n  const usage = packaging(sale, supplies).lines;\n  return supplies.map((supply) => {\n    const line = usage.find(\n      (item) => supplyStockKey(item.name) === supplyStockKey(supply.name),\n    );\n    if (!line) return supply;\n    const qty = Math.max(0, Number(line.qty) || 0);\n    return direction === -1\n      ? consumeSupplyStock(supply, qty)\n      : { ...supply, stock: Math.max(0, supply.stock) + qty };\n  });\n}\n'''
+          replace_once(old_move, new_move, 'FIFO supply stock movement')
+
+          replace_once(
+              '  ["clients", "Clientes", Users],\n  ["receivables", "Vendas a receber", ReceiptText],',
+              '  ["clients", "Clientes", Users],\n  ["suppliers", "Fornecedores", Building2],\n  ["receivables", "Vendas a receber", ReceiptText],',
+              'supplier nav item',
+          )
+          replace_once(
+              '    [history, setHistory] = useState(0),\n    [toast, setToast] = useState("");',
+              '    [history, setHistory] = useState(0),\n    [supplierHistory, setSupplierHistory] = useState(""),\n    [toast, setToast] = useState("");',
+              'supplier history state',
+          )
+          replace_once(
+              ': page === "clients"\n          ? ["Novo cliente", "client"]\n          : page === "receivables"',
+              ': page === "clients"\n          ? ["Novo cliente", "client"]\n          : page === "suppliers"\n            ? ["Novo fornecedor", "supplier"]\n            : page === "receivables"',
+              'supplier page action',
+          )
+          replace_once(
+              '''          ) : page === "clients" ? (\n            <Clients\n              d={data}\n              set={setData}\n              history={setHistory}\n              edit={(id) => setModal({ type: "client", id })}\n              notify={notify}\n            />\n          ) : (\n            <Finance d={data} totals={totals} set={setData} notify={notify} />\n          )}''',
+              '''          ) : page === "clients" ? (\n            <Clients\n              d={data}\n              set={setData}\n              history={setHistory}\n              edit={(id) => setModal({ type: "client", id })}\n              notify={notify}\n            />\n          ) : page === "suppliers" ? (\n            <Suppliers\n              d={data}\n              set={setData}\n              history={setSupplierHistory}\n              edit={(id) => setModal({ type: "supplier", id })}\n              notify={notify}\n            />\n          ) : (\n            <Finance d={data} totals={totals} set={setData} notify={notify} />\n          )}''',
+              'supplier page render',
+          )
+          replace_once(
+              '''      {history ? (\n        <History id={history} d={data} close={() => setHistory(0)} />\n      ) : null}\n      {toast ? (''',
+              '''      {history ? (\n        <History id={history} d={data} close={() => setHistory(0)} />\n      ) : null}\n      {supplierHistory ? (\n        <SupplierHistory\n          name={supplierHistory}\n          d={data}\n          close={() => setSupplierHistory("")}\n        />\n      ) : null}\n      {toast ? (''',
+              'supplier history overlay',
+          )
+
+          replace_once(
+              '''  const brands = Array.from(\n    new Set([\n      ...(merged.brands || []),\n      ...products.map((p: P) => p.brand).filter(Boolean),\n    ]),\n  ) as string[];\n  const rawSales = (merged.sales || []) as V[];''',
+              '''  const brands = Array.from(\n    new Set([\n      ...(merged.brands || []),\n      ...products.map((p: P) => p.brand).filter(Boolean),\n    ]),\n  ) as string[];\n  const suppliers = Array.from(\n    new Set([\n      ...(merged.suppliers || []),\n      ...(merged.purchases || []).map((purchase: B) => purchase.supplier).filter(Boolean),\n    ]),\n  ) as string[];\n  const rawSales = (merged.sales || []) as V[];''',
+              'supplier normalization',
+          )
+          replace_once(
+              '''  let normalizedSupplies = (merged.supplies || []).map((s: S) => ({\n    ...s,\n    attachCost: Boolean(s.attachCost),\n  }));''',
+              '''  let normalizedSupplies = (merged.supplies || []).map((s: S) => ({\n    ...s,\n    attachCost: Boolean(s.attachCost),\n    pendingLots: (s.pendingLots || []).map((lot) => ({\n      ...lot,\n      qty: Math.max(0, Number(lot.qty) || 0),\n      cost: Math.max(0, Number(lot.cost) || 0),\n    })),\n  }));''',
+              'pending lot normalization',
+          )
+          replace_once(
+              '''  if (!merged.supplyInventoryVersion) {\n    normalizedSales.forEach((sale) => {\n      normalizedSupplies = moveSupplyStock(normalizedSupplies, sale, -1);\n    });\n  }\n  return {''',
+              '''  if (!merged.supplyInventoryVersion) {\n    normalizedSales.forEach((sale) => {\n      normalizedSupplies = moveSupplyStock(normalizedSupplies, sale, -1);\n    });\n  }\n  normalizedSupplies = normalizedSupplies.map(activateNextSupplyLot);\n  return {''',
+              'activate queued lots on normalize',
+          )
+          replace_once(
+              '''    supplies: normalizedSupplies,\n    brands,\n    sales: normalizedSales,''',
+              '''    supplies: normalizedSupplies,\n    suppliers,\n    brands,\n    sales: normalizedSales,''',
+              'normalized suppliers return',
+          )
+
+          replace_once(
+              '''                <p>\n                  {s.stock} {s.unit}\n                  {s.cost ? ` · ${brl(s.cost)} por unidade` : ""}\n                </p>\n                <p>Custo na venda: {s.attachCost ? "Sim" : "Não"}</p>''',
+              '''                <p>\n                  {s.stock} {s.unit}\n                  {s.cost ? ` · ${brl(s.cost)} por unidade` : ""}\n                </p>\n                {(s.pendingLots || []).length ? (\n                  <p className="queuedSupplyLot">\n                    Em segundo plano: {(s.pendingLots || []).reduce((sum, lot) => sum + lot.qty, 0)} {s.unit}\n                    {s.pendingLots?.[0] ? ` · próximo lote ${brl(s.pendingLots[0].cost)} por unidade` : ""}\n                  </p>\n                ) : null}\n                <p>Custo na venda: {s.attachCost ? "Sim" : "Não"}</p>''',
+              'queued supply stock display',
+          )
+
+          replace_once(
+              '''    set((x: D) => ({\n      ...x,\n      purchases: x.purchases.filter((p) => p.id !== id),\n    }));''',
+              '''    set((x: D) => ({\n      ...x,\n      purchases: x.purchases.filter((p) => p.id !== id),\n      supplies: x.supplies.map((supply) => ({\n        ...supply,\n        pendingLots: (supply.pendingLots || []).filter((lot) => lot.purchaseId !== id),\n      })),\n    }));''',
+              'remove queued lot with purchase deletion',
+          )
+
+          supplier_components = r'''
+function Suppliers({
+  d,
+  history,
+  edit,
+  set,
+  notify,
+}: {
+  d: D;
+  history: (name: string) => void;
+  edit: (index: number) => void;
+  set: any;
+  notify: (message: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const suppliers = d.suppliers
+    .map((name, index) => ({ name, index }))
+    .filter(({ name }) =>
+      name.toLowerCase().includes(query.trim().toLowerCase()),
+    );
+  function remove(index: number, name: string) {
+    if (d.purchases.some((purchase) => purchase.supplier === name)) {
+      window.alert(
+        "Este fornecedor possui compras registradas e não pode ser excluído.",
+      );
+      return;
+    }
+    if (!window.confirm("Excluir este fornecedor?")) return;
+    set((state: D) => ({
+      ...state,
+      suppliers: state.suppliers.filter((_, current) => current !== index),
+    }));
+    notify("Fornecedor excluído.");
+  }
+  return (
+    <>
+      <Cards v={[[String(d.suppliers.length), "Fornecedores cadastrados"]]} />
+      <div className="clientSearch">
+        <Search />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Pesquisar fornecedor pelo nome"
+          aria-label="Pesquisar fornecedor pelo nome"
+        />
+      </div>
+      <div className="clients">
+        {suppliers.map(({ name, index }) => {
+          const purchases = d.purchases.filter(
+            (purchase) => purchase.supplier === name,
+          );
+          const total = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
+          return (
+            <div key={`${name}-${index}`}>
+              <i>
+                {name
+                  .split(" ")
+                  .filter(Boolean)
+                  .map((part) => part[0])
+                  .slice(0, 2)}
+              </i>
+              <h3>{name}</h3>
+              <p>
+                {purchases.length} compra(s) · {brl(total)} em compras
+              </p>
+              <div className="clientActions">
+                <button onClick={() => history(name)}>Ver histórico</button>
+                <button onClick={() => edit(index)}>
+                  <Pencil />
+                  Editar
+                </button>
+                <button className="dangerText" onClick={() => remove(index, name)}>
+                  <Trash2 />
+                  Excluir
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {!suppliers.length ? (
+        <p className="empty">Nenhum fornecedor encontrado.</p>
+      ) : null}
+    </>
+  );
+}
+
+function SupplierHistory({
+  name,
+  d,
+  close,
+}: {
+  name: string;
+  d: D;
+  close: () => void;
+}) {
+  const purchases = d.purchases.filter((purchase) => purchase.supplier === name);
+  const total = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
+  return (
+    <div className="overlay">
+      <div className="history supplierHistory">
+        <header>
+          <div>
+            <small>HISTÓRICO DE COMPRAS</small>
+            <h2>{name}</h2>
+          </div>
+          <button onClick={close}>
+            <X />
+          </button>
+        </header>
+        <Cards
+          v={[
+            [String(purchases.length), "Compras registradas"],
+            [brl(total), "Total comprado"],
+          ]}
+        />
+        <div className="supplierHistoryTable">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th>Descrição</th>
+                <th>Quantidade</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {purchases.map((purchase) => (
+                <tr key={purchase.id}>
+                  <td>{dateBR(purchase.date)}</td>
+                  <td>{purchase.type}</td>
+                  <td>{purchase.description}</td>
+                  <td>
+                    {purchase.qty}
+                    {purchase.mlPerBottle ? ` × ${purchase.mlPerBottle} ml` : ""}
+                  </td>
+                  <td>{brl(purchase.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!purchases.length ? (
+          <p className="empty">Nenhuma compra registrada com este fornecedor.</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+'''
+          replace_once(
+              '\nfunction PaymentBreakdown({ d }: { d: D }) {',
+              supplier_components + '\nfunction PaymentBreakdown({ d }: { d: D }) {',
+              'supplier components insertion',
+          )
+
+          replace_once(
+              '''function SaleCostEditor({ sale, d, close, save }: { sale: V; d: D; close: () => void; save: (sale: V) => void }) {\n  const automatic = automaticPackaging(sale);''',
+              '''function SaleCostEditor({ sale, d, close, save }: { sale: V; d: D; close: () => void; save: (sale: V) => void }) {\n  const supplyOptions = packagingOptions(sale, d.supplies);''',
+              'cost editor dynamic options',
+          )
+          replace_once(
+              'const [supplyQuantities, setSupplyQuantities] = useState<Record<string, number>>(Object.fromEntries(PACKAGING_RULES.map((name) => [name, sale.supplyOverrides?.[name] ?? automatic[name]])));',
+              'const [supplyQuantities, setSupplyQuantities] = useState<Record<string, number>>(Object.fromEntries(supplyOptions.map(({ name, automaticQty }) => [name, sale.supplyOverrides?.[name] ?? automaticQty])));',
+              'cost editor quantities',
+          )
+          replace_once(
+              '<div className="costEditorSection"><h3>Insumos e suprimentos</h3>{PACKAGING_RULES.map((name) => <label key={name}>',
+              '<div className="costEditorSection"><h3>Insumos e suprimentos</h3>{supplyOptions.map(({ name }) => <label key={name}>',
+              'cost editor supply list',
+          )
+
+          replace_once(
+              '''        supplies: x.supplies.map((s) =>\n          s.id === supply.id\n            ? {\n                ...s,\n                name: String(f.name),\n                unit: String(f.unit),\n                stock,\n                cost,\n                attachCost: f.attachCost === "Sim",\n              }\n            : s,\n        ),''',
+              '''        supplies: x.supplies.map((s) =>\n          s.id === supply.id\n            ? activateNextSupplyLot({\n                ...s,\n                name: String(f.name),\n                unit: String(f.unit),\n                stock,\n                cost,\n                attachCost: f.attachCost === "Sim",\n              })\n            : s,\n        ),''',
+              'activate queued lot after manual stock edit',
+          )
+          replace_once(
+              '''      const item = d.supplies.find(\n        (s) =>\n          s.name.trim().toLowerCase() ===\n          purchase.description.trim().toLowerCase(),\n      );\n      const target = purchase.type === "Perfume" ? product : item;''',
+              '''      const item = d.supplies.find(\n        (s) =>\n          s.name.trim().toLowerCase() ===\n          purchase.description.trim().toLowerCase(),\n      );\n      const queuedLot = item?.pendingLots?.find(\n        (lot) => lot.purchaseId === purchase.id,\n      );\n      if (item && purchase.type !== "Perfume" && queuedLot) {\n        const newCost = total / (qty || 1);\n        set((x: D) => ({\n          ...x,\n          purchases: x.purchases.map((p) =>\n            p.id === purchase.id\n              ? {\n                  ...p,\n                  date: String(f.date),\n                  supplier: String(f.supplier),\n                  qty,\n                  total,\n                }\n              : p,\n          ),\n          supplies: x.supplies.map((supplyItem) =>\n            supplyItem.id === item.id\n              ? {\n                  ...supplyItem,\n                  pendingLots: (supplyItem.pendingLots || []).map((lot) =>\n                    lot.purchaseId === purchase.id\n                      ? { ...lot, qty, cost: newCost }\n                      : lot,\n                  ),\n                }\n              : supplyItem,\n          ),\n        }));\n        close();\n        return;\n      }\n      const target = purchase.type === "Perfume" ? product : item;''',
+              'edit queued supply purchase',
+          )
+
+          replace_once(
+              '''  const type = modal!.type,\n    existingSale = d.sales.find((s) => s.id === modal!.id),\n    existingClient = d.clients.find((c) => c.id === modal!.id),\n    existingProduct = d.products.find((p) => p.id === modal!.id);''',
+              '''  const type = modal!.type,\n    existingSale = d.sales.find((s) => s.id === modal!.id),\n    existingClient = d.clients.find((c) => c.id === modal!.id),\n    existingProduct = d.products.find((p) => p.id === modal!.id),\n    existingSupplier =\n      type === "supplier" && modal!.id !== undefined\n        ? d.suppliers[modal!.id]\n        : undefined;''',
+              'existing supplier form state',
+          )
+          replace_once(
+              '''    set((x: D) => {\n      if (type === "product") {''',
+              '''    if (type === "supplier") {\n      const supplierName = String(f.name || "").trim();\n      if (!supplierName) {\n        window.alert("Informe o nome do fornecedor.");\n        return;\n      }\n      const duplicated = d.suppliers.some(\n        (name, index) =>\n          index !== modal!.id &&\n          name.trim().toLowerCase() === supplierName.toLowerCase(),\n      );\n      if (duplicated) {\n        window.alert("Este fornecedor já está cadastrado.");\n        return;\n      }\n    }\n    set((x: D) => {\n      if (type === "product") {''',
+              'supplier form validation',
+          )
+          replace_once(
+              '''      if (type === "client") {\n        const c = mkC(f, addressCount, existingClient?.id);\n        return {\n          ...x,\n          clients: existingClient\n            ? x.clients.map((v) => (v.id === c.id ? c : v))\n            : [...x.clients, c],\n        };\n      }\n      if (isOldSale) {''',
+              '''      if (type === "client") {\n        const c = mkC(f, addressCount, existingClient?.id);\n        return {\n          ...x,\n          clients: existingClient\n            ? x.clients.map((v) => (v.id === c.id ? c : v))\n            : [...x.clients, c],\n        };\n      }\n      if (type === "supplier") {\n        const supplierName = String(f.name).trim();\n        if (existingSupplier !== undefined && modal!.id !== undefined) {\n          return {\n            ...x,\n            suppliers: x.suppliers.map((name, index) =>\n              index === modal!.id ? supplierName : name,\n            ),\n            purchases: x.purchases.map((purchase) =>\n              purchase.supplier === existingSupplier\n                ? { ...purchase, supplier: supplierName }\n                : purchase,\n            ),\n          };\n        }\n        return { ...x, suppliers: [...x.suppliers, supplierName] };\n      }\n      if (isOldSale) {''',
+              'supplier save case',
+          )
+          replace_once(
+              '''        const supplier = newSupplier\n            ? String(f.newSupplier)\n            : String(f.supplier),''',
+              '''        const supplier = (newSupplier\n            ? String(f.newSupplier)\n            : String(f.supplier)).trim(),''',
+              'trim purchase supplier',
+          )
+
+          old_supply_purchase = '''        } else if (kind === "Suprimento / insumo") {\n          const found = x.supplies.find(\n            (s) => s.name.toLowerCase() === description.toLowerCase(),\n          );\n          supplies = found\n            ? x.supplies.map((s) =>\n                s.id === found.id\n                  ? {\n                      ...s,\n                      stock: s.stock + qty,\n                      attachCost: String(f.attachCost) === "Sim",\n                      cost:\n                        ((s.cost || 0) * s.stock + total) /\n                        (s.stock + qty || 1),\n                    }\n                  : s,\n              )\n            : [\n                ...x.supplies,\n                {\n                  id: Date.now() + 1,\n                  name: description,\n                  stock: qty,\n                  unit: String(f.unit),\n                  min: 0,\n                  attachCost: String(f.attachCost) === "Sim",\n                  cost: total / (qty || 1),\n                },\n              ];\n        }'''
+          new_supply_purchase = '''        } else if (kind === "Suprimento / insumo") {\n          const found = x.supplies.find(\n            (s) => s.name.toLowerCase() === description.toLowerCase(),\n          );\n          const unitCost = total / (qty || 1);\n          supplies = found\n            ? x.supplies.map((s) => {\n                if (s.id !== found.id) return s;\n                const current = activateNextSupplyLot(s);\n                const attachCost = String(f.attachCost) === "Sim";\n                if (current.stock > 0) {\n                  return {\n                    ...current,\n                    attachCost,\n                    pendingLots: [\n                      ...(current.pendingLots || []),\n                      {\n                        purchaseId: purchase.id,\n                        qty,\n                        cost: unitCost,\n                        unit: String(f.unit || current.unit),\n                      },\n                    ],\n                  };\n                }\n                return {\n                  ...current,\n                  stock: qty,\n                  unit: String(f.unit || current.unit),\n                  attachCost,\n                  cost: unitCost,\n                };\n              })\n            : [\n                ...x.supplies,\n                {\n                  id: Date.now() + 1,\n                  name: description,\n                  stock: qty,\n                  unit: String(f.unit),\n                  min: 0,\n                  attachCost: String(f.attachCost) === "Sim",\n                  cost: unitCost,\n                  pendingLots: [],\n                },\n              ];\n        }'''
+          replace_once(old_supply_purchase, new_supply_purchase, 'FIFO supply purchase handling')
+          replace_once(
+              '''          suppliers: x.suppliers.includes(supplier)\n            ? x.suppliers\n            : [...x.suppliers, supplier],''',
+              '''          suppliers: x.suppliers.some(\n            (name) => name.toLowerCase() === supplier.toLowerCase(),\n          )\n            ? x.suppliers\n            : [...x.suppliers, supplier],''',
+              'case insensitive supplier dedupe',
+          )
+
+          replace_once(
+              '''    : type === "client"\n      ? existingClient\n        ? "Editar cliente"\n        : "Cadastrar cliente"\n      : type === "product"''',
+              '''    : type === "client"\n      ? existingClient\n        ? "Editar cliente"\n        : "Cadastrar cliente"\n      : type === "supplier"\n        ? existingSupplier !== undefined\n          ? "Editar fornecedor"\n          : "Cadastrar fornecedor"\n      : type === "product"''',
+              'supplier form title',
+          )
+
+          replace_once(
+              '<Field n="description" l="Especifique o suprimento / insumo" />',
+              '''<label>\n                  <span>Suprimento / insumo</span>\n                  <input\n                    name="description"\n                    list="purchase-supply-options"\n                    placeholder="Selecione um existente ou digite um novo"\n                    required\n                  />\n                  <datalist id="purchase-supply-options">\n                    {d.supplies.map((supply) => (\n                      <option key={supply.id} value={supply.name} />\n                    ))}\n                  </datalist>\n                </label>''',
+              'supply purchase selector',
+          )
+          replace_once(
+              '''        {type === "client" ? (\n          <>''',
+              '''        {type === "client" ? (\n          <>''',
+              'client block anchor',
+          )
+          replace_once(
+              '''        ) : null}\n        <footer>\n          <button type="button" onClick={close}>''',
+              '''        ) : null}\n        {type === "supplier" ? (\n          <Field\n            n="name"\n            l="Nome do fornecedor"\n            v={existingSupplier || ""}\n          />\n        ) : null}\n        <footer>\n          <button type="button" onClick={close}>''',
+              'supplier form fields',
+          )
+
+          replace_once(
+              '''}) {\n  const automatic = automaticPackaging({ items });\n  const effectiveSale = { items, supplyOverrides: overrides };''',
+              '''}) {\n  const options = packagingOptions({ items }, supplies);\n  const automatic = Object.fromEntries(\n    options.map(({ name, automaticQty }) => [name, automaticQty]),\n  ) as Record<string, number>;\n  const effectiveSale = { items, supplyOverrides: overrides };''',
+              'sale supply picker options',
+          )
+          replace_once(
+              '''        {PACKAGING_RULES.map((name) => {\n          const qty = overrides[name] ?? automatic[name];''',
+              '''        {options.map(({ name, automaticQty }) => {\n          const qty = overrides[name] ?? automaticQty;''',
+              'dynamic sale supply list',
+          )
+          replace_once(
+              'event.target.checked ? automatic[name] || 1 : 0,',
+              'event.target.checked ? automaticQty || 1 : 0,',
+              'dynamic supply toggle quantity',
+          )
+
+          app_path.write_text(app, encoding='utf-8')
+
+          packaging = r'''const key = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+export const PACKAGING_RULES = [
+  "Frascos (10ml)",
+  "Caixas (decantes)",
+  "Envelopes decantes",
+  "Papel de seda",
+  "Saco organza",
+  "Carta de agradecimento",
+  "Cartão de visita",
+  "Envelope APC",
+  "Sacolas DAF",
+] as const;
+
+type SaleForPackaging = {
+  status?: string;
+  items: { ml: number; isApc?: boolean }[];
+  supplyOverrides?: Record<string, number>;
+};
+
+type SupplyForPackaging = {
+  name: string;
+  cost?: number;
+  attachCost?: boolean;
+};
+
+export function automaticPackaging(sale: SaleForPackaging) {
+  const bottles = sale.items.reduce(
+    (total, item) =>
+      total +
+      (item.isApc && item.ml > 10 ? 0 : Math.ceil(Math.max(0, item.ml) / 10)),
+    0,
+  );
+  const boxes = Math.ceil(bottles / 8);
+  const hasApc = sale.items.some((item) => item.isApc);
+
+  return {
+    "Frascos (10ml)": bottles,
+    "Caixas (decantes)": boxes,
+    "Envelopes decantes": boxes,
+    "Papel de seda": hasApc ? 0 : boxes,
+    "Saco organza": Math.ceil(bottles / 3),
+    "Carta de agradecimento": 1,
+    "Cartão de visita": 1,
+    "Envelope APC": sale.items.filter((item) => item.isApc).length,
+    "Sacolas DAF": 0,
+  } satisfies Record<(typeof PACKAGING_RULES)[number], number>;
+}
+
+export function packagingOptions(
+  sale: SaleForPackaging,
+  supplies: SupplyForPackaging[],
+) {
+  const automatic = automaticPackaging(sale);
+  const names = [
+    ...PACKAGING_RULES,
+    ...supplies.filter((supply) => supply.attachCost).map((supply) => supply.name),
+    ...Object.keys(sale.supplyOverrides || {}),
+  ];
+  const unique = new Map<string, string>();
+  names.forEach((name) => {
+    const normalized = key(name);
+    if (!unique.has(normalized)) unique.set(normalized, name);
+  });
+  return [...unique.values()].map((name) => {
+    const fixedName = PACKAGING_RULES.find((rule) => key(rule) === key(name));
+    const attached = supplies.some(
+      (supply) => supply.attachCost && key(supply.name) === key(name),
+    );
+    return {
+      name,
+      automaticQty: fixedName ? automatic[fixedName] : attached ? 1 : 0,
+    };
+  });
+}
+
+export function packaging(
+  sale: SaleForPackaging,
+  supplies: SupplyForPackaging[],
+) {
+  if (sale.status === "cancelled") return { total: 0, lines: [], missing: [] };
+
+  const options = packagingOptions(sale, supplies);
+  const lines = options
+    .map(({ name, automaticQty }) => {
+      const qty = Math.max(
+        0,
+        Number(sale.supplyOverrides?.[name] ?? automaticQty),
+      );
+      const supply = supplies.find((item) => key(item.name) === key(name));
+      return {
+        name,
+        qty,
+        automaticQty,
+        unitCost: supply?.cost || 0,
+        missing: !supply || supply.cost == null,
+        total: qty * (supply?.cost || 0),
+      };
+    })
+    .filter((line) => line.qty > 0);
+
+  return {
+    lines,
+    missing: lines.filter((line) => line.missing).map((line) => line.name),
+    total: lines.reduce((total, line) => total + line.total, 0),
+  };
+}
+'''
+          packaging_path.write_text(packaging, encoding='utf-8')
+
+          css_add = r'''
+
+/* Supplier history and queued supply lots */
+.queuedSupplyLot {
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+}
+.supplierHistory {
+  width: min(920px, calc(100vw - 32px));
+}
+.supplierHistoryTable {
+  overflow-x: auto;
+  margin-top: 18px;
+}
+.supplierHistoryTable table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.supplierHistoryTable th,
+.supplierHistoryTable td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+'''
+          if '/* Supplier history and queued supply lots */' not in css:
+              css = css.rstrip() + css_add + '\n'
+          css_path.write_text(css, encoding='utf-8')
+          PY
+          python /tmp/apply_patch.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate build
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: test-anon-key
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-suppliers-inventory.yml
+          git add src/App.tsx src/index.css src/packaging.ts
+          git commit -m "Adiciona fornecedores, lotes FIFO e insumos automáticos [skip-suppliers-inventory]"
+          git push origin HEAD:codex/ajustar-seletor-pedidos
