@@ -96,7 +96,13 @@ type V = {
   marketplacePayoutReceived?: boolean;
   shippingCost?: number;
   shippingPaidBy?: "client" | "daf";
-  shippingMethod?: "Correios" | "Loggi" | "Jadlog" | "Uber/Pessoalmente";
+  shippingMethod?:
+    | "Correios"
+    | "Loggi"
+    | "Jadlog"
+    | "Uber/Pessoalmente"
+    | "TikTok Shop"
+    | "Shopee";
   accumulatingDecants?: boolean;
   historical?: boolean;
   description?: string;
@@ -1274,6 +1280,24 @@ function Prepare({
         : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
     );
   }
+  function prepareSale(s: V) {
+    if (isMarketplaceSale(s)) {
+      const shippingMethod = s.marketplace || "TikTok Shop";
+      set((state: D) => ({
+        ...state,
+        sales: state.sales.map((sale) =>
+          sale.id === s.id
+            ? { ...sale, prepared: true, sent: false, shippingMethod }
+            : sale,
+        ),
+      }));
+      notify(
+        `Pedido #${orderNo(s.id)} finalizado para envio pela ${shippingMethod}.`,
+      );
+      return;
+    }
+    setShippingSale(s);
+  }
   function finishWithShipping(method: V["shippingMethod"]) {
     if (!shippingSale || !method) return;
     set((state: D) => ({
@@ -1287,8 +1311,7 @@ function Prepare({
     notify(`Pedido #${orderNo(shippingSale.id)} finalizado para envio por ${method}.`);
     setShippingSale(null);
   }
-  function toggleAccumulating(s: V) {
-    const accumulatingDecants = !s.accumulatingDecants;
+  function setPreparationStatus(s: V, accumulatingDecants: boolean) {
     set((state: D) => ({
       ...state,
       sales: state.sales.map((sale) =>
@@ -1326,7 +1349,7 @@ function Prepare({
             <button
               className="checkButton"
               aria-label={s.prepared ? "Reabrir pedido" : "Finalizar pedido"}
-              onClick={() => (s.prepared ? toggle(s) : setShippingSale(s))}
+              onClick={() => (s.prepared ? toggle(s) : prepareSale(s))}
             >
               {s.prepared ? <Check /> : null}
             </button>
@@ -1341,24 +1364,24 @@ function Prepare({
             </span>
             {saleOriginBadge(s)}
             <span className="prepareActions">
-              <em>
-                {s.prepared
-                  ? "Finalizado"
-                  : s.accumulatingDecants
-                    ? "Vai acumular mais decantes"
-                    : "A preparar"}
-              </em>
-              {!s.prepared ? (
-                <button
-                  type="button"
-                  className="accumulateButton"
-                  onClick={() => toggleAccumulating(s)}
-                >
-                  {s.accumulatingDecants
-                    ? "Voltar para A preparar"
-                    : "Vai acumular mais decantes"}
-                </button>
-              ) : null}
+              {s.prepared ? <em>Finalizado</em> : (
+                <label className="preparationStatus">
+                  <span>Situação do pedido</span>
+                  <select
+                    aria-label={`Situação do pedido #${orderNo(s.id)}`}
+                    value={s.accumulatingDecants ? "accumulating" : "preparing"}
+                    onChange={(event) =>
+                      setPreparationStatus(
+                        s,
+                        event.target.value === "accumulating",
+                      )
+                    }
+                  >
+                    <option value="preparing">A preparar</option>
+                    <option value="accumulating">Vai acumular mais decantes</option>
+                  </select>
+                </label>
+              )}
             </span>
           </div>
         ))}
@@ -1472,9 +1495,14 @@ function Shipping({
                         .join(" · ")}
                     </small>
                   </span>
-                  {saleOriginBadge(s)}
-                  <strong className={`shippingMethod ${shippingClass(s.shippingMethod)}`}>
-                    {s.shippingMethod || "Envio não informado"}
+                  <strong
+                    className={`shippingMethod ${shippingClass(
+                      isMarketplaceSale(s) ? s.marketplace : s.shippingMethod,
+                    )}`}
+                  >
+                    {isMarketplaceSale(s)
+                      ? s.marketplace || "Marketplace"
+                      : s.shippingMethod || "Envio não informado"}
                   </strong>
                   <strong className="deliveryTitle">Informações de entrega</strong>
                 </summary>
@@ -1482,7 +1510,8 @@ function Shipping({
                   <label>
                     <span>Forma de envio</span>
                     <select
-                      value={s.shippingMethod || ""}
+                      value={isMarketplaceSale(s) ? s.marketplace || "" : s.shippingMethod || ""}
+                      disabled={isMarketplaceSale(s)}
                       onChange={(event) =>
                         changeShippingMethod(
                           s.id,
@@ -1495,6 +1524,8 @@ function Shipping({
                       <option>Loggi</option>
                       <option>Jadlog</option>
                       <option>Uber/Pessoalmente</option>
+                      <option>TikTok Shop</option>
+                      <option>Shopee</option>
                     </select>
                   </label>
                   <FieldView label="Nome" value={saleCustomer(s, d)} />
@@ -1640,7 +1671,7 @@ function Receivables({
           [brl(directTotal + marketplaceTotal), "Total geral a receber"],
           [brl(directTotal), "Vendas diretas a receber"],
           [brl(marketplaceTotal), "Marketplace a receber"],
-          [String(allPendingSales.length), "Vendas pendentes"],
+          [String(allPendingSales.length), "Total de vendas pendentes"],
         ]}
       />
       <div className="panel table">

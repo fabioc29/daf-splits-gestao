@@ -685,6 +685,14 @@ fieldset legend {
 fieldset input {
   position: absolute;
   opacity: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+fieldset label {
+  position: relative;
 }
 fieldset label span {
   border: 1px solid #ccd2da;
@@ -1289,7 +1297,7 @@ button:active {
 .shipping summary {
   cursor: pointer;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(118px, 0.28fr) minmax(170px, 0.45fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.45fr) auto;
   align-items: center;
   gap: 22px;
 }
@@ -1661,6 +1669,18 @@ aside > footer > button svg {
 .shippingMethod.nao-informado {
   color: var(--muted);
 }
+.shippingMethod.tiktok-shop {
+  color: white;
+  background: #090909;
+  border-radius: 999px;
+  padding: 8px 12px;
+}
+.shippingMethod.shopee {
+  color: white;
+  background: #e84a3b;
+  border-radius: 999px;
+  padding: 8px 12px;
+}
 
 input[type="number"] {
   appearance: textfield;
@@ -1989,7 +2009,7 @@ aside {
   font-weight: 900;
 }
 .prepareOrigin.direct { background: #229b69; }
-.prepareOrigin.tiktok { background: linear-gradient(90deg, #090909 0 50%, #e23842 50% 100%); }
+.prepareOrigin.tiktok { background: #090909; }
 .prepareOrigin.shopee { background: #e84a3b; }
 .prepareActions {
   flex: 0 0 min(310px, 28vw) !important;
@@ -1998,14 +2018,26 @@ aside {
   gap: 6px;
 }
 .prepareActions em { text-align: right; }
-.accumulateButton {
+.preparationStatus {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+.preparationStatus span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.preparationStatus select {
+  max-width: 245px;
   border: 1px solid #d8ae43;
-  border-radius: 8px;
-  background: transparent;
+  border-radius: 9px;
+  background: #111a28;
   color: #edc557;
-  padding: 6px 9px;
-  font-size: 11px;
+  padding: 8px 30px 8px 11px;
+  font-size: 12px;
   font-weight: 800;
+  cursor: pointer;
 }
 .shipping summary > .prepareOrigin {
   margin-left: 0;
