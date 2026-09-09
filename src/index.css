@@ -2129,9 +2129,6 @@ aside {
   text-align: center;
   text-align-last: center;
 }
-.preparationStatus select.longValue {
-  font-size: 9px;
-}
 .preparationStatus select option {
   text-align: center;
 }

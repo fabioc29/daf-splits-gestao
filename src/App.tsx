@@ -1382,11 +1382,6 @@ function Prepare({
               {s.prepared ? <em>Finalizado</em> : (
                 <label className="preparationStatus">
                   <select
-                    className={
-                      getPreparationStatus(s) === "accumulating"
-                        ? "longValue"
-                        : undefined
-                    }
                     aria-label={`Situação do pedido #${orderNo(s.id)}`}
                     value={getPreparationStatus(s)}
                     onChange={(event) =>
