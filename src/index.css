@@ -14,8 +14,6 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: Inter, Arial, sans-serif;
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
 }
 .shell {
   display: flex;
@@ -156,6 +154,232 @@ header small {
 .cards b {
   font-size: 23px;
   margin-top: 7px;
+}
+.dashboardCards .splitCard {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+}
+.dashboardCards .splitCard > div {
+  min-width: 0;
+}
+.dashboardCards .splitCard > div + div {
+  border-left: 1px solid var(--line);
+  margin-left: 10px;
+  padding-left: 10px;
+}
+.dashboardCards .splitCard b {
+  font-size: clamp(15px, 1.25vw, 21px);
+  white-space: nowrap;
+}
+.salesToolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(280px, 0.55fr) auto;
+  gap: 12px;
+  margin: 18px 0;
+}
+.salesSearch {
+  position: relative;
+}
+.salesSearch svg {
+  position: absolute;
+  left: 13px;
+  top: 12px;
+  width: 19px;
+  color: var(--muted);
+}
+.salesSearch input,
+.salesFilters input,
+.salesFilters select {
+  width: 100%;
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #111a28;
+  color: var(--text);
+  padding: 0 13px;
+}
+.salesSearch input {
+  padding-left: 43px;
+}
+.monthPicker {
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #111a28;
+  text-transform: capitalize;
+}
+.monthPicker button,
+.filterButton,
+.salesFilters > button,
+.overdueFilter {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 800;
+}
+.monthPicker svg,
+.filterButton svg,
+.overdueFilter svg {
+  width: 18px;
+}
+.monthPicker b {
+  text-align: center;
+}
+.filterButton,
+.overdueFilter {
+  min-height: 46px;
+  padding: 0 15px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.salesFilters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(170px, 1fr)) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #111a28;
+}
+.salesFilters label > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.salesFilters > button {
+  height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.receivableHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.receivableHeader p {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 0;
+}
+.receivableTabs {
+  display: flex;
+  gap: 8px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #111a28;
+}
+.receivableTabs button {
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  padding: 9px 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.receivableTabs button:first-child.active {
+  color: #142033;
+  background: #e0b43c;
+}
+.receivableTabs button:last-child.active {
+  color: white;
+  background: #6f49bb;
+}
+.receivableTabs b {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 5px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 14%);
+}
+.marketplaceReceivableLabel {
+  color: #b99be9 !important;
+  font-weight: 800;
+}
+.overdueFilter.active {
+  border-color: #e0b43c;
+  color: #e0b43c;
+}
+.inventoryProjection {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+}
+.inventoryProjection > div {
+  padding: 2px 22px;
+}
+.inventoryProjection > div:first-child {
+  padding-left: 0;
+}
+.inventoryProjection > div + div {
+  border-left: 1px solid var(--line);
+}
+.inventoryProjection span,
+.inventoryProjection b,
+.inventoryProjection small {
+  display: block;
+}
+.inventoryProjection span,
+.inventoryProjection small {
+  color: var(--muted);
+}
+.inventoryProjection b {
+  margin: 8px 0 5px;
+  font-size: 24px;
+}
+.marketplaceForecast {
+  display: grid;
+  gap: 17px;
+}
+.forecastHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 15px;
+}
+.forecastHead p {
+  color: var(--muted);
+}
+.forecastList {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.forecastList > div {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #111a28;
+}
+.forecastList span,
+.forecastList b,
+.forecastList small {
+  display: block;
+}
+.forecastList b {
+  margin: 6px 0;
+  font-size: 18px;
+}
+.forecastList small {
+  color: var(--muted);
 }
 .grid {
   display: grid;
@@ -360,9 +584,15 @@ td small {
   background: #050911dc;
   z-index: 30;
   display: grid;
-  place-items: center;
+  place-items: start center;
   padding: 15px;
   overflow: auto;
+  overscroll-behavior: contain;
+}
+.overlay > form,
+.overlay > .history,
+.overlay > .systemDialog {
+  margin-block: max(15px, 2.5vh);
 }
 .overlay form,
 .history {
@@ -375,6 +605,35 @@ td small {
   padding: 25px;
   display: grid;
   gap: 14px;
+}
+.systemDialog {
+  width: min(560px, 100%);
+  background: #f8f6f0;
+  color: #172233;
+  border-radius: 20px;
+  padding: 25px;
+  display: grid;
+  gap: 14px;
+  box-shadow: 0 24px 70px #0008;
+}
+.systemDialog header {
+  align-items: center;
+}
+.shippingChoices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.shippingChoices button {
+  min-height: 48px;
+  border: 1px solid #ccd2da;
+  border-radius: 10px;
+  background: white;
+  color: #172233;
+  font-weight: 800;
+}
+.nestedOverlay {
+  z-index: 50;
 }
 .overlay header {
   display: flex;
@@ -426,6 +685,14 @@ fieldset legend {
 fieldset input {
   position: absolute;
   opacity: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+fieldset label {
+  position: relative;
 }
 fieldset label span {
   border: 1px solid #ccd2da;
@@ -454,59 +721,6 @@ fieldset input:checked + span {
   background: var(--gold);
   border: 0;
 }
-.paymentOverlay form {
-  width: min(620px, 100%);
-}
-.paymentContext {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.paymentContext > span,
-.paymentWithoutSchedule {
-  border: 1px solid #d8dde4;
-  border-radius: 12px;
-  background: #fff;
-  padding: 12px;
-}
-.paymentContext small,
-.paymentContext b {
-  display: block;
-}
-.paymentContext small {
-  color: #647185;
-  margin-bottom: 4px;
-}
-.installmentChoices {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-.installmentChoices label span {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 3px 10px;
-  min-height: 72px;
-}
-.installmentChoices label span b {
-  grid-column: 1;
-}
-.installmentChoices label span small {
-  grid-column: 1;
-  color: #647185;
-}
-.installmentChoices label span strong {
-  grid-column: 2;
-  grid-row: 1 / 3;
-  align-self: center;
-}
-.installmentChoices input:checked + span {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
-}
-.formError {
-  color: #c43d49;
-  font-weight: 700;
-}
 .check {
   display: flex !important;
   align-items: center;
@@ -534,11 +748,45 @@ fieldset input:checked + span {
 }
 @media (max-width: 720px) {
   aside {
-    transform: translateX(-100%);
+    transform: none;
+    inset: auto 0 0 0;
+    width: 100%;
+    height: 78px;
+    padding: 8px;
+    z-index: 60;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-top: 1px solid #2a2a2a;
+  }
+  aside > img,
+  aside > .sync,
+  aside > footer {
+    display: none;
+  }
+  aside nav {
+    display: flex;
+    gap: 6px;
+    width: max-content;
+    min-width: 100%;
+  }
+  aside nav button {
+    min-width: 76px;
+    min-height: 60px;
+    padding: 6px 9px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    font-size: 9px;
+    text-align: center;
+  }
+  aside nav button .navAlert {
+    position: absolute;
+    margin: -35px 0 0 42px;
   }
   main {
     margin: 0;
     width: 100%;
+    padding-bottom: 92px;
   }
   main > header {
     padding: 14px 18px;
@@ -550,6 +798,36 @@ fieldset input:checked + span {
   .products,
   .clients {
     grid-template-columns: 1fr;
+  }
+  .dashboardCards .splitCard > div + div {
+    margin-left: 12px;
+    padding-left: 12px;
+  }
+  .receivableHeader {
+    display: grid;
+  }
+  .salesToolbar,
+  .salesFilters,
+  .inventoryProjection,
+  .forecastList {
+    grid-template-columns: 1fr;
+  }
+  .inventoryProjection > div {
+    padding: 14px 0;
+  }
+  .inventoryProjection > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .forecastHead {
+    display: grid;
+  }
+  .receivableTabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+  .receivableTabs button {
+    flex: 1;
   }
   .row {
     grid-template-columns: 1fr;
@@ -596,23 +874,6 @@ fieldset input:checked + span {
   display: grid;
   gap: 18px;
 }
-.profitControlHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-}
-.profitControlHeader h2,
-.profitControlHeader p {
-  margin-top: 0;
-}
-.profitControlHeader p {
-  margin-bottom: 0;
-}
-.profitControlDetails {
-  display: grid;
-  gap: 18px;
-}
 .profitControl > .cards {
   grid-template-columns: repeat(4, 1fr);
 }
@@ -638,10 +899,6 @@ fieldset input:checked + span {
   }
 }
 @media (max-width: 520px) {
-  .profitControlHeader {
-    align-items: stretch;
-    flex-direction: column;
-  }
   .profitControl > .cards {
     grid-template-columns: 1fr;
   }
@@ -682,6 +939,7 @@ nav button:hover .navAlert {
 .clientSearch {
   position: relative;
   max-width: 520px;
+  margin-top: 16px;
 }
 .clientSearch svg {
   position: absolute;
@@ -750,15 +1008,6 @@ nav button:hover .navAlert {
   padding: 10px 14px;
   background: #172233;
   color: white;
-}
-.oldSaleNotice {
-  border: 1px solid #dfc46f;
-  border-radius: 11px;
-  background: #fffaf0;
-  color: #725816;
-  padding: 12px;
-  font-size: 13px;
-  line-height: 1.45;
 }
 .marketplaceBadge {
   display: inline-flex;
@@ -1047,10 +1296,10 @@ button:active {
 }
 .shipping summary {
   cursor: pointer;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.45fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 22px;
 }
 .shipping summary span,
 .shipping summary small {
@@ -1063,6 +1312,14 @@ button:active {
 .shipping summary strong {
   color: var(--gold);
   font-size: 12px;
+}
+.shipping summary > .shippingMethod {
+  justify-self: center;
+  text-align: center;
+  font-size: clamp(17px, 1.35vw, 21px);
+}
+.deliveryTitle {
+  justify-self: end;
 }
 .delivery {
   display: grid;
@@ -1095,30 +1352,26 @@ button:active {
 }
 .addressRow {
   display: grid;
-  grid-template-columns: 2fr 0.65fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr;
   gap: 12px;
 }
-.cepStatus {
-  color: #647185;
-  line-height: 1.4;
-}
-.shippingCostBox {
+.addressLookup {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: 10px;
-  padding: 14px;
-  border: 1px solid #dfc46f;
-  border-radius: 12px;
-  background: #fffaf0;
 }
-.shippingCostBox > label:not(.check) {
-  max-width: 260px;
+.addressLookup .iconButton {
+  height: 43px;
 }
-.shippingCostBox > small {
+.lookupMessage {
+  margin: -4px 0 0;
   color: #647185;
-  line-height: 1.4;
+  font-size: 12px;
+  font-weight: 700;
 }
-.mobileProductSearch {
-  display: none;
+.profitOrdersToggle {
+  justify-self: end;
 }
 @media (max-width: 720px) {
   .delivery,
@@ -1128,7 +1381,15 @@ button:active {
   }
   .shipping summary {
     align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+  .shipping summary > .shippingMethod,
+  .deliveryTitle {
+    justify-self: start;
+    text-align: left;
+  }
+  .addressLookup {
+    grid-template-columns: 1fr;
   }
 }
 .products .iconButton {
@@ -1382,6 +1643,54 @@ aside > footer > button svg {
 .shippingItem.done {
   opacity: 0.72;
 }
+.shippingMeta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.shippingMethod {
+  white-space: nowrap;
+}
+.shippingMethod.correios {
+  color: transparent;
+  background: linear-gradient(90deg, #f3c634 0 50%, #4a9cff 50% 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+}
+.shippingMethod.loggi {
+  color: #65c7ff;
+}
+.shippingMethod.jadlog {
+  color: #ef555c;
+}
+.shippingMethod.uber-pessoalmente {
+  color: white;
+}
+.shippingMethod.nao-informado {
+  color: var(--muted);
+}
+.shippingMethod.tiktok-shop {
+  color: white;
+  background: #090909;
+  border-radius: 999px;
+  padding: 8px 12px;
+}
+.shippingMethod.shopee {
+  color: white;
+  background: #e84a3b;
+  border-radius: 999px;
+  padding: 8px 12px;
+}
+
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
 .toast {
   position: fixed;
   right: 24px;
@@ -1491,117 +1800,6 @@ aside > footer > button svg {
 .purchaseFilters input {
   padding-left: 40px;
 }
-.salesFilterArea {
-  display: grid;
-  gap: 10px;
-  margin-top: 18px;
-}
-.salesSearchRow {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(250px, 390px) auto;
-  align-items: end;
-  gap: 10px;
-}
-.salesSearchRow label {
-  position: relative;
-}
-.salesSearchRow label svg {
-  position: absolute;
-  left: 12px;
-  top: 12px;
-  width: 18px;
-  color: var(--muted);
-}
-.salesSearchRow input,
-.salesDateFilters input,
-.salesDateFilters select {
-  width: 100%;
-  height: 44px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #111a28;
-  color: white;
-  padding: 0 12px;
-}
-.salesSearchRow input {
-  padding-left: 40px;
-}
-.salesSearchRow button,
-.salesDateFilters button {
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #111a28;
-  color: white;
-  padding: 0 14px;
-  font-weight: 800;
-  cursor: pointer;
-}
-.salesSearchRow button.active {
-  border-color: var(--gold);
-  color: var(--gold);
-}
-.salesSearchRow button svg {
-  width: 18px;
-}
-.salesDateFilters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(180px, 1fr)) auto;
-  align-items: end;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 11px;
-  background: #111a28;
-}
-.salesDateFilters label {
-  display: grid;
-  gap: 6px;
-}
-.salesDateFilters label span,
-.salesMonthFilter > span {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-.salesMonthFilter {
-  display: grid;
-  gap: 6px;
-}
-.salesMonthPicker {
-  min-height: 44px;
-  display: grid;
-  grid-template-columns: 42px minmax(150px, 1fr) 42px;
-  align-items: center;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: #111a28;
-  overflow: hidden;
-}
-.salesMonthPicker b {
-  text-align: center;
-  text-transform: capitalize;
-  color: white;
-}
-.salesMonthPicker button {
-  min-height: 42px;
-  border: 0;
-  border-radius: 0;
-  padding: 0;
-  color: var(--gold);
-}
-.salesMonthPicker button svg {
-  width: 20px;
-  height: 20px;
-}
-.salesDateFilters button:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
 .stockFilters select {
   height: 44px;
   border: 1px solid var(--line);
@@ -1683,16 +1881,6 @@ aside > footer > button svg {
 .saleSupplyList input[type="number"] {
   height: 36px;
 }
-.numberWithoutControls {
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-.numberWithoutControls::-webkit-inner-spin-button,
-.numberWithoutControls::-webkit-outer-spin-button {
-  margin: 0;
-  appearance: none;
-  -webkit-appearance: none;
-}
 .saleSupplyList > div > small {
   padding-bottom: 10px;
   text-align: right;
@@ -1705,62 +1893,9 @@ aside > footer > button svg {
 .content > .cards + .financeChart {
   margin-top: 0;
 }
-.financeChartsGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-.financeChartsGrid .financeChart {
-  grid-template-columns: 1fr;
-  gap: 18px;
-}
-.financeChartsGrid .paymentDonut {
-  width: 150px;
-  height: 150px;
-  margin: 18px auto 0;
-}
-.financeChartsGrid .paymentDonut:before {
-  inset: 30px;
-}
-.financeCategoryChart > p {
-  color: var(--muted);
-  font-size: 12px;
-}
-.financeCategoryChart .categoryDonut {
-  width: 150px;
-  height: 150px;
-}
-.financeCategoryChart .categoryDonut:after {
-  inset: 31px;
-}
-.removeSaleItem {
-  grid-column: 1 / -1;
-  justify-self: end;
-  border: 0;
-  background: transparent;
-  color: #bd2836;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 0;
-  font-weight: 800;
-}
-.removeSaleItem svg {
-  width: 15px;
-  height: 15px;
-}
 @media (max-width: 720px) {
-  .financeChartsGrid {
-    grid-template-columns: 1fr;
-  }
-  .paymentContext,
-  .installmentChoices {
-    grid-template-columns: 1fr;
-  }
   .stockFilters,
-  .purchaseFilters,
-  .salesSearchRow,
-  .salesDateFilters {
+  .purchaseFilters {
     grid-template-columns: 1fr;
   }
   .saleSuppliesHead {
@@ -1776,6 +1911,14 @@ aside > footer > button svg {
   }
   .shippingItem {
     gap: 9px;
+  }
+  .shippingMeta {
+    align-items: flex-end;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .shippingChoices {
+    grid-template-columns: 1fr;
   }
   .toast {
     left: 18px;
@@ -1814,25 +1957,9 @@ aside {
   background: #fff1d8;
   color: #a56400;
 }
-.saleBadge.marketplace,
-.receivableMarketplace {
-  background: #eee7ff;
-  color: #7043c7;
-}
-.receivableMarketplace {
-  display: inline-flex;
-  align-items: center;
-  border-radius: 999px;
-  padding: 6px 10px;
-  font-weight: 800;
-}
-.receivableTabs {
-  margin: 0;
-}
-.receivableTabs button.marketplace.active {
-  background: #8356d8;
-  border-color: #8356d8;
-  color: white;
+.saleBadge.marketplace {
+  background: #eee5ff;
+  color: #7441bd;
 }
 .saleBadge.semcusto {
   background: #e4edff;
@@ -1860,24 +1987,6 @@ aside {
   background: #eee;
   color: #526071;
 }
-.cancelInstallment {
-  grid-column: 1 / -1;
-  justify-self: end;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid #dca3a6;
-  border-radius: 9px;
-  background: #fff;
-  color: #bd2836;
-  padding: 8px 11px;
-  font-weight: 800;
-  cursor: pointer;
-}
-.cancelInstallment svg {
-  width: 16px;
-  height: 16px;
-}
 .dashboardMain .financeChart {
   grid-template-columns: 1fr;
 }
@@ -1888,6 +1997,91 @@ aside {
 .dashboardMain .paymentDonut:before {
   inset: 38px;
 }
+.prepareOrigin {
+  margin-left: auto;
+  flex: none;
+  min-width: 118px;
+  border-radius: 999px;
+  padding: 8px 12px;
+  text-align: center;
+  color: white;
+  font-size: 13px;
+  font-weight: 900;
+}
+.prepareOrigin.direct { background: #229b69; }
+.prepareOrigin.tiktok { background: #090909; }
+.prepareOrigin.shopee { background: #e84a3b; }
+.prepareActions {
+  flex: 0 0 min(310px, 28vw) !important;
+  display: grid !important;
+  justify-items: end;
+  gap: 6px;
+}
+.prepareActions em { text-align: right; }
+.preparationStatus {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+.preparationStatus span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+.preparationStatus select {
+  max-width: 245px;
+  border: 1px solid #d8ae43;
+  border-radius: 9px;
+  background: #111a28;
+  color: #edc557;
+  padding: 8px 30px 8px 11px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.shipping summary > .prepareOrigin {
+  margin-left: 0;
+  justify-self: center;
+}
+.shippingCostBox {
+  border: 1px solid #d8be77;
+  border-radius: 14px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+.costEditor {
+  width: min(900px, calc(100vw - 28px)) !important;
+  max-height: calc(100vh - 28px) !important;
+}
+.costEditorSection {
+  display: grid;
+  gap: 9px;
+  border: 1px solid #d9dde4;
+  border-radius: 12px;
+  padding: 14px;
+}
+.costEditorSection h3 { margin: 0 0 4px; color: #172233; }
+.costEditorSection label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: center;
+  gap: 12px;
+}
+.costEditorSummary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.costEditorSummary span {
+  display: grid;
+  gap: 5px;
+  border-radius: 10px;
+  background: #eee8d9;
+  padding: 12px;
+  color: #647185;
+}
+.costEditorSummary b { color: #172233; }
 @media (max-width: 720px) {
   .installmentSummary {
     display: grid;
@@ -1896,161 +2090,21 @@ aside {
     width: 170px;
     height: 170px;
   }
-}
-
-/* Navegação e densidade específicas para celular */
-@media (max-width: 720px) {
-  aside {
-    inset: auto 0 0;
-    width: 100%;
-    height: 72px;
-    padding: 6px 7px;
-    transform: none;
-    z-index: 25;
-    border-top: 1px solid #2b3749;
+  .prepareOrigin {
+    margin-left: 51px;
   }
-  aside > img,
-  aside > footer,
-  aside > .sync {
-    display: none;
+  .prepareActions {
+    flex: 1 1 100% !important;
+    margin-left: 51px;
   }
-  aside nav {
-    display: flex;
-    gap: 4px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-  aside nav::-webkit-scrollbar {
-    display: none;
-  }
-  nav button {
-    position: relative;
-    flex: 0 0 76px;
-    min-height: 58px;
-    padding: 4px 6px;
-    flex-direction: column;
-    justify-content: center;
-    gap: 3px;
-    text-align: center;
-    font-size: 9px;
-    line-height: 1.1;
-  }
-  nav svg {
-    width: 18px;
-    height: 18px;
-  }
-  .navAlert {
-    position: absolute;
-    top: 3px;
-    right: 5px;
-    min-width: 17px;
-    height: 17px;
-    padding: 0 4px;
-    font-size: 8px;
-  }
-  main {
-    padding-bottom: 76px;
-  }
-  main > header {
-    height: auto;
-    min-height: 74px;
-    padding: 11px 13px;
-    align-items: flex-start;
-    gap: 9px;
-    flex-wrap: wrap;
-  }
-  main > header h1 {
-    font-size: 21px;
-  }
-  .headerActions {
-    width: 100%;
-    overflow-x: auto;
-    padding-bottom: 2px;
-  }
-  .headerActions button {
-    flex: 0 0 auto;
-    white-space: nowrap;
-    font-size: 12px;
-  }
-  .headerActions.salesHeaderActions {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow: visible;
-  }
-  .headerActions.salesHeaderActions button {
-    width: 100%;
-    min-width: 0;
-    justify-content: center;
-  }
-  .content {
-    padding: 12px;
-    gap: 12px;
-  }
-  .cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-  .cards > div,
-  .panel,
-  .products > div,
-  .clients > div {
-    padding: 14px;
-    border-radius: 13px;
-  }
-  .cards b {
-    font-size: 18px;
-  }
-  .panel h2 {
-    font-size: 18px;
-  }
-  .products,
-  .clients {
-    grid-template-columns: 1fr;
-  }
-  .overlay {
-    padding: 0;
-    place-items: stretch;
-  }
-  .overlay form,
-  .history {
-    width: 100%;
-    min-height: 100dvh;
-    max-height: 100dvh;
-    border-radius: 0;
-    padding: 16px;
-    gap: 12px;
-  }
-  .overlay h2 {
-    font-size: 23px;
+  .shipping summary > .prepareOrigin {
+    margin-left: 0;
+    justify-self: start;
   }
   .overlay input,
   .overlay select {
-    width: 100%;
-    min-width: 0;
     font-size: 16px;
   }
-  .desktopProductSearch {
-    display: none;
-  }
-  .mobileProductSearch {
-    display: block;
-  }
-  .overlay form > footer {
-    position: sticky;
-    bottom: -16px;
-    background: #f8f6f0;
-    padding: 12px 0 16px;
-  }
-  .volumeApc {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  table {
-    margin-top: 10px;
-  }
-}
-
-@media (max-width: 380px) {
-  .cards {
-    grid-template-columns: 1fr;
-  }
+  .costEditorSummary,
+  .costEditorSection label { grid-template-columns: 1fr; }
 }

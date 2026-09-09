@@ -13,6 +13,8 @@ export const PACKAGING_RULES = [
   "Saco organza",
   "Carta de agradecimento",
   "Cartão de visita",
+  "Envelope APC",
+  "Sacolas DAF",
 ] as const;
 
 type SaleForPackaging = {
@@ -41,6 +43,8 @@ export function automaticPackaging(sale: SaleForPackaging) {
     "Saco organza": Math.ceil(bottles / 3),
     "Carta de agradecimento": 1,
     "Cartão de visita": 1,
+    "Envelope APC": sale.items.filter((item) => item.isApc).length,
+    "Sacolas DAF": 0,
   } satisfies Record<(typeof PACKAGING_RULES)[number], number>;
 }
 
