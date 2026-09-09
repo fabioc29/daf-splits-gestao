@@ -1,0 +1,1554 @@
+
+===== MARKER: function normalizeData @ line 551 =====
+00511:             <Clients
+00512:               d={data}
+00513:               set={setData}
+00514:               history={setHistory}
+00515:               edit={(id) => setModal({ type: "client", id })}
+00516:               notify={notify}
+00517:             />
+00518:           ) : (
+00519:             <Finance d={data} totals={totals} set={setData} notify={notify} />
+00520:           )}
+00521:         </section>
+00522:       </main>
+00523:       {modal?.type === "supplyEdit" || modal?.type === "purchaseEdit" ? (
+00524:         <InventoryEdit
+00525:           modal={modal}
+00526:           d={data}
+00527:           set={setData}
+00528:           close={() => setModal(null)}
+00529:         />
+00530:       ) : modal ? (
+00531:         <Form
+00532:           modal={modal}
+00533:           d={data}
+00534:           set={setData}
+00535:           close={() => setModal(null)}
+00536:         />
+00537:       ) : null}
+00538:       {history ? (
+00539:         <History id={history} d={data} close={() => setHistory(0)} />
+00540:       ) : null}
+00541:       {toast ? (
+00542:         <div className="toast">
+00543:           <Check />
+00544:           {toast}
+00545:         </div>
+00546:       ) : null}
+00547:     </div>
+00548:   );
+00549: }
+00550: 
+00551: function normalizeData(stored: any): D {
+00552:   const merged = { ...blank, ...stored };
+00553:   const products = (merged.products || []).map((p: P) => ({
+00554:     ...p,
+00555:     category: p.category === "Importado" ? "Designer" : p.category,
+00556:     gender: p.gender || "Unissex",
+00557:     apc: p.apc ?? 1,
+00558:   }));
+00559:   const brands = Array.from(
+00560:     new Set([
+00561:       ...(merged.brands || []),
+00562:       ...products.map((p: P) => p.brand).filter(Boolean),
+00563:     ]),
+00564:   ) as string[];
+00565:   const rawSales = (merged.sales || []) as V[];
+00566:   const ids = rawSales.map((sale) => sale.id).sort((a, b) => a - b);
+00567:   const needsSequentialIds =
+00568:     !merged.orderSequenceVersion && ids.some((id, index) => id !== index + 1);
+00569:   const sequentialIds = new Map<number, number>();
+00570:   if (needsSequentialIds) {
+00571:     [...rawSales]
+00572:       .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+00573:       .forEach((sale, index) => sequentialIds.set(sale.id, index + 1));
+00574:   }
+00575:   const normalizedSales = rawSales.map((s: V) => {
+00576:     const marketplaceSale = isMarketplaceSale(s);
+00577:     const linkedCustomer = merged.clients.find(
+00578:       (client: C) => client.id === s.clientId,
+00579:     );
+00580:     return {
+00581:       ...s,
+00582:       id: needsSequentialIds ? sequentialIds.get(s.id) || s.id : s.id,
+00583:       clientId: marketplaceSale ? 0 : s.clientId,
+00584:       customerName:
+00585:         s.customerName || (marketplaceSale ? linkedCustomer?.name : undefined),
+00586:       payment: marketplaceSale ? "À prazo" : s.payment,
+00587:       sent: Boolean(s.sent),
+00588:       status: s.status || "active",
+00589:       expenses: Number(s.expenses || 0),
+00590:       supplyOverrides: Object.fromEntries(
+00591:         Object.entries(s.supplyOverrides || {}).map(([name, qty]) => [
+00592:           name,
+00593:           Math.max(0, Number(qty) || 0),
+00594:         ]),
+00595:       ),
+00596:       channel: s.channel || "direct",
+00597:       marketplaceFee: Number(s.marketplaceFee || 0),
+00598:       marketplacePayoutReceived: Boolean(s.marketplacePayoutReceived),
+00599:       shippingCost: Number(s.shippingCost || 0),
+00600:       shippingPaidBy:
+00601:         s.shippingPaidBy || (Number(s.shippingCost || 0) > 0 ? "daf" : "client"),
+00602:       accumulatingDecants: Boolean(s.accumulatingDecants),
+00603:       historical:
+00604:         Boolean(s.historical) ||
+00605:         (!marketplaceSale && (s.items || []).length === 0),
+00606:       items: (s.items || []).map((item: L) => ({
+00607:         ...item,
+00608:         isApc: Boolean(item.isApc),
+00609:         unitCost:
+00610:           item.unitCost ??
+00611:           products.find((p: P) => p.id === item.productId)?.cost ??
+00612:           0,
+00613:       })),
+00614:       installments: s.installments?.length
+00615:         ? s.installments
+00616:         : s.dueDate
+00617:           ? [
+00618:               {
+00619:                 date: s.dueDate,
+00620:                 amount: s.installment || Math.max(0, s.total - s.paid),
+00621:               },
+00622:             ]
+00623:           : [],
+00624:     } as V;
+00625:   });
+00626:   let normalizedSupplies = (merged.supplies || []).map((s: S) => ({
+00627:     ...s,
+00628:     attachCost: Boolean(s.attachCost),
+00629:   }));
+00630:   if (!merged.supplyInventoryVersion) {
+00631:     normalizedSales.forEach((sale) => {
+00632:       normalizedSupplies = moveSupplyStock(normalizedSupplies, sale, -1);
+00633:     });
+00634:   }
+00635:   return {
+00636:     ...merged,
+00637:     products,
+00638:     orderSequenceVersion: 1,
+00639:     supplyInventoryVersion: 1,
+00640:     marketplacePayoutDays: {
+00641:       "TikTok Shop": Number(merged.marketplacePayoutDays?.["TikTok Shop"] || 9),
+00642:       Shopee: Number(merged.marketplacePayoutDays?.Shopee || 7),
+00643:     },
+00644:     supplies: normalizedSupplies,
+00645:     brands,
+00646:     sales: normalizedSales,
+00647:   };
+00648: }
+00649: function readLocal(): D {
+00650:   try {
+00651:     const stored = JSON.parse(localStorage.getItem("daf-v4") || "null");
+00652:     return stored ? normalizeData(stored) : blank;
+00653:   } catch {
+00654:     return blank;
+00655:   }
+00656: }
+00657: function SetupRequired() {
+00658:   return (
+00659:     <div className="authPage">
+00660:       <div className="authCard">
+00661:         <CloudOff />
+00662:         <h1>Supabase não configurado</h1>
+00663:         <p>
+00664:           Adicione as variáveis VITE_SUPABASE_URL e
+00665:           VITE_SUPABASE_PUBLISHABLE_KEY na Vercel.
+00666:         </p>
+00667:       </div>
+00668:     </div>
+00669:   );
+00670: }
+00671: function Auth() {
+00672:   const [message, setMessage] = useState(""),
+00673:     [busy, setBusy] = useState(false);
+00674:   async function submit(e: any) {
+00675:     e.preventDefault();
+00676:     setBusy(true);
+00677:     setMessage("");
+00678:     const f = Object.fromEntries(new FormData(e.currentTarget)),
+00679:       email = String(f.email),
+00680:       password = String(f.password);
+00681:     const { error } = await supabase.auth.signInWithPassword({
+00682:       email,
+00683:       password,
+00684:     });
+00685:     setBusy(false);
+00686:     setMessage(error ? "E-mail ou senha incorretos." : "");
+00687:   }
+00688:   return (
+00689:     <div className="authPage">
+00690:       <form className="authCard" onSubmit={submit}>
+00691:         <img src={LOGO} alt="DAF Splits" />
+00692:         <small>SISTEMA DE GESTÃO</small>
+00693:         <h1>Entrar no sistema</h1>
+00694:         <label>
+00695:           <span>E-mail</span>
+00696:           <input name="email" type="email" required />
+00697:         </label>
+00698:         <label>
+00699:           <span>Senha</span>
+00700:           <input name="password" type="password" minLength={6} required />
+00701:         </label>
+00702:         {message ? <p className="authMessage">{message}</p> : null}
+00703:         <button className="primary" disabled={busy}>
+00704:           {busy ? "Aguarde..." : "Entrar"}
+00705:         </button>
+00706:       </form>
+00707:     </div>
+00708:   );
+00709: }
+00710: 
+00711: function Cards({ v }: { v: [string, string][] }) {
+00712:   return (
+00713:     <div className="cards">
+00714:       {v.map(([value, label]) => (
+00715:         <div key={label}>
+00716:           <span>{label}</span>
+00717:           <b>{value}</b>
+00718:         </div>
+00719:       ))}
+00720:     </div>
+00721:   );
+00722: }
+00723: 
+00724: function Dash({ d }: { d: D }) {
+00725:   const now = new Date(),
+00726:     monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+00727:     monthSales = d.sales.filter((sale) => sale.date.startsWith(monthKey)),
+00728:     activeSales = monthSales.filter(
+00729:       (sale) =>
+00730:         sale.status !== "cancelled" &&
+
+===== MARKER: const nav @ line 229 =====
+00189: const amountDue = (sale: V) =>
+00190:   marketplacePending(sale)
+00191:     ? Math.max(0, sale.total)
+00192:     : Math.max(0, sale.total - sale.paid);
+00193: const getPreparationStatus = (sale: V) =>
+00194:   sale.preparationStatus ||
+00195:   (sale.accumulatingDecants ? "accumulating" : "preparing");
+00196: const shippingClass = (method?: string) =>
+00197:   (method || "não informado")
+00198:     .toLowerCase()
+00199:     .normalize("NFD")
+00200:     .replace(/[\u0300-\u036f]/g, "")
+00201:     .replace(/[^a-z]+/g, "-");
+00202: const supplyStockKey = (value: string) =>
+00203:   value
+00204:     .normalize("NFD")
+00205:     .replace(/[\u0300-\u036f]/g, "")
+00206:     .toLowerCase()
+00207:     .replace(/[^a-z0-9]/g, "");
+00208: function moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {
+00209:   if (isHistoricalSale(sale)) return supplies;
+00210:   const usage = packaging(sale, supplies).lines;
+00211:   return supplies.map((supply) => {
+00212:     const line = usage.find(
+00213:       (item) => supplyStockKey(item.name) === supplyStockKey(supply.name),
+00214:     );
+00215:     return line
+00216:       ? {
+00217:           ...supply,
+00218:           stock: supply.stock + direction * line.qty,
+00219:         }
+00220:       : supply;
+00221:   });
+00222: }
+00223: const saleCustomer = (sale: V, data: D) =>
+00224:   sale.customerName ||
+00225:   data.clients.find((client) => client.id === sale.clientId)?.name ||
+00226:   "Cliente não informado";
+00227: const LOGO =
+00228:   "data:image/webp;base64,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";
+00229: const nav = [
+00230:   ["dashboard", "Visão geral", LayoutDashboard],
+00231:   ["sales", "Vendas", ShoppingBag],
+00232:   ["prepare", "Pedidos para preparar", ClipboardCheck],
+00233:   ["shipping", "Envios", Truck],
+00234:   ["stock", "Estoque", Box],
+00235:   ["purchases", "Compras", ShoppingCart],
+00236:   ["clients", "Clientes", Users],
+00237:   ["receivables", "Vendas a receber", ReceiptText],
+00238:   ["finance", "Financeiro", Wallet],
+00239: ] as const;
+00240: 
+00241: export default function App() {
+00242:   const [session, setSession] = useState<Session | null>(null),
+00243:     [authLoading, setAuthLoading] = useState(true);
+00244:   useEffect(() => {
+00245:     supabase.auth.getSession().then(({ data }) => {
+00246:       setSession(data.session);
+00247:       setAuthLoading(false);
+00248:     });
+00249:     const {
+00250:       data: { subscription },
+00251:     } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+00252:     return () => subscription.unsubscribe();
+00253:   }, []);
+00254:   if (!isSupabaseConfigured) return <SetupRequired />;
+00255:   if (authLoading)
+00256:     return (
+00257:       <div className="authPage">
+00258:         <div className="authCard">
+00259:           <Cloud />
+00260:           <h1>Conectando ao Supabase...</h1>
+00261:         </div>
+00262:       </div>
+00263:     );
+00264:   if (!session) return <Auth />;
+00265:   return <System session={session} />;
+00266: }
+00267: 
+00268: function System({ session }: { session: Session }) {
+00269:   const [data, setData] = useState<D>(() => readLocal()),
+00270:     [ready, setReady] = useState(false),
+00271:     [sync, setSync] = useState<"loading" | "saved" | "error">("loading");
+00272:   const saveQueue = useRef<Promise<void>>(Promise.resolve());
+00273:   const saveVersion = useRef(0);
+00274:   const [page, setPage] = useState("dashboard"),
+00275:     [modal, setModal] = useState<Modal>(null),
+00276:     [history, setHistory] = useState(0),
+00277:     [toast, setToast] = useState("");
+00278:   function notify(message: string) {
+00279:     setToast(message);
+00280:     window.setTimeout(() => setToast(""), 2600);
+00281:   }
+00282:   useEffect(() => {
+00283:     let active = true;
+00284:     (async () => {
+00285:       const { data: remote, error } = await supabase
+00286:         .from("app_state")
+00287:         .select("data")
+00288:         .eq("user_id", session.user.id)
+00289:         .maybeSingle();
+00290:       if (!active) return;
+00291:       if (error) {
+00292:         setSync("error");
+00293:         return;
+00294:       }
+00295:       if (remote?.data && Object.keys(remote.data).length) {
+00296:         setData(normalizeData(remote.data));
+00297:       } else {
+00298:         const local = readLocal();
+00299:         const { error: saveError } = await supabase
+00300:           .from("app_state")
+00301:           .upsert({ user_id: session.user.id, data: local });
+00302:         if (saveError) {
+00303:           setSync("error");
+00304:           return;
+00305:         }
+00306:       }
+00307:       setReady(true);
+00308:       setSync("saved");
+00309:     })();
+00310:     return () => {
+00311:       active = false;
+00312:     };
+00313:   }, [session.user.id]);
+00314:   useEffect(() => {
+00315:     localStorage.setItem("daf-v4", JSON.stringify(data));
+00316:     if (!ready) return;
+00317:     const version = ++saveVersion.current;
+00318:     setSync("loading");
+00319:     saveQueue.current = saveQueue.current
+00320:       .catch(() => undefined)
+00321:       .then(async () => {
+00322:         try {
+00323:           const { error } = await supabase
+00324:             .from("app_state")
+00325:             .upsert({ user_id: session.user.id, data });
+00326:           if (version === saveVersion.current) {
+00327:             setSync(error ? "error" : "saved");
+00328:           }
+00329:         } catch {
+00330:           if (version === saveVersion.current) setSync("error");
+00331:         }
+00332:       });
+00333:   }, [data, ready, session.user.id]);
+00334:   const totals = useMemo(
+00335:     () =>
+00336:       data.sales
+00337:         .filter(
+00338:           (s) =>
+00339:             s.status !== "cancelled" &&
+00340:             !isNoCost(s) &&
+00341:             !isHistoricalSale(s),
+00342:         )
+00343:         .reduce(
+00344:           (a, s) => ({ gross: a.gross + s.total, paid: a.paid + s.paid }),
+00345:           { gross: 0, paid: 0 },
+00346:         ),
+00347:     [data.sales],
+00348:   );
+00349:   const navAlerts: Record<string, number> = {
+00350:     receivables: data.sales.filter(
+00351:       (s) =>
+00352:         s.status !== "cancelled" &&
+00353:         !isNoCost(s) &&
+00354:         !isMarketplaceSale(s) &&
+00355:         s.paid < s.total,
+00356:     ).length,
+00357:     prepare: data.sales.filter(
+00358:       (sale) =>
+00359:         sale.status !== "cancelled" &&
+00360:         !sale.prepared &&
+00361:         !isHistoricalSale(sale),
+00362:     ).length,
+00363:     shipping: data.sales.filter(
+00364:       (sale) =>
+00365:         sale.status !== "cancelled" &&
+00366:         sale.prepared &&
+00367:         !sale.sent &&
+00368:         !isHistoricalSale(sale),
+00369:     ).length,
+00370:   };
+00371:   const action =
+00372:     page === "sales"
+00373:       ? ["Nova venda", "sale"]
+00374:       : page === "purchases"
+00375:         ? ["Nova compra/despesa", "purchase"]
+00376:         : page === "clients"
+00377:           ? ["Novo cliente", "client"]
+00378:           : page === "receivables"
+00379:             ? ["Cadastrar venda antiga", "oldSale"]
+00380:             : null;
+00381:   if (!ready && sync !== "error")
+00382:     return (
+00383:       <div className="authPage">
+00384:         <div className="authCard">
+00385:           <Cloud />
+00386:           <h1>Carregando seus dados...</h1>
+00387:         </div>
+00388:       </div>
+00389:     );
+00390:   return (
+00391:     <div className="shell">
+00392:       <aside>
+00393:         <img src={LOGO} alt="DAF Splits" />
+00394:         <nav>
+00395:           {nav.map(([id, label, Icon]) => (
+00396:             <button
+00397:               key={id}
+00398:               className={page === id ? "on" : ""}
+00399:               onClick={() => setPage(id)}
+00400:             >
+00401:               <Icon />
+00402:               {label}
+00403:               {navAlerts[id] ? (
+00404:                 <span
+00405:                   className="navAlert"
+00406:                   aria-label={`${navAlerts[id]} pendente(s)`}
+00407:                 >
+00408:                   {navAlerts[id]}
+
+===== MARKER: Clientes @ line 236 =====
+00196: const shippingClass = (method?: string) =>
+00197:   (method || "não informado")
+00198:     .toLowerCase()
+00199:     .normalize("NFD")
+00200:     .replace(/[\u0300-\u036f]/g, "")
+00201:     .replace(/[^a-z]+/g, "-");
+00202: const supplyStockKey = (value: string) =>
+00203:   value
+00204:     .normalize("NFD")
+00205:     .replace(/[\u0300-\u036f]/g, "")
+00206:     .toLowerCase()
+00207:     .replace(/[^a-z0-9]/g, "");
+00208: function moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {
+00209:   if (isHistoricalSale(sale)) return supplies;
+00210:   const usage = packaging(sale, supplies).lines;
+00211:   return supplies.map((supply) => {
+00212:     const line = usage.find(
+00213:       (item) => supplyStockKey(item.name) === supplyStockKey(supply.name),
+00214:     );
+00215:     return line
+00216:       ? {
+00217:           ...supply,
+00218:           stock: supply.stock + direction * line.qty,
+00219:         }
+00220:       : supply;
+00221:   });
+00222: }
+00223: const saleCustomer = (sale: V, data: D) =>
+00224:   sale.customerName ||
+00225:   data.clients.find((client) => client.id === sale.clientId)?.name ||
+00226:   "Cliente não informado";
+00227: const LOGO =
+00228:   "data:image/webp;base64,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";
+00229: const nav = [
+00230:   ["dashboard", "Visão geral", LayoutDashboard],
+00231:   ["sales", "Vendas", ShoppingBag],
+00232:   ["prepare", "Pedidos para preparar", ClipboardCheck],
+00233:   ["shipping", "Envios", Truck],
+00234:   ["stock", "Estoque", Box],
+00235:   ["purchases", "Compras", ShoppingCart],
+00236:   ["clients", "Clientes", Users],
+00237:   ["receivables", "Vendas a receber", ReceiptText],
+00238:   ["finance", "Financeiro", Wallet],
+00239: ] as const;
+00240: 
+00241: export default function App() {
+00242:   const [session, setSession] = useState<Session | null>(null),
+00243:     [authLoading, setAuthLoading] = useState(true);
+00244:   useEffect(() => {
+00245:     supabase.auth.getSession().then(({ data }) => {
+00246:       setSession(data.session);
+00247:       setAuthLoading(false);
+00248:     });
+00249:     const {
+00250:       data: { subscription },
+00251:     } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
+00252:     return () => subscription.unsubscribe();
+00253:   }, []);
+00254:   if (!isSupabaseConfigured) return <SetupRequired />;
+00255:   if (authLoading)
+00256:     return (
+00257:       <div className="authPage">
+00258:         <div className="authCard">
+00259:           <Cloud />
+00260:           <h1>Conectando ao Supabase...</h1>
+00261:         </div>
+00262:       </div>
+00263:     );
+00264:   if (!session) return <Auth />;
+00265:   return <System session={session} />;
+00266: }
+00267: 
+00268: function System({ session }: { session: Session }) {
+00269:   const [data, setData] = useState<D>(() => readLocal()),
+00270:     [ready, setReady] = useState(false),
+00271:     [sync, setSync] = useState<"loading" | "saved" | "error">("loading");
+00272:   const saveQueue = useRef<Promise<void>>(Promise.resolve());
+00273:   const saveVersion = useRef(0);
+00274:   const [page, setPage] = useState("dashboard"),
+00275:     [modal, setModal] = useState<Modal>(null),
+00276:     [history, setHistory] = useState(0),
+00277:     [toast, setToast] = useState("");
+00278:   function notify(message: string) {
+00279:     setToast(message);
+00280:     window.setTimeout(() => setToast(""), 2600);
+00281:   }
+00282:   useEffect(() => {
+00283:     let active = true;
+00284:     (async () => {
+00285:       const { data: remote, error } = await supabase
+00286:         .from("app_state")
+00287:         .select("data")
+00288:         .eq("user_id", session.user.id)
+00289:         .maybeSingle();
+00290:       if (!active) return;
+00291:       if (error) {
+00292:         setSync("error");
+00293:         return;
+00294:       }
+00295:       if (remote?.data && Object.keys(remote.data).length) {
+00296:         setData(normalizeData(remote.data));
+00297:       } else {
+00298:         const local = readLocal();
+00299:         const { error: saveError } = await supabase
+00300:           .from("app_state")
+00301:           .upsert({ user_id: session.user.id, data: local });
+00302:         if (saveError) {
+00303:           setSync("error");
+00304:           return;
+00305:         }
+00306:       }
+00307:       setReady(true);
+00308:       setSync("saved");
+00309:     })();
+00310:     return () => {
+00311:       active = false;
+00312:     };
+00313:   }, [session.user.id]);
+00314:   useEffect(() => {
+00315:     localStorage.setItem("daf-v4", JSON.stringify(data));
+00316:     if (!ready) return;
+00317:     const version = ++saveVersion.current;
+00318:     setSync("loading");
+00319:     saveQueue.current = saveQueue.current
+00320:       .catch(() => undefined)
+00321:       .then(async () => {
+00322:         try {
+00323:           const { error } = await supabase
+00324:             .from("app_state")
+00325:             .upsert({ user_id: session.user.id, data });
+00326:           if (version === saveVersion.current) {
+00327:             setSync(error ? "error" : "saved");
+00328:           }
+00329:         } catch {
+00330:           if (version === saveVersion.current) setSync("error");
+00331:         }
+00332:       });
+00333:   }, [data, ready, session.user.id]);
+00334:   const totals = useMemo(
+00335:     () =>
+00336:       data.sales
+00337:         .filter(
+00338:           (s) =>
+00339:             s.status !== "cancelled" &&
+00340:             !isNoCost(s) &&
+00341:             !isHistoricalSale(s),
+00342:         )
+00343:         .reduce(
+00344:           (a, s) => ({ gross: a.gross + s.total, paid: a.paid + s.paid }),
+00345:           { gross: 0, paid: 0 },
+00346:         ),
+00347:     [data.sales],
+00348:   );
+00349:   const navAlerts: Record<string, number> = {
+00350:     receivables: data.sales.filter(
+00351:       (s) =>
+00352:         s.status !== "cancelled" &&
+00353:         !isNoCost(s) &&
+00354:         !isMarketplaceSale(s) &&
+00355:         s.paid < s.total,
+00356:     ).length,
+00357:     prepare: data.sales.filter(
+00358:       (sale) =>
+00359:         sale.status !== "cancelled" &&
+00360:         !sale.prepared &&
+00361:         !isHistoricalSale(sale),
+00362:     ).length,
+00363:     shipping: data.sales.filter(
+00364:       (sale) =>
+00365:         sale.status !== "cancelled" &&
+00366:         sale.prepared &&
+00367:         !sale.sent &&
+00368:         !isHistoricalSale(sale),
+00369:     ).length,
+00370:   };
+00371:   const action =
+00372:     page === "sales"
+00373:       ? ["Nova venda", "sale"]
+00374:       : page === "purchases"
+00375:         ? ["Nova compra/despesa", "purchase"]
+00376:         : page === "clients"
+00377:           ? ["Novo cliente", "client"]
+00378:           : page === "receivables"
+00379:             ? ["Cadastrar venda antiga", "oldSale"]
+00380:             : null;
+00381:   if (!ready && sync !== "error")
+00382:     return (
+00383:       <div className="authPage">
+00384:         <div className="authCard">
+00385:           <Cloud />
+00386:           <h1>Carregando seus dados...</h1>
+00387:         </div>
+00388:       </div>
+00389:     );
+00390:   return (
+00391:     <div className="shell">
+00392:       <aside>
+00393:         <img src={LOGO} alt="DAF Splits" />
+00394:         <nav>
+00395:           {nav.map(([id, label, Icon]) => (
+00396:             <button
+00397:               key={id}
+00398:               className={page === id ? "on" : ""}
+00399:               onClick={() => setPage(id)}
+00400:             >
+00401:               <Icon />
+00402:               {label}
+00403:               {navAlerts[id] ? (
+00404:                 <span
+00405:                   className="navAlert"
+00406:                   aria-label={`${navAlerts[id]} pendente(s)`}
+00407:                 >
+00408:                   {navAlerts[id]}
+00409:                 </span>
+00410:               ) : null}
+00411:             </button>
+00412:           ))}
+00413:         </nav>
+00414:         <div className={"sync " + sync}>
+00415:           {sync === "error" ? <CloudOff /> : <Cloud />}
+
+===== MARKER: function Clients @ line 2109 =====
+02069:               <th>Total</th>
+02070:               <th>Ações</th>
+02071:             </tr>
+02072:           </thead>
+02073:           <tbody>
+02074:             {filteredPurchases.map((p) => (
+02075:               <tr key={p.id}>
+02076:                 <td>{dateBR(p.date)}</td>
+02077:                 <td>{p.supplier}</td>
+02078:                 <td>{p.type}</td>
+02079:                 <td>{p.description}</td>
+02080:                 <td>
+02081:                   {p.qty}
+02082:                   {p.mlPerBottle ? ` × ${p.mlPerBottle} ml` : ""}
+02083:                 </td>
+02084:                 <td>{brl(p.total)}</td>
+02085:                 <td>
+02086:                   <button className="iconButton" onClick={() => edit(p.id)}>
+02087:                     <Pencil />
+02088:                     Editar
+02089:                   </button>
+02090:                   <button
+02091:                     className="iconButton danger"
+02092:                     onClick={() => remove(p.id)}
+02093:                   >
+02094:                     <Trash2 />
+02095:                     Excluir
+02096:                   </button>
+02097:                 </td>
+02098:               </tr>
+02099:             ))}
+02100:           </tbody>
+02101:         </table>
+02102:         {!filteredPurchases.length ? (
+02103:           <p className="empty">Nenhuma compra encontrada.</p>
+02104:         ) : null}
+02105:       </div>
+02106:     </>
+02107:   );
+02108: }
+02109: function Clients({
+02110:   d,
+02111:   history,
+02112:   edit,
+02113:   set,
+02114:   notify,
+02115: }: {
+02116:   d: D;
+02117:   history: (n: number) => void;
+02118:   edit: (n: number) => void;
+02119:   set: any;
+02120:   notify: (s: string) => void;
+02121: }) {
+02122:   const [query, setQuery] = useState("");
+02123:   const clients = d.clients.filter((client) =>
+02124:     client.name.toLowerCase().includes(query.trim().toLowerCase()),
+02125:   );
+02126:   function remove(id: number) {
+02127:     if (d.sales.some((s) => s.clientId === id)) {
+02128:       window.alert(
+02129:         "Este cliente possui vendas registradas e não pode ser excluído.",
+02130:       );
+02131:       return;
+02132:     }
+02133:     if (!window.confirm("Excluir este cliente?")) return;
+02134:     set((x: D) => ({ ...x, clients: x.clients.filter((c) => c.id !== id) }));
+02135:     notify("Cliente excluído.");
+02136:   }
+02137:   return (
+02138:     <>
+02139:       <Cards v={[[String(d.clients.length), "Clientes cadastrados"]]} />
+02140:       <div className="clientSearch">
+02141:         <Search />
+02142:         <input
+02143:           value={query}
+02144:           onChange={(event) => setQuery(event.target.value)}
+02145:           placeholder="Pesquisar cliente pelo nome"
+02146:           aria-label="Pesquisar cliente pelo nome"
+02147:         />
+02148:       </div>
+02149:       <div className="clients">
+02150:         {clients.map((c) => (
+02151:           <div key={c.id}>
+02152:             <i>
+02153:               {c.name
+02154:                 .split(" ")
+02155:                 .map((x) => x[0])
+02156:                 .slice(0, 2)}
+02157:             </i>
+02158:             <h3>{c.name}</h3>
+02159:             <p>
+02160:               {c.phone} · CEP {c.cep}
+02161:             </p>
+02162:             <div className="clientActions">
+02163:               <button onClick={() => history(c.id)}>Ver histórico</button>
+02164:               <button onClick={() => edit(c.id)}>
+02165:                 <Pencil />
+02166:                 Editar
+02167:               </button>
+02168:               <button className="dangerText" onClick={() => remove(c.id)}>
+02169:                 <Trash2 />
+02170:                 Excluir
+02171:               </button>
+02172:             </div>
+02173:           </div>
+02174:         ))}
+02175:       </div>
+02176:       {!clients.length ? (
+02177:         <p className="empty">Nenhum cliente encontrado.</p>
+02178:       ) : null}
+02179:     </>
+02180:   );
+02181: }
+02182: function PaymentBreakdown({ d }: { d: D }) {
+02183:   const payments = [
+02184:     { name: "Pix", color: "#22a66f", matches: (sale: V) => !isMarketplaceSale(sale) && ((isInstallmentSale(sale) && isInstallmentSettled(sale)) || (!isInstallmentSale(sale) && sale.payment === "Pix")) },
+02185:     { name: "Cartão de Crédito", color: "#2f80ed", matches: (sale: V) => !isMarketplaceSale(sale) && !isInstallmentSale(sale) && sale.payment === "Cartão de Crédito" },
+02186:     { name: "À prazo", color: "#e0b43c", matches: (sale: V) => !isMarketplaceSale(sale) && isInstallmentSale(sale) && !isInstallmentSettled(sale) },
+02187:     { name: "Marketplace", color: "#8b5cf6", matches: (sale: V) => isMarketplaceSale(sale) },
+02188:   ].map((x) => ({
+02189:     ...x,
+02190:     value: d.sales
+02191:       .filter(
+02192:         (s) =>
+02193:           s.status !== "cancelled" &&
+02194:           !isNoCost(s) &&
+02195:           !isHistoricalSale(s) &&
+02196:           x.matches(s),
+02197:       )
+02198:       .reduce((n, s) => n + Math.max(0, s.total), 0),
+02199:   }));
+02200:   const total = payments.reduce((n, x) => n + x.value, 0);
+02201:   let cursor = 0;
+02202:   const gradient = total
+02203:     ? `conic-gradient(${payments
+02204:         .map((x) => {
+02205:           const start = (cursor / total) * 360;
+02206:           cursor += x.value;
+02207:           return `${x.color} ${start}deg ${(cursor / total) * 360}deg`;
+02208:         })
+02209:         .join(",")})`
+02210:     : "#303b4c";
+02211:   return (
+02212:     <div className="panel financeChart">
+02213:       <div>
+02214:         <h2>Vendas por forma de pagamento</h2>
+02215:         <p>Distribuição do faturamento recebido por forma e origem do pagamento.</p>
+02216:         <div className="paymentDonut" style={{ background: gradient }}>
+02217:           <span>
+02218:             <small>Total vendido</small>
+02219:             <b>{brl(total)}</b>
+02220:           </span>
+02221:         </div>
+02222:       </div>
+02223:       <div className="paymentLegend">
+02224:         {payments.map((x) => (
+02225:           <div key={x.name}>
+02226:             <i style={{ background: x.color }} />
+02227:             <span>
+02228:               {x.name}
+02229:               <small>
+02230:                 {total ? Math.round((x.value / total) * 100) : 0}% do total
+02231:               </small>
+02232:             </span>
+02233:             <b>{brl(x.value)}</b>
+02234:           </div>
+02235:         ))}
+02236:       </div>
+02237:     </div>
+02238:   );
+02239: }
+02240: function Finance({
+02241:   d,
+02242:   totals,
+02243:   set,
+02244:   notify,
+02245: }: {
+02246:   d: D;
+02247:   totals: { gross: number; paid: number };
+02248:   set: any;
+02249:   notify: (message: string) => void;
+02250: }) {
+02251:   const balanceCosts = d.sales
+02252:     .filter(
+02253:       (sale) =>
+02254:         sale.status !== "cancelled" &&
+02255:         !isNoCost(sale) &&
+02256:         !isHistoricalSale(sale),
+02257:     )
+02258:     .reduce(
+02259:       (sum, sale) =>
+02260:         sum +
+02261:         sale.items.reduce(
+02262:           (itemSum, item) =>
+02263:             itemSum +
+02264:             item.ml *
+02265:               (item.unitCost ??
+02266:                 d.products.find((product) => product.id === item.productId)?.cost ??
+02267:                 0),
+02268:           0,
+02269:         ) +
+02270:         Number(sale.expenses || 0) +
+02271:         Number(sale.marketplaceFee || 0) +
+02272:         Number(sale.shippingCost || 0) +
+02273:         packaging(sale, d.supplies).total,
+02274:       0,
+02275:     );
+02276:   const purchaseExpenses = d.purchases.reduce(
+02277:     (sum, purchase) => sum + Number(purchase.total || 0),
+02278:     0,
+02279:   );
+02280:   const balance = totals.gross - balanceCosts - purchaseExpenses;
+02281:   return (
+02282:     <>
+02283:       <Cards
+02284:         v={[
+02285:           [brl(totals.paid), "Faturamento"],
+02286:           [brl(totals.gross), "Total vendido"],
+02287:           [brl(totals.gross - totals.paid), "A receber"],
+02288:           [brl(balance), "Saldo"],
+
+===== MARKER: function Purchases @ line 1989 =====
+01949:                   >
+01950:                     <Trash2 />
+01951:                     Excluir
+01952:                   </button>
+01953:                 </div>
+01954:               </div>
+01955:             ))}
+01956:           </div>
+01957:         </>
+01958:       ) : (
+01959:         <>
+01960:           <div className="products">
+01961:             {d.supplies.map((s) => (
+01962:               <div key={s.id}>
+01963:                 <h3>{s.name}</h3>
+01964:                 <p>
+01965:                   {s.stock} {s.unit}
+01966:                   {s.cost ? ` · ${brl(s.cost)} por unidade` : ""}
+01967:                 </p>
+01968:                 <p>Custo na venda: {s.attachCost ? "Sim" : "Não"}</p>
+01969:                 <button className="iconButton" onClick={() => editSupply(s.id)}>
+01970:                   <Pencil />
+01971:                   Editar
+01972:                 </button>
+01973:                 <button
+01974:                   className="iconButton danger"
+01975:                   onClick={() => removeSupply(s.id)}
+01976:                 >
+01977:                   <Trash2 />
+01978:                   Excluir
+01979:                 </button>
+01980:               </div>
+01981:             ))}
+01982:           </div>
+01983:         </>
+01984:       )}
+01985:     </>
+01986:   );
+01987: }
+01988: 
+01989: function Purchases({
+01990:   d,
+01991:   set,
+01992:   edit,
+01993:   notify,
+01994: }: {
+01995:   edit: (id: number) => void;
+01996:   d: D;
+01997:   set: any;
+01998:   notify: (s: string) => void;
+01999: }) {
+02000:   const [supplierFilter, setSupplierFilter] = useState("Todos");
+02001:   const [purchaseQuery, setPurchaseQuery] = useState("");
+02002:   const month = today().slice(0, 7),
+02003:     monthly = d.purchases.filter((p) => p.date.startsWith(month)),
+02004:     spent = monthly.reduce((n, p) => n + p.total, 0);
+02005:   const suppliers = Array.from(
+02006:     new Set(d.purchases.map((purchase) => purchase.supplier).filter(Boolean)),
+02007:   ).sort();
+02008:   const filteredPurchases = d.purchases.filter((purchase) => {
+02009:     const matchesSupplier =
+02010:       supplierFilter === "Todos" || purchase.supplier === supplierFilter;
+02011:     const searchable =
+02012:       `${purchase.date} ${purchase.supplier} ${purchase.type} ${purchase.description}`.toLowerCase();
+02013:     return (
+02014:       matchesSupplier && searchable.includes(purchaseQuery.trim().toLowerCase())
+02015:     );
+02016:   });
+02017:   function remove(id: number) {
+02018:     if (
+02019:       !window.confirm(
+02020:         "Excluir este registro de compra? O estoque já lançado não será alterado.",
+02021:       )
+02022:     )
+02023:       return;
+02024:     set((x: D) => ({
+02025:       ...x,
+02026:       purchases: x.purchases.filter((p) => p.id !== id),
+02027:     }));
+02028:     notify("Registro de compra excluído.");
+02029:   }
+02030:   return (
+02031:     <>
+02032:       <Cards
+02033:         v={[
+02034:           [brl(spent), "Gasto em compras neste mês"],
+02035:           [String(monthly.length), "Compras no mês"],
+02036:         ]}
+02037:       />
+02038:       <div className="panel table">
+02039:         <h2>Histórico de compras</h2>
+02040:         <div className="purchaseFilters">
+02041:           <label>
+02042:             <Search />
+02043:             <input
+02044:               value={purchaseQuery}
+02045:               onChange={(event) => setPurchaseQuery(event.target.value)}
+02046:               placeholder="Pesquisar compra, item ou fornecedor"
+02047:               aria-label="Pesquisar no histórico de compras"
+02048:             />
+02049:           </label>
+02050:           <select
+02051:             value={supplierFilter}
+02052:             onChange={(event) => setSupplierFilter(event.target.value)}
+02053:             aria-label="Filtrar compras por fornecedor"
+02054:           >
+02055:             <option>Todos</option>
+02056:             {suppliers.map((supplier) => (
+02057:               <option key={supplier}>{supplier}</option>
+02058:             ))}
+02059:           </select>
+02060:         </div>
+02061:         <table>
+02062:           <thead>
+02063:             <tr>
+02064:               <th>Data</th>
+02065:               <th>Fornecedor</th>
+02066:               <th>Tipo</th>
+02067:               <th>Descrição</th>
+02068:               <th>Quantidade</th>
+02069:               <th>Total</th>
+02070:               <th>Ações</th>
+02071:             </tr>
+02072:           </thead>
+02073:           <tbody>
+02074:             {filteredPurchases.map((p) => (
+02075:               <tr key={p.id}>
+02076:                 <td>{dateBR(p.date)}</td>
+02077:                 <td>{p.supplier}</td>
+02078:                 <td>{p.type}</td>
+02079:                 <td>{p.description}</td>
+02080:                 <td>
+02081:                   {p.qty}
+02082:                   {p.mlPerBottle ? ` × ${p.mlPerBottle} ml` : ""}
+02083:                 </td>
+02084:                 <td>{brl(p.total)}</td>
+02085:                 <td>
+02086:                   <button className="iconButton" onClick={() => edit(p.id)}>
+02087:                     <Pencil />
+02088:                     Editar
+02089:                   </button>
+02090:                   <button
+02091:                     className="iconButton danger"
+02092:                     onClick={() => remove(p.id)}
+02093:                   >
+02094:                     <Trash2 />
+02095:                     Excluir
+02096:                   </button>
+02097:                 </td>
+02098:               </tr>
+02099:             ))}
+02100:           </tbody>
+02101:         </table>
+02102:         {!filteredPurchases.length ? (
+02103:           <p className="empty">Nenhuma compra encontrada.</p>
+02104:         ) : null}
+02105:       </div>
+02106:     </>
+02107:   );
+02108: }
+02109: function Clients({
+02110:   d,
+02111:   history,
+02112:   edit,
+02113:   set,
+02114:   notify,
+02115: }: {
+02116:   d: D;
+02117:   history: (n: number) => void;
+02118:   edit: (n: number) => void;
+02119:   set: any;
+02120:   notify: (s: string) => void;
+02121: }) {
+02122:   const [query, setQuery] = useState("");
+02123:   const clients = d.clients.filter((client) =>
+02124:     client.name.toLowerCase().includes(query.trim().toLowerCase()),
+02125:   );
+02126:   function remove(id: number) {
+02127:     if (d.sales.some((s) => s.clientId === id)) {
+02128:       window.alert(
+02129:         "Este cliente possui vendas registradas e não pode ser excluído.",
+02130:       );
+02131:       return;
+02132:     }
+02133:     if (!window.confirm("Excluir este cliente?")) return;
+02134:     set((x: D) => ({ ...x, clients: x.clients.filter((c) => c.id !== id) }));
+02135:     notify("Cliente excluído.");
+02136:   }
+02137:   return (
+02138:     <>
+02139:       <Cards v={[[String(d.clients.length), "Clientes cadastrados"]]} />
+02140:       <div className="clientSearch">
+02141:         <Search />
+02142:         <input
+02143:           value={query}
+02144:           onChange={(event) => setQuery(event.target.value)}
+02145:           placeholder="Pesquisar cliente pelo nome"
+02146:           aria-label="Pesquisar cliente pelo nome"
+02147:         />
+02148:       </div>
+02149:       <div className="clients">
+02150:         {clients.map((c) => (
+02151:           <div key={c.id}>
+02152:             <i>
+02153:               {c.name
+02154:                 .split(" ")
+02155:                 .map((x) => x[0])
+02156:                 .slice(0, 2)}
+02157:             </i>
+02158:             <h3>{c.name}</h3>
+02159:             <p>
+02160:               {c.phone} · CEP {c.cep}
+02161:             </p>
+02162:             <div className="clientActions">
+02163:               <button onClick={() => history(c.id)}>Ver histórico</button>
+02164:               <button onClick={() => edit(c.id)}>
+02165:                 <Pencil />
+02166:                 Editar
+02167:               </button>
+02168:               <button className="dangerText" onClick={() => remove(c.id)}>
+
+===== MARKER: function SaleSupplyPicker @ line 3958 =====
+03918:             {Array.from({ length: Math.max(0, addressCount - 1) }, (_, offset) => {
+03919:               const i = offset + 1;
+03920:               return (
+03921:               <div className="addressRow" key={i}>
+03922:                 <Field
+03923:                   n={"address" + i}
+03924:                   l={"Endereço " + (i + 1)}
+03925:                   v={existingClient?.addresses[i]?.value}
+03926:                 />
+03927:                 <Field
+03928:                   n={"label" + i}
+03929:                   l="Identificação"
+03930:                   p="Casa, trabalho..."
+03931:                   v={existingClient?.addresses[i]?.label}
+03932:                 />
+03933:                 <span />
+03934:               </div>
+03935:               );
+03936:             })}
+03937:             <button
+03938:               type="button"
+03939:               className="add"
+03940:               onClick={() => setAddressCount((n) => n + 1)}
+03941:             >
+03942:               <Plus />
+03943:               Adicionar endereço
+03944:             </button>
+03945:           </>
+03946:         ) : null}
+03947:         <footer>
+03948:           <button type="button" onClick={close}>
+03949:             Cancelar
+03950:           </button>
+03951:           <button className="primary">Salvar registro</button>
+03952:         </footer>
+03953:       </form>
+03954:     </div>
+03955:   );
+03956: }
+03957: 
+03958: function SaleSupplyPicker({
+03959:   items,
+03960:   supplies,
+03961:   overrides,
+03962:   setOverrides,
+03963: }: {
+03964:   items: { ml: number; isApc?: boolean }[];
+03965:   supplies: S[];
+03966:   overrides: Record<string, number>;
+03967:   setOverrides: (value: Record<string, number>) => void;
+03968: }) {
+03969:   const automatic = automaticPackaging({ items });
+03970:   const effectiveSale = { items, supplyOverrides: overrides };
+03971:   const effectiveLines = packaging(effectiveSale, supplies).lines;
+03972:   const total = effectiveLines.reduce((sum, line) => sum + line.total, 0);
+03973: 
+03974:   function update(name: string, qty: number) {
+03975:     setOverrides({ ...overrides, [name]: Math.max(0, qty) });
+03976:   }
+03977: 
+03978:   return (
+03979:     <div className="saleSupplies">
+03980:       <div className="saleSuppliesHead">
+03981:         <div>
+03982:           <b>Insumos/suprimentos contabilizados</b>
+03983:           <small>
+03984:             Quantidades pré-calculadas pelo pedido. Você pode alterar
+03985:             manualmente.
+03986:           </small>
+03987:         </div>
+03988:         {Object.keys(overrides).length ? (
+03989:           <button type="button" onClick={() => setOverrides({})}>
+03990:             Restaurar automático
+03991:           </button>
+03992:         ) : null}
+03993:       </div>
+03994:       <div className="saleSupplyList">
+03995:         {PACKAGING_RULES.map((name) => {
+03996:           const qty = overrides[name] ?? automatic[name];
+03997:           const line = effectiveLines.find((item) => item.name === name);
+03998:           return (
+03999:             <div key={name} className={qty > 0 ? "selected" : ""}>
+04000:               <label>
+04001:                 <input
+04002:                   type="checkbox"
+04003:                   checked={qty > 0}
+04004:                   onChange={(event) =>
+04005:                     update(
+04006:                       name,
+04007:                       event.target.checked ? automatic[name] || 1 : 0,
+04008:                     )
+04009:                   }
+04010:                 />
+04011:                 <span>{name}</span>
+04012:               </label>
+04013:               <label>
+04014:                 <span>Quantidade</span>
+04015:                 <input
+04016:                   type="number"
+04017:                   min="0"
+04018:                   step="1"
+04019:                   value={qty}
+04020:                   onChange={(event) => update(name, Number(event.target.value))}
+04021:                 />
+04022:               </label>
+04023:               <small>
+04024:                 {line?.missing ? "Custo não cadastrado" : brl(line?.total || 0)}
+04025:               </small>
+04026:             </div>
+04027:           );
+04028:         })}
+04029:       </div>
+04030:       <strong>Total dos insumos: {brl(total)}</strong>
+04031:     </div>
+04032:   );
+04033: }
+04034: 
+04035: const mkP = (f: any, id = Date.now()): P => ({
+04036:   id,
+04037:   brand: String(f.brand),
+04038:   name: String(f.name),
+04039:   category: String(f.category),
+04040:   gender: String(f.gender),
+04041:   stock: Number(f.stock),
+04042:   min: 0,
+04043:   cost: Number(f.cost),
+04044:   apc: String(f.apc) === "Sim" ? 1 : 0,
+04045: });
+04046: const mkC = (f: any, n: number, id = Date.now()): C => ({
+04047:   id,
+04048:   name: String(f.name),
+04049:   phone: String(f.phone),
+04050:   cpf: String(f.cpf),
+04051:   cep: String(f.cep),
+04052:   number: String(f.number || ""),
+04053:   district: String(f.district || ""),
+04054:   city: String(f.city || ""),
+04055:   state: String(f.state || ""),
+04056:   date: String(f.date),
+04057:   addresses: Array.from({ length: n }, (_, i) => ({
+04058:     label: String(f["label" + i] || ""),
+04059:     value: String(f["address" + i] || ""),
+04060:   })).filter((a) => a.value),
+04061: });
+04062: function BrandFields({
+04063:   brands,
+04064:   newBrand,
+04065:   setNewBrand,
+04066:   value,
+04067: }: {
+04068:   brands: string[];
+04069:   newBrand: boolean;
+04070:   setNewBrand: (v: boolean) => void;
+04071:   value?: string;
+04072: }) {
+04073:   return (
+04074:     <>
+04075:       <label className="check">
+04076:         <input
+04077:           type="checkbox"
+04078:           checked={newBrand}
+04079:           onChange={(e) => setNewBrand(e.target.checked)}
+04080:         />
+04081:         Cadastrar nova marca
+04082:       </label>
+04083:       {newBrand ? (
+04084:         <Field n="newBrand" l="Nova marca" />
+04085:       ) : (
+04086:         <Select
+04087:           n="brand"
+04088:           l="Marca"
+04089:           value={value}
+04090:           o={brands.map((x) => [x, x])}
+04091:         />
+04092:       )}
+04093:     </>
+04094:   );
+04095: }
+04096: function ProductFields({
+04097:   product,
+04098:   brands,
+04099:   newBrand,
+04100:   setNewBrand,
+04101: }: {
+04102:   product?: P;
+04103:   brands: string[];
+04104:   newBrand: boolean;
+04105:   setNewBrand: (v: boolean) => void;
+04106: }) {
+04107:   return (
+04108:     <>
+04109:       <BrandFields
+04110:         brands={brands}
+04111:         newBrand={newBrand}
+04112:         setNewBrand={setNewBrand}
+04113:         value={product?.brand}
+04114:       />
+04115:       <Field n="name" l="Perfume" v={product?.name} />
+04116:       <Choices
+04117:         name="category"
+04118:         label="Categoria"
+04119:         a={["Nicho", "Árabe", "Designer"]}
+04120:         v={product?.category}
+04121:       />
+04122:       <Choices
+04123:         name="gender"
+04124:         label="Público"
+04125:         a={["Masculino", "Feminino", "Unissex"]}
+04126:         v={product?.gender}
+04127:       />
+04128:       <Choices
+04129:         name="apc"
+04130:         label="APC?"
+04131:         a={["Sim", "Não"]}
+04132:         v={product ? (product.apc ? "Sim" : "Não") : "Sim"}
+04133:       />
+04134:       <div className="row">
+04135:         <Field n="stock" l="Estoque (ml)" t="number" v={product?.stock} />
+04136:         <Field n="cost" l="Custo por ml" t="number" v={product?.cost} />
+04137:       </div>
+
+===== MARKER: function save @ line 2383 =====
+02343:       <div>
+02344:         <span>Lucro projetado do estoque</span>
+02345:         <b>{brl(Math.max(0, projectedRevenue - inventoryCost))}</b>
+02346:         <small>Estimativa, antes de novas despesas</small>
+02347:       </div>
+02348:     </div>
+02349:   );
+02350: }
+02351: 
+02352: function MarketplaceForecast({
+02353:   d,
+02354:   set,
+02355:   notify,
+02356: }: {
+02357:   d: D;
+02358:   set: any;
+02359:   notify: (message: string) => void;
+02360: }) {
+02361:   const terms = d.marketplacePayoutDays || { "TikTok Shop": 9, Shopee: 7 };
+02362:   const [editingTerms, setEditingTerms] = useState(false);
+02363:   const pending = d.sales
+02364:     .filter(
+02365:       (sale) =>
+02366:         isMarketplaceSale(sale) &&
+02367:         sale.status !== "cancelled" &&
+02368:         marketplacePending(sale),
+02369:     )
+02370:     .map((sale) => {
+02371:       const platform = sale.marketplace || "Shopee";
+02372:       const expected = (() => {
+02373:         const date = new Date(`${sale.date}T12:00:00`);
+02374:         date.setDate(date.getDate() + terms[platform]);
+02375:         const year = date.getFullYear();
+02376:         const month = String(date.getMonth() + 1).padStart(2, "0");
+02377:         const day = String(date.getDate()).padStart(2, "0");
+02378:         return `${year}-${month}-${day}`;
+02379:       })();
+02380:       return { sale, platform, expected };
+02381:     })
+02382:     .sort((a, b) => a.expected.localeCompare(b.expected));
+02383:   function saveTerms(event: any) {
+02384:     event.preventDefault();
+02385:     const form = Object.fromEntries(new FormData(event.currentTarget));
+02386:     const next = { Shopee: Number(form.shopee), "TikTok Shop": Number(form.tiktok) };
+02387:     if (!Number.isFinite(next.Shopee) || !Number.isFinite(next["TikTok Shop"]) || next.Shopee < 0 || next["TikTok Shop"] < 0) {
+02388:       window.alert("Informe prazos válidos em dias.");
+02389:       return;
+02390:     }
+02391:     set((state: D) => ({ ...state, marketplacePayoutDays: next }));
+02392:     setEditingTerms(false);
+02393:     notify("Prazos de repasse atualizados.");
+02394:   }
+02395:   return (
+02396:     <div className="panel marketplaceForecast">
+02397:       <div className="forecastHead">
+02398:         <div>
+02399:           <h2>Previsão de recebimento de marketplaces</h2>
+02400:           <p>Shopee: {terms.Shopee} dias · TikTok Shop: {terms["TikTok Shop"]} dias</p>
+02401:         </div>
+02402:         <button type="button" className="iconButton" onClick={() => setEditingTerms(true)}>
+02403:           <Pencil /> Editar prazos
+02404:         </button>
+02405:       </div>
+02406:       <div className="forecastList">
+02407:         {pending.map(({ sale, platform, expected }) => (
+02408:           <div key={sale.id}>
+02409:             <span>#{orderNo(sale.id)} · {platform}</span>
+02410:             <b>{brl(amountDue(sale))}</b>
+02411:             <small>Previsão: {dateBR(expected)}</small>
+02412:           </div>
+02413:         ))}
+02414:         {!pending.length ? <p className="empty">Nenhum repasse pendente.</p> : null}
+02415:       </div>
+02416:       {editingTerms ? (
+02417:         <div className="overlay nestedOverlay">
+02418:           <form onSubmit={saveTerms}>
+02419:             <header>
+02420:               <div><small>CONFIGURAÇÃO</small><h2>Editar prazos de repasse</h2></div>
+02421:               <button type="button" onClick={() => setEditingTerms(false)}><X /></button>
+02422:             </header>
+02423:             <Field n="shopee" l="Prazo da Shopee (dias)" t="number" v={terms.Shopee} />
+02424:             <Field n="tiktok" l="Prazo do TikTok Shop (dias)" t="number" v={terms["TikTok Shop"]} />
+02425:             <footer>
+02426:               <button type="button" onClick={() => setEditingTerms(false)}>Cancelar</button>
+02427:               <button className="primary">Salvar prazos</button>
+02428:             </footer>
+02429:           </form>
+02430:         </div>
+02431:       ) : null}
+02432:     </div>
+02433:   );
+02434: }
+02435: 
+02436: function ProfitControl({
+02437:   d,
+02438:   set,
+02439:   notify,
+02440: }: {
+02441:   d: D;
+02442:   set: any;
+02443:   notify: (message: string) => void;
+02444: }) {
+02445:   const [showOrders, setShowOrders] = useState(false);
+02446:   const [editingSale, setEditingSale] = useState<V | null>(null);
+02447:   const sales = d.sales.filter(
+02448:     (sale) => sale.status !== "cancelled" && !isHistoricalSale(sale),
+02449:   );
+02450:   const rows = sales.map((sale) => {
+02451:     const perfumeCost = sale.items.reduce(
+02452:       (sum, item) =>
+02453:         sum +
+02454:         item.ml *
+02455:           (item.unitCost ??
+02456:             d.products.find((p) => p.id === item.productId)?.cost ??
+02457:             0),
+02458:       0,
+02459:     );
+02460:     const expenses =
+02461:       Number(sale.expenses || 0) +
+02462:       Number(sale.marketplaceFee || 0) +
+02463:       Number(sale.shippingCost || 0) +
+02464:       packaging(sale, d.supplies).total;
+02465:     const profit = (isNoCost(sale) ? 0 : sale.total) - perfumeCost - expenses;
+02466:     return { sale, perfumeCost, expenses, profit };
+02467:   });
+02468:   const revenue = rows.reduce(
+02469:     (sum, row) => sum + (isNoCost(row.sale) ? 0 : row.sale.total),
+02470:     0,
+02471:   );
+02472:   const perfumeCost = rows.reduce((sum, row) => sum + row.perfumeCost, 0);
+02473:   const expenses = rows.reduce((sum, row) => sum + row.expenses, 0);
+02474:   const profit = revenue - perfumeCost - expenses;
+02475:   const margin = revenue ? (profit / revenue) * 100 : 0;
+02476:   return (
+02477:     <>
+02478:     <div className="panel profitControl">
+02479:       <h2>Margem e despesas por pedido</h2>
+02480:       <p>
+02481:         Calculado pelo preço vendido, custo por ml do perfume e despesas
+02482:         lançadas.
+02483:       </p>
+02484:       <Cards
+02485:         v={[
+02486:           [brl(perfumeCost), "Custo dos perfumes"],
+02487:           [brl(expenses), "Taxas e despesas"],
+02488:           [brl(profit), "Lucro estimado"],
+02489:           [`${margin.toFixed(1).replace(".", ",")}%`, "Margem estimada"],
+02490:         ]}
+02491:       />
+02492:       <div className="marginTrack">
+02493:         <i style={{ width: `${Math.max(0, Math.min(100, margin))}%` }} />
+02494:       </div>
+02495:       <button
+02496:         type="button"
+02497:         className="iconButton profitOrdersToggle"
+02498:         onClick={() => setShowOrders((visible) => !visible)}
+02499:       >
+02500:         {showOrders ? "Ocultar pedidos" : "Ver pedidos"}
+02501:       </button>
+02502:       {showOrders ? <div className="table">
+02503:         <table>
+02504:           <thead>
+02505:             <tr>
+02506:               <th>Pedido</th>
+02507:               <th>Venda</th>
+02508:               <th>Custo perfume</th>
+02509:               <th>Despesas</th>
+02510:               <th>Lucro</th>
+02511:               <th>Ação</th>
+02512:             </tr>
+02513:           </thead>
+02514:           <tbody>
+02515:             {rows.map(
+02516:               ({
+02517:                 sale,
+02518:                 perfumeCost: cost,
+02519:                 expenses: expense,
+02520:                 profit: rowProfit,
+02521:               }) => (
+02522:                 <tr key={sale.id}>
+02523:                   <td>#{orderNo(sale.id)}</td>
+02524:                   <td>{brl(sale.total)}</td>
+02525:                   <td>{brl(cost)}</td>
+02526:                   <td>
+02527:                     {brl(expense)}
+02528:                     <details>
+02529:                       <summary>Ver insumos</summary>
+02530:                       {packaging(sale, d.supplies).lines.map((line) => (
+02531:                         <small key={line.name}>
+02532:                           {line.qty} × {line.name}:{" "}
+02533:                           {line.missing
+02534:                             ? "Custo não cadastrado"
+02535:                             : brl(line.total)}
+02536:                         </small>
+02537:                       ))}
+02538:                     </details>
+02539:                   </td>
+02540:                   <td>{brl(rowProfit)}</td>
+02541:                   <td>
+02542:                     <button
+02543:                       className="iconButton"
+02544:                       onClick={() => setEditingSale(sale)}
+02545:                     >
+02546:                       <Pencil /> Editar despesa
+02547:                     </button>
+02548:                   </td>
+02549:                 </tr>
+02550:               ),
+02551:             )}
+02552:           </tbody>
+02553:         </table>
+02554:       </div> : null}
+02555:     </div>
+02556:     {editingSale ? (
+02557:       <SaleCostEditor
+02558:         key={editingSale.id}
+02559:         sale={editingSale}
+02560:         d={d}
+02561:         close={() => setEditingSale(null)}
+02562:         save={(updatedSale) => {
