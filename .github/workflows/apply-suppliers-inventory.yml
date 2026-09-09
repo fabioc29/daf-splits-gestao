@@ -21,7 +21,22 @@ jobs:
           node-version: 20
           cache: npm
       - name: Apply requested changes
-        run: python .github/apply_suppliers_inventory.py
+        shell: bash
+        run: |
+          set +e
+          python .github/apply_suppliers_inventory.py > /tmp/patch-out.txt 2> /tmp/patch-error.txt
+          code=$?
+          cat /tmp/patch-out.txt
+          cat /tmp/patch-error.txt
+          if [ "$code" -ne 0 ]; then
+            cp /tmp/patch-error.txt .patch-error.txt
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .patch-error.txt
+            git commit -m "Registra erro do patch de fornecedores [skip-suppliers-inventory]"
+            git push origin HEAD:codex/ajustar-seletor-pedidos
+            exit "$code"
+          fi
       - name: Install dependencies
         run: npm ci
       - name: Validate build
