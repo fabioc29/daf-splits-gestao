@@ -2108,3 +2108,22 @@ aside {
   .costEditorSummary,
   .costEditorSection label { grid-template-columns: 1fr; }
 }
+
+
+/* Compact preparation status selector */
+.preparationStatus {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: auto;
+  gap: 0;
+}
+.preparationStatus select {
+  width: 205px;
+  max-width: 100%;
+  min-height: 34px;
+  border-radius: 8px;
+  padding: 5px 27px 5px 9px;
+  font-size: 11px;
+  line-height: 1.15;
+}

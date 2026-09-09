@@ -104,6 +104,7 @@ type V = {
     | "TikTok Shop"
     | "Shopee";
   accumulatingDecants?: boolean;
+  preparationStatus?: "preparing" | "accumulating" | "waiting";
   historical?: boolean;
   description?: string;
 };
@@ -189,6 +190,9 @@ const amountDue = (sale: V) =>
   marketplacePending(sale)
     ? Math.max(0, sale.total)
     : Math.max(0, sale.total - sale.paid);
+const getPreparationStatus = (sale: V) =>
+  sale.preparationStatus ||
+  (sale.accumulatingDecants ? "accumulating" : "preparing");
 const shippingClass = (method?: string) =>
   (method || "não informado")
     .toLowerCase()
@@ -1311,17 +1315,28 @@ function Prepare({
     notify(`Pedido #${orderNo(shippingSale.id)} finalizado para envio por ${method}.`);
     setShippingSale(null);
   }
-  function setPreparationStatus(s: V, accumulatingDecants: boolean) {
+  function setPreparationStatus(
+    s: V,
+    preparationStatus: "preparing" | "accumulating" | "waiting",
+  ) {
     set((state: D) => ({
       ...state,
       sales: state.sales.map((sale) =>
-        sale.id === s.id ? { ...sale, accumulatingDecants } : sale,
+        sale.id === s.id
+          ? {
+              ...sale,
+              preparationStatus,
+              accumulatingDecants: preparationStatus === "accumulating",
+            }
+          : sale,
       ),
     }));
     notify(
-      accumulatingDecants
+      preparationStatus === "accumulating"
         ? `Pedido #${orderNo(s.id)} marcado para acumular mais decantes.`
-        : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
+        : preparationStatus === "waiting"
+          ? `Pedido #${orderNo(s.id)} marcado como Vai esperar.`
+          : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
     );
   }
   return (
@@ -1366,19 +1381,22 @@ function Prepare({
             <span className="prepareActions">
               {s.prepared ? <em>Finalizado</em> : (
                 <label className="preparationStatus">
-                  <span>Situação do pedido</span>
                   <select
                     aria-label={`Situação do pedido #${orderNo(s.id)}`}
-                    value={s.accumulatingDecants ? "accumulating" : "preparing"}
+                    value={getPreparationStatus(s)}
                     onChange={(event) =>
                       setPreparationStatus(
                         s,
-                        event.target.value === "accumulating",
+                        event.target.value as
+                          | "preparing"
+                          | "accumulating"
+                          | "waiting",
                       )
                     }
                   >
                     <option value="preparing">A preparar</option>
                     <option value="accumulating">Vai acumular mais decantes</option>
+                    <option value="waiting">Vai esperar</option>
                   </select>
                 </label>
               )}
