@@ -97,6 +97,7 @@ type V = {
   shippingCost?: number;
   shippingPaidBy?: "client" | "daf";
   shippingMethod?: "Correios" | "Loggi" | "Jadlog" | "Uber/Pessoalmente";
+  accumulatingDecants?: boolean;
   historical?: boolean;
   description?: string;
 };
@@ -588,6 +589,7 @@ function normalizeData(stored: any): D {
       shippingCost: Number(s.shippingCost || 0),
       shippingPaidBy:
         s.shippingPaidBy || (Number(s.shippingCost || 0) > 0 ? "daf" : "client"),
+      accumulatingDecants: Boolean(s.accumulatingDecants),
       historical:
         Boolean(s.historical) ||
         (!marketplaceSale && (s.items || []).length === 0),
@@ -1285,6 +1287,20 @@ function Prepare({
     notify(`Pedido #${orderNo(shippingSale.id)} finalizado para envio por ${method}.`);
     setShippingSale(null);
   }
+  function toggleAccumulating(s: V) {
+    const accumulatingDecants = !s.accumulatingDecants;
+    set((state: D) => ({
+      ...state,
+      sales: state.sales.map((sale) =>
+        sale.id === s.id ? { ...sale, accumulatingDecants } : sale,
+      ),
+    }));
+    notify(
+      accumulatingDecants
+        ? `Pedido #${orderNo(s.id)} marcado para acumular mais decantes.`
+        : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
+    );
+  }
   return (
     <>
     <div className="panel">
@@ -1323,9 +1339,26 @@ function Prepare({
                 </small>
               ))}
             </span>
-            <span className="prepareMeta">
-              {saleOriginBadge(s)}
-              <em>{s.prepared ? "Finalizado" : "A preparar"}</em>
+            {saleOriginBadge(s)}
+            <span className="prepareActions">
+              <em>
+                {s.prepared
+                  ? "Finalizado"
+                  : s.accumulatingDecants
+                    ? "Vai acumular mais decantes"
+                    : "A preparar"}
+              </em>
+              {!s.prepared ? (
+                <button
+                  type="button"
+                  className="accumulateButton"
+                  onClick={() => toggleAccumulating(s)}
+                >
+                  {s.accumulatingDecants
+                    ? "Voltar para A preparar"
+                    : "Vai acumular mais decantes"}
+                </button>
+              ) : null}
             </span>
           </div>
         ))}
@@ -1439,6 +1472,7 @@ function Shipping({
                         .join(" · ")}
                     </small>
                   </span>
+                  {saleOriginBadge(s)}
                   <strong className={`shippingMethod ${shippingClass(s.shippingMethod)}`}>
                     {s.shippingMethod || "Envio não informado"}
                   </strong>
@@ -1603,10 +1637,10 @@ function Receivables({
     <>
       <Cards
         v={[
+          [brl(directTotal + marketplaceTotal), "Total geral a receber"],
           [brl(directTotal), "Vendas diretas a receber"],
           [brl(marketplaceTotal), "Marketplace a receber"],
-          [brl(directTotal + marketplaceTotal), "Total geral a receber"],
-          [String(list.length), "Vendas pendentes"],
+          [String(allPendingSales.length), "Vendas pendentes"],
         ]}
       />
       <div className="panel table">

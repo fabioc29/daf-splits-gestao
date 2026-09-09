@@ -584,9 +584,15 @@ td small {
   background: #050911dc;
   z-index: 30;
   display: grid;
-  place-items: center;
+  place-items: start center;
   padding: 15px;
   overflow: auto;
+  overscroll-behavior: contain;
+}
+.overlay > form,
+.overlay > .history,
+.overlay > .systemDialog {
+  margin-block: max(15px, 2.5vh);
 }
 .overlay form,
 .history {
@@ -1283,7 +1289,7 @@ button:active {
 .shipping summary {
   cursor: pointer;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.45fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(118px, 0.28fr) minmax(170px, 0.45fr) auto;
   align-items: center;
   gap: 22px;
 }
@@ -1971,13 +1977,9 @@ aside {
 .dashboardMain .paymentDonut:before {
   inset: 38px;
 }
-.prepareMeta {
-  margin-left: auto;
-  display: flex !important;
-  align-items: center;
-  gap: 12px;
-}
 .prepareOrigin {
+  margin-left: auto;
+  flex: none;
   min-width: 118px;
   border-radius: 999px;
   padding: 8px 12px;
@@ -1989,6 +1991,26 @@ aside {
 .prepareOrigin.direct { background: #229b69; }
 .prepareOrigin.tiktok { background: linear-gradient(90deg, #090909 0 50%, #e23842 50% 100%); }
 .prepareOrigin.shopee { background: #e84a3b; }
+.prepareActions {
+  flex: 0 0 min(310px, 28vw) !important;
+  display: grid !important;
+  justify-items: end;
+  gap: 6px;
+}
+.prepareActions em { text-align: right; }
+.accumulateButton {
+  border: 1px solid #d8ae43;
+  border-radius: 8px;
+  background: transparent;
+  color: #edc557;
+  padding: 6px 9px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.shipping summary > .prepareOrigin {
+  margin-left: 0;
+  justify-self: center;
+}
 .shippingCostBox {
   border: 1px solid #d8be77;
   border-radius: 14px;
@@ -2036,10 +2058,20 @@ aside {
     width: 170px;
     height: 170px;
   }
-  .prepareMeta {
-    width: 100%;
+  .prepareOrigin {
     margin-left: 51px;
-    justify-content: space-between;
+  }
+  .prepareActions {
+    flex: 1 1 100% !important;
+    margin-left: 51px;
+  }
+  .shipping summary > .prepareOrigin {
+    margin-left: 0;
+    justify-self: start;
+  }
+  .overlay input,
+  .overlay select {
+    font-size: 16px;
   }
   .costEditorSummary,
   .costEditorSection label { grid-template-columns: 1fr; }
