@@ -1,0 +1,25 @@
+name: Proteger fluxo para main
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validar-origem:
+    name: Alteração aprovada na fabio
+    runs-on: ubuntu-latest
+    steps:
+      - name: Exigir Pull Request vindo da fabio
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$HEAD_REF" != "fabio" ]; then
+            echo "::error::A branch main só aceita Pull Requests originados da branch fabio."
+            exit 1
+          fi
+
+          echo "Origem validada: fabio."
