@@ -1,4 +1,0 @@
-  File "/home/runner/work/daf-splits-gestao/daf-splits-gestao/.github/apply_suppliers_inventory.py", line 722
-    : type === "product"""",
-                          ^
-SyntaxError: unterminated string literal (detected at line 722)
