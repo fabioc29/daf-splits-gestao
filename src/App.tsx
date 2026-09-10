@@ -9,6 +9,7 @@ import {
   Box,
   ShoppingCart,
   Users,
+  Building2,
   Wallet,
   Plus,
   X,
@@ -27,7 +28,7 @@ import {
   ChevronRight,
   SlidersHorizontal,
 } from "lucide-react";
-import { automaticPackaging, packaging, PACKAGING_RULES } from "./packaging";
+import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
 
@@ -50,6 +51,12 @@ type S = {
   min: number;
   attachCost: boolean;
   cost?: number;
+  pendingLots?: {
+    purchaseId: number;
+    qty: number;
+    cost: number;
+    unit?: string;
+  }[];
 };
 type C = {
   id: number;
@@ -104,6 +111,7 @@ type V = {
     | "TikTok Shop"
     | "Shopee";
   accumulatingDecants?: boolean;
+  preparationStatus?: "preparing" | "accumulating" | "waiting";
   historical?: boolean;
   description?: string;
 };
@@ -118,6 +126,17 @@ type B = {
   mlPerBottle?: number;
   attachCost?: boolean;
 };
+type SupplierType =
+  | "Fornecedor de perfumes"
+  | "Fornecedor de suprimentos/insumos"
+  | "Fornecedor geral"
+  | "Outros";
+const SUPPLIER_TYPES: SupplierType[] = [
+  "Fornecedor de perfumes",
+  "Fornecedor de suprimentos/insumos",
+  "Fornecedor geral",
+  "Outros",
+];
 type D = {
   products: P[];
   supplies: S[];
@@ -125,6 +144,8 @@ type D = {
   sales: V[];
   purchases: B[];
   suppliers: string[];
+  supplierTypes: Record<string, SupplierType>;
+  supplierDates: Record<string, string>;
   brands: string[];
   orderSequenceVersion?: number;
   supplyInventoryVersion?: number;
@@ -139,6 +160,8 @@ const blank: D = {
   sales: [],
   purchases: [],
   suppliers: [],
+  supplierTypes: {},
+  supplierDates: {},
   brands: [],
   marketplacePayoutDays: { "TikTok Shop": 9, Shopee: 7 },
 };
@@ -189,6 +212,9 @@ const amountDue = (sale: V) =>
   marketplacePending(sale)
     ? Math.max(0, sale.total)
     : Math.max(0, sale.total - sale.paid);
+const getPreparationStatus = (sale: V) =>
+  sale.preparationStatus ||
+  (sale.accumulatingDecants ? "accumulating" : "preparing");
 const shippingClass = (method?: string) =>
   (method || "não informado")
     .toLowerCase()
@@ -201,6 +227,51 @@ const supplyStockKey = (value: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
+function activateNextSupplyLot(supply: S): S {
+  let stock = Math.max(0, Number(supply.stock) || 0);
+  let cost = Number(supply.cost || 0);
+  const pendingLots = [...(supply.pendingLots || [])].map((lot) => ({
+    ...lot,
+    qty: Math.max(0, Number(lot.qty) || 0),
+    cost: Math.max(0, Number(lot.cost) || 0),
+  }));
+  while (stock <= 0 && pendingLots.length) {
+    const next = pendingLots.shift()!;
+    if (next.qty <= 0) continue;
+    stock = next.qty;
+    cost = next.cost;
+  }
+  return { ...supply, stock, cost, pendingLots };
+}
+function consumeSupplyStock(supply: S, quantity: number): S {
+  let current = activateNextSupplyLot(supply);
+  let stock = current.stock;
+  let cost = Number(current.cost || 0);
+  const pendingLots = [...(current.pendingLots || [])];
+  let remaining = Math.max(0, quantity);
+  while (remaining > 0) {
+    if (stock <= 0) {
+      const next = pendingLots.shift();
+      if (!next) break;
+      stock = Math.max(0, Number(next.qty) || 0);
+      cost = Math.max(0, Number(next.cost) || 0);
+      continue;
+    }
+    const used = Math.min(stock, remaining);
+    stock -= used;
+    remaining -= used;
+  }
+  if (stock <= 0) {
+    while (pendingLots.length) {
+      const next = pendingLots.shift()!;
+      if (next.qty <= 0) continue;
+      stock = next.qty;
+      cost = next.cost;
+      break;
+    }
+  }
+  return { ...current, stock, cost, pendingLots };
+}
 function moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {
   if (isHistoricalSale(sale)) return supplies;
   const usage = packaging(sale, supplies).lines;
@@ -208,12 +279,11 @@ function moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {
     const line = usage.find(
       (item) => supplyStockKey(item.name) === supplyStockKey(supply.name),
     );
-    return line
-      ? {
-          ...supply,
-          stock: supply.stock + direction * line.qty,
-        }
-      : supply;
+    if (!line) return supply;
+    const qty = Math.max(0, Number(line.qty) || 0);
+    return direction === -1
+      ? consumeSupplyStock(supply, qty)
+      : { ...supply, stock: Math.max(0, supply.stock) + qty };
   });
 }
 const saleCustomer = (sale: V, data: D) =>
@@ -230,6 +300,7 @@ const nav = [
   ["stock", "Estoque", Box],
   ["purchases", "Compras", ShoppingCart],
   ["clients", "Clientes", Users],
+  ["suppliers", "Fornecedores", Building2],
   ["receivables", "Vendas a receber", ReceiptText],
   ["finance", "Financeiro", Wallet],
 ] as const;
@@ -270,6 +341,7 @@ function System({ session }: { session: Session }) {
   const [page, setPage] = useState("dashboard"),
     [modal, setModal] = useState<Modal>(null),
     [history, setHistory] = useState(0),
+    [supplierHistory, setSupplierHistory] = useState(""),
     [toast, setToast] = useState("");
   function notify(message: string) {
     setToast(message);
@@ -364,14 +436,58 @@ function System({ session }: { session: Session }) {
         !isHistoricalSale(sale),
     ).length,
   };
-  const action =
-    page === "sales"
+  const receivableDueAlert = (() => {
+  const currentDate = today();
+  let dueToday = false;
+  let overdue = false;
+  for (const sale of data.sales) {
+    if (
+      sale.status === "cancelled" ||
+      isNoCost(sale) ||
+      isMarketplaceSale(sale) ||
+      sale.paid >= sale.total
+    )
+      continue;
+    if (sale.installments?.length) {
+      const scheduleTotal = sale.installments.reduce(
+        (sum, installment) =>
+          sum + Math.max(0, Number(installment.amount) || 0),
+        0,
+      );
+      const paidTowardSchedule = Math.max(
+        0,
+        sale.paid - Math.max(0, sale.total - scheduleTotal),
+      );
+      let accumulated = 0;
+      for (const installment of sale.installments) {
+        accumulated += Math.max(
+          0,
+          Number(installment.amount) || 0,
+        );
+        const settled =
+          Boolean(installment.paid) ||
+          accumulated <= paidTowardSchedule + 0.01;
+        if (settled || !installment.date) continue;
+        if (installment.date < currentDate) overdue = true;
+        else if (installment.date === currentDate) dueToday = true;
+      }
+    } else if (sale.dueDate) {
+      if (sale.dueDate < currentDate) overdue = true;
+      else if (sale.dueDate === currentDate) dueToday = true;
+    }
+  }
+  return overdue ? "overdue" : dueToday ? "today" : null;
+})();
+const action =
+  page === "sales"
       ? ["Nova venda", "sale"]
       : page === "purchases"
         ? ["Nova compra/despesa", "purchase"]
         : page === "clients"
           ? ["Novo cliente", "client"]
-          : page === "receivables"
+          : page === "suppliers"
+            ? ["Novo fornecedor", "supplier"]
+            : page === "receivables"
             ? ["Cadastrar venda antiga", "oldSale"]
             : null;
   if (!ready && sync !== "error")
@@ -396,14 +512,33 @@ function System({ session }: { session: Session }) {
             >
               <Icon />
               {label}
-              {navAlerts[id] ? (
-                <span
-                  className="navAlert"
-                  aria-label={`${navAlerts[id]} pendente(s)`}
-                >
-                  {navAlerts[id]}
-                </span>
-              ) : null}
+              {navAlerts[id] || (id === "receivables" && receivableDueAlert) ? (
+      <span className="navAlertGroup">
+        {id === "receivables" && receivableDueAlert ? (
+          <span
+            className={"receivableDueAlert " + receivableDueAlert}
+            aria-label={
+              receivableDueAlert === "overdue"
+                ? "Há parcela atrasada"
+                : "Há parcela vencendo hoje"
+            }
+            title={
+              receivableDueAlert === "overdue"
+                ? "Há parcela atrasada"
+                : "Há parcela vencendo hoje"
+            }
+          />
+        ) : null}
+        {navAlerts[id] ? (
+          <span
+            className="navAlert"
+            aria-label={String(navAlerts[id]) + " pendente(s)"}
+          >
+            {navAlerts[id]}
+          </span>
+        ) : null}
+      </span>
+    ) : null}
             </button>
           ))}
         </nav>
@@ -492,6 +627,7 @@ function System({ session }: { session: Session }) {
               set={setData}
               add={() => setModal({ type: "supply" })}
               addProduct={() => setModal({ type: "product" })}
+              manageBrands={() => setModal({ type: "brands" })}
               editSupply={(id) => setModal({ type: "supplyEdit", id })}
               edit={(id) => setModal({ type: "product", id })}
               notify={notify}
@@ -511,6 +647,14 @@ function System({ session }: { session: Session }) {
               edit={(id) => setModal({ type: "client", id })}
               notify={notify}
             />
+          ) : page === "suppliers" ? (
+            <Suppliers
+              d={data}
+              set={setData}
+              history={setSupplierHistory}
+              edit={(id) => setModal({ type: "supplier", id })}
+              notify={notify}
+            />
           ) : (
             <Finance d={data} totals={totals} set={setData} notify={notify} />
           )}
@@ -523,6 +667,13 @@ function System({ session }: { session: Session }) {
           set={setData}
           close={() => setModal(null)}
         />
+      ) : modal?.type === "brands" ? (
+        <BrandManager
+          d={data}
+          set={setData}
+          close={() => setModal(null)}
+          notify={notify}
+        />
       ) : modal ? (
         <Form
           modal={modal}
@@ -533,6 +684,13 @@ function System({ session }: { session: Session }) {
       ) : null}
       {history ? (
         <History id={history} d={data} close={() => setHistory(0)} />
+      ) : null}
+      {supplierHistory ? (
+        <SupplierHistory
+          name={supplierHistory}
+          d={data}
+          close={() => setSupplierHistory("")}
+        />
       ) : null}
       {toast ? (
         <div className="toast">
@@ -558,6 +716,82 @@ function normalizeData(stored: any): D {
       ...products.map((p: P) => p.brand).filter(Boolean),
     ]),
   ) as string[];
+  const cleanSupplierName = (value: unknown) =>
+    String(value || "")
+      .trim()
+      .replace(/\s+/g, " ");
+  const supplierKey = (value: unknown) =>
+    cleanSupplierName(value)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+  const supplierByKey = new Map<string, string>();
+  [
+    ...(merged.suppliers || []),
+    ...(merged.purchases || []).map((purchase: B) => purchase.supplier),
+  ]
+    .map(cleanSupplierName)
+    .filter(Boolean)
+    .forEach((name) => {
+      const key = supplierKey(name);
+      if (!supplierByKey.has(key)) supplierByKey.set(key, name);
+    });
+  const suppliers = [...supplierByKey.values()];
+  const storedSupplierTypes = merged.supplierTypes || {};
+  const storedSupplierDates = merged.supplierDates || {};
+  const storedSupplierTypeByKey = new Map<string, SupplierType>(
+    Object.entries(storedSupplierTypes).map(
+      ([name, type]) =>
+        [
+          supplierKey(name),
+          SUPPLIER_TYPES.includes(type as SupplierType)
+            ? (type as SupplierType)
+            : "Outros",
+        ] as [string, SupplierType],
+    ),
+  );
+  const storedSupplierDateByKey = new Map<string, string>(
+    Object.entries(storedSupplierDates).map(
+      ([name, date]) => [supplierKey(name), String(date || "")] as [string, string],
+    ),
+  );
+  const supplierTypes = Object.fromEntries(
+    suppliers.map((name) => {
+      const key = supplierKey(name);
+      const forcedType: SupplierType | undefined =
+        key === supplierKey("The King of Parfums") ||
+        key === supplierKey("TW Perfumes")
+          ? "Fornecedor de perfumes"
+          : key === supplierKey("Mercado Livre")
+            ? "Fornecedor geral"
+            : undefined;
+      return [
+        name,
+        forcedType || storedSupplierTypeByKey.get(key) || "Outros",
+      ];
+    }),
+  ) as Record<string, SupplierType>;
+  const supplierDates = Object.fromEntries(
+    suppliers.map((name) => {
+      const key = supplierKey(name);
+      const purchaseDates = (merged.purchases || [])
+        .filter((purchase: B) => supplierKey(purchase.supplier) === key)
+        .map((purchase: B) => purchase.date)
+        .filter(Boolean)
+        .sort();
+      return [
+        name,
+        storedSupplierDateByKey.get(key) || purchaseDates[0] || today(),
+      ];
+    }),
+  ) as Record<string, string>;
+  const purchases = (merged.purchases || []).map((purchase: B) => {
+    const cleaned = cleanSupplierName(purchase.supplier);
+    return {
+      ...purchase,
+      supplier: supplierByKey.get(supplierKey(cleaned)) || cleaned,
+    };
+  });
   const rawSales = (merged.sales || []) as V[];
   const ids = rawSales.map((sale) => sale.id).sort((a, b) => a - b);
   const needsSequentialIds =
@@ -622,12 +856,18 @@ function normalizeData(stored: any): D {
   let normalizedSupplies = (merged.supplies || []).map((s: S) => ({
     ...s,
     attachCost: Boolean(s.attachCost),
+    pendingLots: (s.pendingLots || []).map((lot) => ({
+      ...lot,
+      qty: Math.max(0, Number(lot.qty) || 0),
+      cost: Math.max(0, Number(lot.cost) || 0),
+    })),
   }));
   if (!merged.supplyInventoryVersion) {
     normalizedSales.forEach((sale) => {
       normalizedSupplies = moveSupplyStock(normalizedSupplies, sale, -1);
     });
   }
+  normalizedSupplies = normalizedSupplies.map(activateNextSupplyLot);
   return {
     ...merged,
     products,
@@ -637,7 +877,11 @@ function normalizeData(stored: any): D {
       "TikTok Shop": Number(merged.marketplacePayoutDays?.["TikTok Shop"] || 9),
       Shopee: Number(merged.marketplacePayoutDays?.Shopee || 7),
     },
+    purchases,
     supplies: normalizedSupplies,
+    suppliers,
+    supplierTypes,
+    supplierDates,
     brands,
     sales: normalizedSales,
   };
@@ -1311,17 +1555,28 @@ function Prepare({
     notify(`Pedido #${orderNo(shippingSale.id)} finalizado para envio por ${method}.`);
     setShippingSale(null);
   }
-  function setPreparationStatus(s: V, accumulatingDecants: boolean) {
+  function setPreparationStatus(
+    s: V,
+    preparationStatus: "preparing" | "accumulating" | "waiting",
+  ) {
     set((state: D) => ({
       ...state,
       sales: state.sales.map((sale) =>
-        sale.id === s.id ? { ...sale, accumulatingDecants } : sale,
+        sale.id === s.id
+          ? {
+              ...sale,
+              preparationStatus,
+              accumulatingDecants: preparationStatus === "accumulating",
+            }
+          : sale,
       ),
     }));
     notify(
-      accumulatingDecants
+      preparationStatus === "accumulating"
         ? `Pedido #${orderNo(s.id)} marcado para acumular mais decantes.`
-        : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
+        : preparationStatus === "waiting"
+          ? `Pedido #${orderNo(s.id)} marcado como Vai esperar.`
+          : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
     );
   }
   return (
@@ -1366,19 +1621,22 @@ function Prepare({
             <span className="prepareActions">
               {s.prepared ? <em>Finalizado</em> : (
                 <label className="preparationStatus">
-                  <span>Situação do pedido</span>
                   <select
                     aria-label={`Situação do pedido #${orderNo(s.id)}`}
-                    value={s.accumulatingDecants ? "accumulating" : "preparing"}
+                    value={getPreparationStatus(s)}
                     onChange={(event) =>
                       setPreparationStatus(
                         s,
-                        event.target.value === "accumulating",
+                        event.target.value as
+                          | "preparing"
+                          | "accumulating"
+                          | "waiting",
                       )
                     }
                   >
                     <option value="preparing">A preparar</option>
-                    <option value="accumulating">Vai acumular mais decantes</option>
+                    <option value="accumulating">Vai acumular</option>
+                    <option value="waiting">Vai esperar</option>
                   </select>
                 </label>
               )}
@@ -1775,10 +2033,186 @@ function Receivables({
   );
 }
 
+function BrandManager({
+  d,
+  set,
+  close,
+  notify,
+}: {
+  d: D;
+  set: any;
+  close: () => void;
+  notify: (message: string) => void;
+}) {
+  const brands = Array.from(
+    new Set([
+      ...d.brands,
+      ...d.products.map((product) => product.brand),
+    ].map((brand) => brand.trim()).filter(Boolean)),
+  ).sort((a, b) =>
+    a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
+  );
+  const [editing, setEditing] = useState("");
+  const [draft, setDraft] = useState("");
+
+  function startEdit(brand: string) {
+    setEditing(brand);
+    setDraft(brand);
+  }
+
+  function saveEdit() {
+    const nextBrand = draft.trim();
+    if (!editing || !nextBrand) return;
+    const duplicate = brands.some(
+      (brand) =>
+        brand !== editing &&
+        brand.localeCompare(nextBrand, "pt-BR", { sensitivity: "base" }) === 0,
+    );
+    if (duplicate) {
+      window.alert("Já existe uma marca cadastrada com este nome.");
+      return;
+    }
+    set((state: D) => ({
+      ...state,
+      brands: Array.from(
+        new Set(
+          state.brands.map((brand) =>
+            brand === editing ? nextBrand : brand,
+          ),
+        ),
+      ),
+      products: state.products.map((product) =>
+        product.brand === editing
+          ? { ...product, brand: nextBrand }
+          : product,
+      ),
+      purchases: state.purchases.map((purchase) =>
+        purchase.type === "Perfume" &&
+        purchase.description.startsWith(editing + " ")
+          ? {
+              ...purchase,
+              description:
+                nextBrand + purchase.description.slice(editing.length),
+            }
+          : purchase,
+      ),
+    }));
+    notify("Marca atualizada.");
+    setEditing("");
+    setDraft("");
+  }
+
+  function removeBrand(brand: string) {
+    if (d.products.some((product) => product.brand === brand)) {
+      window.alert(
+        "Esta marca ainda está vinculada a perfumes. Edite ou exclua os perfumes dessa marca antes de removê-la.",
+      );
+      return;
+    }
+    if (!window.confirm(`Excluir a marca “${brand}”?`)) return;
+    set((state: D) => ({
+      ...state,
+      brands: state.brands.filter((item) => item !== brand),
+    }));
+    notify("Marca excluída.");
+  }
+
+  return (
+    <div className="overlay">
+      <div className="systemDialog brandManagerDialog">
+        <header>
+          <div>
+            <small>GESTÃO DE CADASTROS</small>
+            <h2>Marcas</h2>
+          </div>
+          <button type="button" onClick={close} aria-label="Fechar marcas">
+            <X />
+          </button>
+        </header>
+
+        <p className="brandManagerHint">
+          {brands.length} marca(s) cadastrada(s), em ordem alfabética.
+        </p>
+
+        <div className="brandManagerList">
+          {brands.map((brand) => (
+            <div className="brandManagerRow" key={brand}>
+              {editing === brand ? (
+                <input
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  autoFocus
+                  aria-label={`Editar marca ${brand}`}
+                />
+              ) : (
+                <b>{brand}</b>
+              )}
+              <div>
+                {editing === brand ? (
+                  <>
+                    <button
+                      type="button"
+                      className="iconButton"
+                      onClick={saveEdit}
+                    >
+                      <Check />
+                      Salvar
+                    </button>
+                    <button
+                      type="button"
+                      className="iconButton"
+                      onClick={() => {
+                        setEditing("");
+                        setDraft("");
+                      }}
+                    >
+                      <X />
+                      Cancelar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="iconButton"
+                      onClick={() => startEdit(brand)}
+                    >
+                      <Pencil />
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="iconButton danger"
+                      onClick={() => removeBrand(brand)}
+                    >
+                      <Trash2 />
+                      Excluir
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+          {!brands.length ? (
+            <p className="empty">Nenhuma marca cadastrada.</p>
+          ) : null}
+        </div>
+
+        <footer>
+          <button type="button" onClick={close}>
+            Fechar
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function Stock({
   d,
   add,
   addProduct,
+  manageBrands,
   editSupply,
   edit,
   set,
@@ -1787,6 +2221,7 @@ function Stock({
   d: D;
   add: () => void;
   addProduct: () => void;
+  manageBrands: () => void;
   editSupply: (id: number) => void;
   edit: (id: number) => void;
   set: any;
@@ -1796,7 +2231,9 @@ function Stock({
     [category, setCategory] = useState("Todos"),
     [brand, setBrand] = useState("Todas"),
     [query, setQuery] = useState("");
-  const brands = Array.from(new Set(d.products.map((p) => p.brand))).sort();
+  const brands = Array.from(new Set(d.products.map((p) => p.brand))).sort(
+    (a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
+  );
   const perfumeInventoryValue = d.products.reduce(
     (total, product) => total + Math.max(0, product.stock) * product.cost,
     0,
@@ -1829,13 +2266,24 @@ function Stock({
           <h2>Estoque</h2>
           <p>Escolha qual tipo de estoque deseja consultar.</p>
         </div>
-        <button
-          className="primary stockAction"
-          onClick={view !== "supplies" ? addProduct : add}
-        >
-          <Plus />
-          {view !== "supplies" ? "Novo perfume" : "Novo suprimento/insumo"}
-        </button>
+        <div className="stockHeadActions">
+          {view !== "supplies" ? (
+            <button
+              type="button"
+              className="brandManagerButton"
+              onClick={manageBrands}
+            >
+              Marcas
+            </button>
+          ) : null}
+          <button
+            className="primary stockAction"
+            onClick={view !== "supplies" ? addProduct : add}
+          >
+            <Plus />
+            {view !== "supplies" ? "Novo perfume" : "Novo suprimento/insumo"}
+          </button>
+        </div>
       </div>
       <div className="segmented stockSwitch">
         <button
@@ -1947,6 +2395,12 @@ function Stock({
                   {s.stock} {s.unit}
                   {s.cost ? ` · ${brl(s.cost)} por unidade` : ""}
                 </p>
+                {(s.pendingLots || []).length ? (
+                  <p className="queuedSupplyLot">
+                    Em segundo plano: {(s.pendingLots || []).reduce((sum, lot) => sum + lot.qty, 0)} {s.unit}
+                    {s.pendingLots?.[0] ? ` · próximo lote ${brl(s.pendingLots[0].cost)} por unidade` : ""}
+                  </p>
+                ) : null}
                 <p>Custo na venda: {s.attachCost ? "Sim" : "Não"}</p>
                 <button className="iconButton" onClick={() => editSupply(s.id)}>
                   <Pencil />
@@ -2006,6 +2460,10 @@ function Purchases({
     set((x: D) => ({
       ...x,
       purchases: x.purchases.filter((p) => p.id !== id),
+      supplies: x.supplies.map((supply) => ({
+        ...supply,
+        pendingLots: (supply.pendingLots || []).filter((lot) => lot.purchaseId !== id),
+      })),
     }));
     notify("Registro de compra excluído.");
   }
@@ -2161,6 +2619,316 @@ function Clients({
     </>
   );
 }
+function Suppliers({
+  d,
+  history,
+  edit,
+  set,
+  notify,
+}: {
+  d: D;
+  history: (name: string) => void;
+  edit: (index: number) => void;
+  set: any;
+  notify: (message: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const suppliers = d.suppliers
+    .map((name, index) => ({ name, index }))
+    .filter(({ name }) =>
+      name.toLowerCase().includes(query.trim().toLowerCase()),
+    );
+  function remove(index: number, name: string) {
+    if (d.purchases.some((purchase) => purchase.supplier === name)) {
+      window.alert(
+        "Este fornecedor possui compras registradas e não pode ser excluído.",
+      );
+      return;
+    }
+    if (!window.confirm("Excluir este fornecedor?")) return;
+    set((state: D) => ({
+      ...state,
+      suppliers: state.suppliers.filter((_, current) => current !== index),
+      supplierTypes: Object.fromEntries(
+        Object.entries(state.supplierTypes || {}).filter(
+          ([supplierName]) => supplierName !== name,
+        ),
+      ) as Record<string, SupplierType>,
+      supplierDates: Object.fromEntries(
+        Object.entries(state.supplierDates || {}).filter(
+          ([supplierName]) => supplierName !== name,
+        ),
+      ) as Record<string, string>,
+    }));
+    notify("Fornecedor excluído.");
+  }
+  return (
+    <>
+      <Cards v={[[String(d.suppliers.length), "Fornecedores cadastrados"]]} />
+      <div className="clientSearch">
+        <Search />
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Pesquisar fornecedor pelo nome"
+          aria-label="Pesquisar fornecedor pelo nome"
+        />
+      </div>
+      <div className="clients">
+        {suppliers.map(({ name, index }) => {
+          const purchases = d.purchases.filter(
+            (purchase) => purchase.supplier === name,
+          );
+          const total = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
+          return (
+            <div key={`${name}-${index}`}>
+              <i>
+                {name
+                  .split(" ")
+                  .filter(Boolean)
+                  .map((part) => part[0])
+                  .slice(0, 2)}
+              </i>
+              <h3>{name}</h3>
+              <p>
+                {purchases.length} compra(s) · {brl(total)} em compras
+              </p>
+              <div className="clientActions">
+                <button onClick={() => history(name)}>Ver histórico</button>
+                <button onClick={() => edit(index)}>
+                  <Pencil />
+                  Editar
+                </button>
+                <button className="dangerText" onClick={() => remove(index, name)}>
+                  <Trash2 />
+                  Excluir
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {!suppliers.length ? (
+        <p className="empty">Nenhum fornecedor encontrado.</p>
+      ) : null}
+    </>
+  );
+}
+
+function SupplierHistory({
+  name,
+  d,
+  close,
+}: {
+  name: string;
+  d: D;
+  close: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [month, setMonth] = useState("");
+  const [purchaseDay, setPurchaseDay] = useState("");
+  const purchases = d.purchases
+    .filter((purchase) => purchase.supplier === name)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const supplierType = d.supplierTypes?.[name] || "Outros";
+  const isPerfumeSupplier = supplierType === "Fornecedor de perfumes";
+  const supplierSince =
+    d.supplierDates?.[name] ||
+    (purchases.length
+    ? purchases.reduce(
+        (earliest, purchase) =>
+          !earliest || purchase.date < earliest
+            ? purchase.date
+            : earliest,
+        "",
+      )
+    : "");
+  const total = purchases.reduce(
+    (sum, purchase) => sum + purchase.total,
+    0,
+  );
+  const totalUnits = purchases
+    .filter((purchase) => purchase.type === "Perfume")
+    .reduce(
+      (sum, purchase) => sum + Math.max(0, Number(purchase.qty) || 0),
+      0,
+    );
+  const filteredPurchases = purchases.filter((purchase) => {
+    const productText = (
+      purchase.description +
+      " " +
+      purchase.type
+    ).toLowerCase();
+    return (
+      productText.includes(query.trim().toLowerCase()) &&
+      (!month || purchase.date.startsWith(month)) &&
+      (!purchaseDay || purchase.date === purchaseDay)
+    );
+  });
+  return (
+    <div className="overlay">
+      <div className="history supplierHistory supplierHistoryImproved">
+        <header className="supplierHistoryHeader">
+          <div>
+            <small>HISTÓRICO DE COMPRAS</small>
+            <div className="supplierHistoryTitle">
+              <h2>{name}</h2>
+              <span>
+                Fornecedor desde{" "}
+                {supplierSince
+                  ? dateBR(supplierSince)
+                  : "data não informada"}
+              </span>
+            </div>
+          </div>
+          <button onClick={close} aria-label="Fechar histórico">
+            <X />
+          </button>
+        </header>
+
+        <div
+          className={
+            "supplierHistoryStats " +
+            (isPerfumeSupplier ? "four" : "three")
+          }
+        >
+          <div>
+            <span>Compras registradas</span>
+            <b>{purchases.length}</b>
+          </div>
+          <div>
+            <span>Total comprado</span>
+            <b>{brl(total)}</b>
+          </div>
+          {isPerfumeSupplier ? (
+            <div>
+              <span>Unidades compradas</span>
+              <b>{totalUnits}</b>
+            </div>
+          ) : null}
+          <div>
+            <span>Última compra</span>
+            <b>
+              {purchases[0] ? dateBR(purchases[0].date) : "Sem compras"}
+            </b>
+          </div>
+        </div>
+
+        <div className="supplierHistoryContent">
+          <div className="supplierHistoryContentHead">
+            <div>
+              <h3>Compras com este fornecedor</h3>
+              <p>
+                {month || purchaseDay
+                  ? "Exibindo o período selecionado."
+                  : "Histórico completo do fornecedor (lifetime)."}
+              </p>
+            </div>
+          </div>
+
+          <div className="supplierHistoryToolbar">
+            <label className="supplierHistorySearch">
+              <Search />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Pesquisar por produto comprado"
+                aria-label="Pesquisar produto no histórico do fornecedor"
+              />
+            </label>
+            <button
+              type="button"
+              className={
+                showFilters || month || purchaseDay
+                  ? "historyFilterButton active"
+                  : "historyFilterButton"
+              }
+              onClick={() => setShowFilters((visible) => !visible)}
+            >
+              <SlidersHorizontal />
+              Filtrar por data
+            </button>
+          </div>
+
+          {showFilters ? (
+            <div className="supplierHistoryFilters">
+              <label>
+                <span>Mês</span>
+                <input
+                  type="month"
+                  value={month}
+                  onChange={(event) => {
+                    setMonth(event.target.value);
+                    if (event.target.value) setPurchaseDay("");
+                  }}
+                />
+              </label>
+              <label>
+                <span>Data específica</span>
+                <input
+                  type="date"
+                  value={purchaseDay}
+                  onChange={(event) => {
+                    setPurchaseDay(event.target.value);
+                    if (event.target.value) setMonth("");
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setMonth("");
+                  setPurchaseDay("");
+                }}
+              >
+                Limpar filtro
+              </button>
+            </div>
+          ) : null}
+
+          <div className="supplierHistoryTable">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Tipo</th>
+                  <th>Produto</th>
+                  <th>Quantidade</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPurchases.map((purchase) => (
+                  <tr key={purchase.id}>
+                    <td>{dateBR(purchase.date)}</td>
+                    <td>{purchase.type}</td>
+                    <td>{purchase.description}</td>
+                    <td>
+                      {purchase.qty}
+                      {purchase.mlPerBottle
+                        ? " × " + purchase.mlPerBottle + " ml"
+                        : ""}
+                    </td>
+                    <td>
+                      <b>{brl(purchase.total)}</b>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!filteredPurchases.length ? (
+              <p className="empty">
+                Nenhuma compra encontrada com estes filtros.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PaymentBreakdown({ d }: { d: D }) {
   const payments = [
     { name: "Pix", color: "#22a66f", matches: (sale: V) => !isMarketplaceSale(sale) && ((isInstallmentSale(sale) && isInstallmentSettled(sale)) || (!isInstallmentSale(sale) && sale.payment === "Pix")) },
@@ -2561,13 +3329,13 @@ function ProfitControl({
 }
 
 function SaleCostEditor({ sale, d, close, save }: { sale: V; d: D; close: () => void; save: (sale: V) => void }) {
-  const automatic = automaticPackaging(sale);
+  const supplyOptions = packagingOptions(sale, d.supplies);
   const [extraExpenses, setExtraExpenses] = useState(Number(sale.expenses || 0));
   const [marketplaceFee, setMarketplaceFee] = useState(Number(sale.marketplaceFee || 0));
   const [freightPayer, setFreightPayer] = useState<"client" | "daf">(sale.shippingPaidBy || (sale.shippingCost ? "daf" : "client"));
   const [freightCost, setFreightCost] = useState(Number(sale.shippingCost || 0));
   const [unitCosts, setUnitCosts] = useState(sale.items.map((item) => item.unitCost ?? d.products.find((product) => product.id === item.productId)?.cost ?? 0));
-  const [supplyQuantities, setSupplyQuantities] = useState<Record<string, number>>(Object.fromEntries(PACKAGING_RULES.map((name) => [name, sale.supplyOverrides?.[name] ?? automatic[name]])));
+  const [supplyQuantities, setSupplyQuantities] = useState<Record<string, number>>(Object.fromEntries(supplyOptions.map(({ name, automaticQty }) => [name, sale.supplyOverrides?.[name] ?? automaticQty])));
   const previewSale: V = {
     ...sale,
     expenses: extraExpenses,
@@ -2592,7 +3360,7 @@ function SaleCostEditor({ sale, d, close, save }: { sale: V; d: D; close: () => 
         <Choices label="Frete pago pelo" a={["Cliente", "DAF"]} v={freightPayer === "daf" ? "DAF" : "Cliente"} set={(value) => setFreightPayer(value === "DAF" ? "daf" : "client")} />
         {freightPayer === "daf" ? <label><span>Valor do frete</span><input type="number" min="0" step="0.01" value={freightCost} onChange={(e) => setFreightCost(parseDecimal(e.target.value))} /></label> : null}
         <div className="costEditorSection"><h3>Custo dos perfumes</h3>{sale.items.map((item, index) => <label key={`${item.productId}-${index}`}><span>{d.products.find((product) => product.id === item.productId)?.name || `Perfume ${index + 1}`} — {item.ml} ml · custo por ml</span><input type="number" min="0" step="0.01" value={unitCosts[index] || 0} onChange={(e) => setUnitCosts((current) => { const next = [...current]; next[index] = parseDecimal(e.target.value); return next; })} /></label>)}</div>
-        <div className="costEditorSection"><h3>Insumos e suprimentos</h3>{PACKAGING_RULES.map((name) => <label key={name}><span>{name}</span><input type="number" min="0" step="1" value={supplyQuantities[name] || 0} onChange={(e) => setSupplyQuantities((current) => ({ ...current, [name]: Math.max(0, parseDecimal(e.target.value)) }))} /></label>)}</div>
+        <div className="costEditorSection"><h3>Insumos e suprimentos</h3>{supplyOptions.map(({ name }) => <label key={name}><span>{name}</span><input type="number" min="0" step="1" value={supplyQuantities[name] || 0} onChange={(e) => setSupplyQuantities((current) => ({ ...current, [name]: Math.max(0, parseDecimal(e.target.value)) }))} /></label>)}</div>
         <div className="costEditorSummary"><span>Perfumes <b>{brl(perfumeCost)}</b></span><span>Insumos <b>{brl(supplyCost)}</b></span><span>Despesas totais <b>{brl(totalExpenses)}</b></span><span>Lucro estimado <b>{brl(profit)}</b></span></div>
         <footer><button type="button" onClick={close}>Cancelar</button><button className="primary">Salvar custos</button></footer>
       </form>
@@ -2685,14 +3453,14 @@ function InventoryEdit({
         ...x,
         supplies: x.supplies.map((s) =>
           s.id === supply.id
-            ? {
+            ? activateNextSupplyLot({
                 ...s,
                 name: String(f.name),
                 unit: String(f.unit),
                 stock,
                 cost,
                 attachCost: f.attachCost === "Sim",
-              }
+              })
             : s,
         ),
       }));
@@ -2719,6 +3487,40 @@ function InventoryEdit({
           s.name.trim().toLowerCase() ===
           purchase.description.trim().toLowerCase(),
       );
+      const queuedLot = item?.pendingLots?.find(
+        (lot) => lot.purchaseId === purchase.id,
+      );
+      if (item && purchase.type !== "Perfume" && queuedLot) {
+        const newCost = total / (qty || 1);
+        set((x: D) => ({
+          ...x,
+          purchases: x.purchases.map((p) =>
+            p.id === purchase.id
+              ? {
+                  ...p,
+                  date: String(f.date),
+                  supplier: String(f.supplier),
+                  qty,
+                  total,
+                }
+              : p,
+          ),
+          supplies: x.supplies.map((supplyItem) =>
+            supplyItem.id === item.id
+              ? {
+                  ...supplyItem,
+                  pendingLots: (supplyItem.pendingLots || []).map((lot) =>
+                    lot.purchaseId === purchase.id
+                      ? { ...lot, qty, cost: newCost }
+                      : lot,
+                  ),
+                }
+              : supplyItem,
+          ),
+        }));
+        close();
+        return;
+      }
       const target = purchase.type === "Perfume" ? product : item;
       if (!target) {
         setError(
@@ -2838,7 +3640,15 @@ function Form({
   const type = modal!.type,
     existingSale = d.sales.find((s) => s.id === modal!.id),
     existingClient = d.clients.find((c) => c.id === modal!.id),
-    existingProduct = d.products.find((p) => p.id === modal!.id);
+    existingProduct = d.products.find((p) => p.id === modal!.id),
+    existingSupplier =
+      type === "supplier" && modal!.id !== undefined
+        ? d.suppliers[modal!.id]
+        : undefined;
+  const existingSupplierType: SupplierType =
+    existingSupplier !== undefined
+      ? d.supplierTypes?.[existingSupplier] || "Outros"
+      : "Outros";
   const isOldSale = type === "oldSale";
   const isSale = type === "sale" || type === "marketplace" || isOldSale;
   const isMarketplace =
@@ -2867,9 +3677,6 @@ function Form({
     [newClient, setNewClient] = useState(false),
     [addressCount, setAddressCount] = useState(
       existingClient?.addresses.length || 1,
-    ),
-    [newBrand, setNewBrand] = useState(
-      !existingProduct && d.brands.length === 0,
     ),
     [purchaseCalc, setPurchaseCalc] = useState({ qty: 0, ml: 0, total: 0 }),
     [supplyCalc, setSupplyCalc] = useState({ qty: 0, total: 0 }),
@@ -2984,9 +3791,25 @@ function Form({
         return;
       }
     }
+    if (type === "supplier") {
+      const supplierName = String(f.name || "").trim();
+      if (!supplierName) {
+        window.alert("Informe o nome do fornecedor.");
+        return;
+      }
+      const duplicated = d.suppliers.some(
+        (name, index) =>
+          index !== modal!.id &&
+          name.trim().toLowerCase() === supplierName.toLowerCase(),
+      );
+      if (duplicated) {
+        window.alert("Este fornecedor já está cadastrado.");
+        return;
+      }
+    }
     set((x: D) => {
       if (type === "product") {
-        const brand = newBrand ? String(f.newBrand) : String(f.brand),
+        const brand = String(f.brand || "").trim(),
           product = mkP({ ...f, brand }, existingProduct?.id),
           brands = x.brands.includes(brand) ? x.brands : [...x.brands, brand];
         return {
@@ -3020,6 +3843,54 @@ function Form({
           clients: existingClient
             ? x.clients.map((v) => (v.id === c.id ? c : v))
             : [...x.clients, c],
+        };
+      }
+      if (type === "supplier") {
+        const supplierName = String(f.name).trim();
+        const supplierType = SUPPLIER_TYPES.includes(
+          String(f.supplierType) as SupplierType,
+        )
+          ? (String(f.supplierType) as SupplierType)
+          : "Outros";
+        if (existingSupplier !== undefined && modal!.id !== undefined) {
+          const supplierTypes = Object.fromEntries(
+            Object.entries(x.supplierTypes || {}).filter(
+              ([name]) => name !== existingSupplier,
+            ),
+          ) as Record<string, SupplierType>;
+          const supplierDates = Object.fromEntries(
+            Object.entries(x.supplierDates || {}).filter(
+              ([name]) => name !== existingSupplier,
+            ),
+          ) as Record<string, string>;
+          supplierTypes[supplierName] = supplierType;
+          supplierDates[supplierName] =
+            x.supplierDates?.[existingSupplier] || today();
+          return {
+            ...x,
+            suppliers: x.suppliers.map((name, index) =>
+              index === modal!.id ? supplierName : name,
+            ),
+            supplierTypes,
+            supplierDates,
+            purchases: x.purchases.map((purchase) =>
+              purchase.supplier === existingSupplier
+                ? { ...purchase, supplier: supplierName }
+                : purchase,
+            ),
+          };
+        }
+        return {
+          ...x,
+          suppliers: [...x.suppliers, supplierName],
+          supplierTypes: {
+            ...(x.supplierTypes || {}),
+            [supplierName]: supplierType,
+          },
+          supplierDates: {
+            ...(x.supplierDates || {}),
+            [supplierName]: today(),
+          },
         };
       }
       if (isOldSale) {
@@ -3070,13 +3941,13 @@ function Form({
         return { ...x, clients, sales: [sale, ...x.sales] };
       }
       if (type === "purchase") {
-        const supplier = newSupplier
+        const supplier = (newSupplier
             ? String(f.newSupplier)
-            : String(f.supplier),
+            : String(f.supplier)).trim(),
           qty = Number(f.qty || 1),
           mlPerBottle = kind === "Perfume" ? Number(f.mlPerBottle) : undefined,
           total = Number(f.total),
-          brand = newBrand ? String(f.newBrand) : String(f.brand || ""),
+          brand = String(f.brand || "").trim(),
           description =
             kind === "Perfume"
               ? `${brand} ${String(f.productName)}`.trim()
@@ -3136,19 +4007,35 @@ function Form({
           const found = x.supplies.find(
             (s) => s.name.toLowerCase() === description.toLowerCase(),
           );
+          const unitCost = total / (qty || 1);
           supplies = found
-            ? x.supplies.map((s) =>
-                s.id === found.id
-                  ? {
-                      ...s,
-                      stock: s.stock + qty,
-                      attachCost: String(f.attachCost) === "Sim",
-                      cost:
-                        ((s.cost || 0) * s.stock + total) /
-                        (s.stock + qty || 1),
-                    }
-                  : s,
-              )
+            ? x.supplies.map((s) => {
+                if (s.id !== found.id) return s;
+                const current = activateNextSupplyLot(s);
+                const attachCost = String(f.attachCost) === "Sim";
+                if (current.stock > 0) {
+                  return {
+                    ...current,
+                    attachCost,
+                    pendingLots: [
+                      ...(current.pendingLots || []),
+                      {
+                        purchaseId: purchase.id,
+                        qty,
+                        cost: unitCost,
+                        unit: String(f.unit || current.unit),
+                      },
+                    ],
+                  };
+                }
+                return {
+                  ...current,
+                  stock: qty,
+                  unit: String(f.unit || current.unit),
+                  attachCost,
+                  cost: unitCost,
+                };
+              })
             : [
                 ...x.supplies,
                 {
@@ -3158,24 +4045,57 @@ function Form({
                   unit: String(f.unit),
                   min: 0,
                   attachCost: String(f.attachCost) === "Sim",
-                  cost: total / (qty || 1),
+                  cost: unitCost,
+                  pendingLots: [],
                 },
               ];
         }
+        const supplierAlreadyExists = x.suppliers.some(
+          (name) => name.toLowerCase() === supplier.toLowerCase(),
+        );
+        const newSupplierType = newSupplier
+          ? SUPPLIER_TYPES.includes(String(f.newSupplierType) as SupplierType)
+            ? (String(f.newSupplierType) as SupplierType)
+            : "Outros"
+          : undefined;
         return {
           ...x,
           products,
           supplies,
           brands,
           purchases: [purchase, ...x.purchases],
-          suppliers: x.suppliers.includes(supplier)
+          suppliers: supplierAlreadyExists
             ? x.suppliers
             : [...x.suppliers, supplier],
+          supplierTypes:
+            newSupplier && !supplierAlreadyExists
+              ? {
+                  ...(x.supplierTypes || {}),
+                  [supplier]: newSupplierType || "Outros",
+                }
+              : x.supplierTypes,
+          supplierDates:
+            newSupplier && !supplierAlreadyExists
+              ? {
+                  ...(x.supplierDates || {}),
+                  [supplier]: String(f.date || today()),
+                }
+              : x.supplierDates,
         };
       }
-      let clientId = isMarketplace ? 0 : Number(f.clientId),
-        clients = x.clients;
-      if (newClient && !isMarketplace) {
+      const typedClientName = isMarketplace
+      ? ""
+      : String(f.clientName || "").trim();
+    const matchedClient = isMarketplace
+      ? undefined
+      : x.clients.find(
+          (client) =>
+            client.name.trim().toLowerCase() ===
+            typedClientName.toLowerCase(),
+        );
+    let clientId = isMarketplace ? 0 : matchedClient?.id || 0,
+      clients = x.clients;
+    if (newClient && !isMarketplace) {
         clientId = Date.now();
         const address = String(f.newAddress || "");
         clients = [
@@ -3227,8 +4147,10 @@ function Form({
         date: String(f.date),
         clientId,
         customerName: isMarketplace
-          ? String(f.marketplaceCustomer || "").trim()
-          : undefined,
+        ? String(f.marketplaceCustomer || "").trim()
+        : newClient || matchedClient
+          ? undefined
+          : typedClientName || undefined,
         items,
         total: Number(f.total),
         paid: Number(f.paid),
@@ -3302,6 +4224,10 @@ function Form({
       ? existingClient
         ? "Editar cliente"
         : "Cadastrar cliente"
+      : type === "supplier"
+        ? existingSupplier !== undefined
+          ? "Editar fornecedor"
+          : "Cadastrar fornecedor"
       : type === "product"
         ? existingProduct
           ? "Editar perfume"
@@ -3431,13 +4357,22 @@ function Form({
                     {clientLookupMessage ? <small className="cepStatus">{clientLookupMessage}</small> : null}
                   </>
                 ) : (
-                  <Select
-                    n="clientId"
-                    l="Cliente"
-                    value={existingSale?.clientId}
-                    o={d.clients.map((c) => [c.id, c.name])}
-                  />
-                )}
+        <label className="saleClientInput">
+          <span>Cliente</span>
+          <input
+            name="clientName"
+            list="sale-client-options"
+            defaultValue={existingSale ? saleCustomer(existingSale, d) : ""}
+            placeholder="Selecione ou digite o nome do cliente"
+            required
+          />
+          <datalist id="sale-client-options">
+            {d.clients.map((client) => (
+              <option key={client.id} value={client.name} />
+            ))}
+          </datalist>
+        </label>
+      )}
               </>
             )}{" "}
             {Array.from({ length: lines }, (_, i) => (
@@ -3482,14 +4417,30 @@ function Form({
                 </div>
               </div>
             ))}
-            <button
-              type="button"
-              className="add"
-              onClick={() => setLines((n) => n + 1)}
-            >
-              <Plus />
-              Adicionar outro perfume
-            </button>
+            <div className="saleItemActions">
+    <button
+      type="button"
+      className="add"
+      onClick={() => setLines((n) => n + 1)}
+    >
+      <Plus />
+      Adicionar outro perfume
+    </button>
+    {lines > 1 ? (
+      <button
+        type="button"
+        className="removeSaleItem"
+        onClick={() => {
+          setLines((n) => Math.max(1, n - 1));
+          setApcLines((current) => current.slice(0, -1));
+          setSaleVolumes((current) => current.slice(0, -1));
+        }}
+      >
+        <Trash2 />
+        Excluir perfume
+      </button>
+    ) : null}
+  </div>
             <SaleSupplyPicker
               items={Array.from({ length: lines }, (_, index) => ({
                 ml: saleVolumes[index] || 0,
@@ -3622,8 +4573,6 @@ function Form({
           <ProductFields
             product={existingProduct}
             brands={d.brands}
-            newBrand={newBrand}
-            setNewBrand={setNewBrand}
           />
         ) : null}
         {type === "supply" ? (
@@ -3676,7 +4625,15 @@ function Form({
               Cadastrar fornecedor novo
             </label>
             {newSupplier ? (
-              <Field n="newSupplier" l="Novo fornecedor" />
+              <>
+                <Field n="newSupplier" l="Novo fornecedor" />
+                <Choices
+                  name="newSupplierType"
+                  label="Tipo de fornecedor"
+                  a={SUPPLIER_TYPES}
+                  v="Outros"
+                />
+              </>
             ) : (
               <Select
                 n="supplier"
@@ -3693,11 +4650,7 @@ function Form({
             />
             {kind === "Perfume" ? (
               <>
-                <BrandFields
-                  brands={d.brands}
-                  newBrand={newBrand}
-                  setNewBrand={setNewBrand}
-                />
+                <BrandFields brands={d.brands} />
                 <Field n="productName" l="Nome do perfume" />
                 <Choices
                   name="category"
@@ -3757,7 +4710,20 @@ function Form({
               </>
             ) : kind === "Suprimento / insumo" ? (
               <>
-                <Field n="description" l="Especifique o suprimento / insumo" />
+                <label>
+                  <span>Suprimento / insumo</span>
+                  <input
+                    name="description"
+                    list="purchase-supply-options"
+                    placeholder="Selecione um existente ou digite um novo"
+                    required
+                  />
+                  <datalist id="purchase-supply-options">
+                    {d.supplies.map((supply) => (
+                      <option key={supply.id} value={supply.name} />
+                    ))}
+                  </datalist>
+                </label>
                 <div className="row three">
                   <Field n="qty" l="Quantidade" t="number" />
                   <Field n="unit" l="Unidade" p="un., caixas..." />
@@ -3926,6 +4892,21 @@ function Form({
             </button>
           </>
         ) : null}
+        {type === "supplier" ? (
+          <>
+            <Field
+              n="name"
+              l="Nome do fornecedor"
+              v={existingSupplier || ""}
+            />
+            <Choices
+              name="supplierType"
+              label="Tipo de fornecedor"
+              a={SUPPLIER_TYPES}
+              v={existingSupplierType}
+            />
+          </>
+        ) : null}
         <footer>
           <button type="button" onClick={close}>
             Cancelar
@@ -3948,7 +4929,10 @@ function SaleSupplyPicker({
   overrides: Record<string, number>;
   setOverrides: (value: Record<string, number>) => void;
 }) {
-  const automatic = automaticPackaging({ items });
+  const options = packagingOptions({ items }, supplies);
+  const automatic = Object.fromEntries(
+    options.map(({ name, automaticQty }) => [name, automaticQty]),
+  ) as Record<string, number>;
   const effectiveSale = { items, supplyOverrides: overrides };
   const effectiveLines = packaging(effectiveSale, supplies).lines;
   const total = effectiveLines.reduce((sum, line) => sum + line.total, 0);
@@ -3974,8 +4958,8 @@ function SaleSupplyPicker({
         ) : null}
       </div>
       <div className="saleSupplyList">
-        {PACKAGING_RULES.map((name) => {
-          const qty = overrides[name] ?? automatic[name];
+        {options.map(({ name, automaticQty }) => {
+          const qty = overrides[name] ?? automaticQty;
           const line = effectiveLines.find((item) => item.name === name);
           return (
             <div key={name} className={qty > 0 ? "selected" : ""}>
@@ -3986,7 +4970,7 @@ function SaleSupplyPicker({
                   onChange={(event) =>
                     update(
                       name,
-                      event.target.checked ? automatic[name] || 1 : 0,
+                      event.target.checked ? automaticQty || 1 : 0,
                     )
                   }
                 />
@@ -4043,57 +5027,44 @@ const mkC = (f: any, n: number, id = Date.now()): C => ({
 });
 function BrandFields({
   brands,
-  newBrand,
-  setNewBrand,
   value,
 }: {
   brands: string[];
-  newBrand: boolean;
-  setNewBrand: (v: boolean) => void;
   value?: string;
 }) {
+  const sortedBrands = Array.from(
+    new Set(brands.map((brand) => brand.trim()).filter(Boolean)),
+  ).sort((a, b) =>
+    a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
+  );
   return (
-    <>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={newBrand}
-          onChange={(e) => setNewBrand(e.target.checked)}
-        />
-        Cadastrar nova marca
-      </label>
-      {newBrand ? (
-        <Field n="newBrand" l="Nova marca" />
-      ) : (
-        <Select
-          n="brand"
-          l="Marca"
-          value={value}
-          o={brands.map((x) => [x, x])}
-        />
-      )}
-    </>
+    <label>
+      <span>Marca</span>
+      <input
+        name="brand"
+        list="brand-options"
+        defaultValue={value || ""}
+        placeholder="Selecione ou digite uma marca"
+        required
+      />
+      <datalist id="brand-options">
+        {sortedBrands.map((brand) => (
+          <option key={brand} value={brand} />
+        ))}
+      </datalist>
+    </label>
   );
 }
 function ProductFields({
   product,
   brands,
-  newBrand,
-  setNewBrand,
 }: {
   product?: P;
   brands: string[];
-  newBrand: boolean;
-  setNewBrand: (v: boolean) => void;
 }) {
   return (
     <>
-      <BrandFields
-        brands={brands}
-        newBrand={newBrand}
-        setNewBrand={setNewBrand}
-        value={product?.brand}
-      />
+      <BrandFields brands={brands} value={product?.brand} />
       <Field n="name" l="Perfume" v={product?.name} />
       <Choices
         name="category"
@@ -4247,23 +5218,246 @@ function Select({
   );
 }
 function History({ id, d, close }: { id: number; d: D; close: () => void }) {
-  const c = d.clients.find((c) => c.id === id);
+  const c = d.clients.find((client) => client.id === id);
+  const [query, setQuery] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [month, setMonth] = useState("");
+  const [saleDay, setSaleDay] = useState("");
+  const customerSales = d.sales
+    .filter((sale) => sale.clientId === id)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const completedSales = customerSales.filter(
+    (sale) => sale.status !== "cancelled",
+  );
+  const filteredSales = customerSales.filter((sale) => {
+    const perfumeText = sale.items
+      .map((item) => {
+        const product = d.products.find(
+          (candidate) => candidate.id === item.productId,
+        );
+        return product
+          ? product.brand + " " + product.name
+          : sale.description || "";
+      })
+      .join(" ")
+      .toLowerCase();
+    return (
+      perfumeText.includes(query.trim().toLowerCase()) &&
+      (!month || sale.date.startsWith(month)) &&
+      (!saleDay || sale.date === saleDay)
+    );
+  });
+  const totalPurchased = completedSales.reduce(
+    (sum, sale) => sum + (isNoCost(sale) ? 0 : Math.max(0, sale.total)),
+    0,
+  );
+  const bottleCount = completedSales.reduce(
+  (sum, sale) =>
+    sum + sale.items.filter((item) => !item.isApc).length,
+  0,
+);
+const apcCount = completedSales.reduce(
+  (sum, sale) =>
+    sum + sale.items.filter((item) => Boolean(item.isApc)).length,
+  0,
+);
+  const lastPurchase = completedSales[0];
+  const lastPurchaseDays = lastPurchase
+    ? Math.max(
+        0,
+        Math.floor(
+          (new Date(today() + "T12:00:00").getTime() -
+            new Date(lastPurchase.date + "T12:00:00").getTime()) /
+            86400000,
+        ),
+      )
+    : null;
   return (
     <div className="overlay">
-      <div className="history">
-        <header>
-          <h2>{c?.name}</h2>
-          <button onClick={close}>
+      <div className="history clientHistory">
+        <header className="clientHistoryHeader">
+          <div className="clientHistoryTitle">
+            <h2>{c?.name}</h2>
+            <span>
+              Cliente desde {c?.date ? dateBR(c.date) : "data não informada"}
+            </span>
+          </div>
+          <button onClick={close} aria-label="Fechar histórico">
             <X />
           </button>
         </header>
-        <p>CEP: {c?.cep}</p>
-        {c?.addresses.map((a, i) => (
-          <p key={i}>
-            <b>{a.label}</b> {a.value}
-          </p>
-        ))}
-        <Sales d={{ ...d, sales: d.sales.filter((s) => s.clientId === id) }} />
+
+        <div className="clientHistoryContact">
+          <span>
+            <b>CEP:</b> {c?.cep || "Não informado"}
+          </span>
+          {c?.addresses.map((address, index) => (
+            <span key={index}>
+              <b>{address.label || "Endereço"}:</b> {address.value}
+            </span>
+          ))}
+        </div>
+
+        <div className="clientHistoryStats">
+          <div>
+            <span>Valor total comprado</span>
+            <b>{brl(totalPurchased)}</b>
+          </div>
+          <div>
+            <span>Pedidos realizados</span>
+            <b>{completedSales.length}</b>
+          </div>
+          <div>
+            <span>Frascos comprados</span>
+            <b>{bottleCount}</b>
+          </div>
+          <div>
+            <span>APC's comprados</span>
+            <b>{apcCount}</b>
+          </div>
+          <div>
+            <span>Última compra em</span>
+            <b>
+              {lastPurchaseDays === null
+                ? "Sem compras"
+                : lastPurchaseDays +
+                  " " +
+                  (lastPurchaseDays === 1 ? "dia" : "dias")}
+            </b>
+          </div>
+        </div>
+
+        <div className="clientHistorySales">
+          <div className="clientHistorySalesHead">
+            <div>
+              <h3>Histórico de compras</h3>
+              <p>
+                {month || saleDay
+                  ? "Exibindo o período selecionado."
+                  : "Histórico completo do cliente (lifetime)."}
+              </p>
+            </div>
+          </div>
+
+          <div className="clientHistoryToolbar">
+            <label className="clientHistorySearch">
+              <Search />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Pesquisar por perfume pedido"
+                aria-label="Pesquisar perfume no histórico do cliente"
+              />
+            </label>
+            <button
+              type="button"
+              className={
+                showFilters || month || saleDay
+                  ? "historyFilterButton active"
+                  : "historyFilterButton"
+              }
+              onClick={() => setShowFilters((visible) => !visible)}
+            >
+              <SlidersHorizontal />
+              Filtrar por data
+            </button>
+          </div>
+
+          {showFilters ? (
+            <div className="clientHistoryFilters">
+              <label>
+                <span>Mês</span>
+                <input
+                  type="month"
+                  value={month}
+                  onChange={(event) => {
+                    setMonth(event.target.value);
+                    if (event.target.value) setSaleDay("");
+                  }}
+                />
+              </label>
+              <label>
+                <span>Data específica</span>
+                <input
+                  type="date"
+                  value={saleDay}
+                  onChange={(event) => {
+                    setSaleDay(event.target.value);
+                    if (event.target.value) setMonth("");
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setMonth("");
+                  setSaleDay("");
+                }}
+              >
+                Limpar filtro
+              </button>
+            </div>
+          ) : null}
+
+          <div className="clientHistoryTable">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pedido</th>
+                  <th>Data</th>
+                  <th>Perfumes</th>
+                  <th>Pagamento</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSales.map((sale) => (
+                  <tr
+                    key={sale.id}
+                    className={
+                      sale.status === "cancelled" ? "cancelled" : ""
+                    }
+                  >
+                    <td>#{orderNo(sale.id)}</td>
+                    <td>{dateBR(sale.date)}</td>
+                    <td>
+                      {sale.items.length ? (
+                        sale.items.map((item, index) => {
+                          const product = d.products.find(
+                            (candidate) =>
+                              candidate.id === item.productId,
+                          );
+                          return (
+                            <small key={index}>
+                              {product
+                                ? product.brand + " " + product.name
+                                : "Perfume"}{" "}
+                              — {item.ml} ml
+                              {item.isApc ? " · APC" : ""}
+                            </small>
+                          );
+                        })
+                      ) : (
+                        <small>
+                          {sale.description || "Venda antiga"}
+                        </small>
+                      )}
+                    </td>
+                    <td>{sale.payment}</td>
+                    <td>{brl(isNoCost(sale) ? 0 : sale.total)}</td>
+                    <td>{saleBadge(sale)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!filteredSales.length ? (
+              <p className="empty">
+                Nenhuma compra encontrada com estes filtros.
+              </p>
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );
