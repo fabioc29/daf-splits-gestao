@@ -25,6 +25,7 @@ jobs:
         run: |
           cat > /tmp/patch.py <<'PY'
           from pathlib import Path
+          import re
 
           app_path = Path("src/App.tsx")
           css_path = Path("src/index.css")
@@ -176,30 +177,30 @@ jobs:
               "perfume supplier units",
           )
 
-          rep(
-              '''        <div className="supplierHistoryStats">
-          <div>
-            <span>Compras registradas</span>
-            <b>{purchases.length}</b>
-          </div>
-          <div>
-            <span>Total comprado</span>
-            <b>{brl(total)}</b>
-          </div>
-          <div>
-            <span>Unidades compradas</span>
-            <b>{totalUnits}</b>
-          </div>
-          <div>
-            <span>Última compra</span>
-            <b>
-              {purchases[0]
-                ? dateBR(purchases[0].date)
-                : "Sem compras"}
-            </b>
-          </div>
+          app, count = re.subn(
+              r'''<div className="supplierHistoryStats">\s*
+          <div>\s*
+            <span>Compras registradas</span>\s*
+            <b>\{purchases\.length\}</b>\s*
+          </div>\s*
+          <div>\s*
+            <span>Total comprado</span>\s*
+            <b>\{brl\(total\)\}</b>\s*
+          </div>\s*
+          <div>\s*
+            <span>Unidades compradas</span>\s*
+            <b>\{totalUnits\}</b>\s*
+          </div>\s*
+          <div>\s*
+            <span>Última compra</span>\s*
+            <b>\s*
+              \{purchases\[0\]\s*
+                \? dateBR\(purchases\[0\]\.date\)\s*
+                : "Sem compras"\}\s*
+            </b>\s*
+          </div>\s*
           </div>''',
-              '''        <div
+              '''<div
           className={
             "supplierHistoryStats " +
             (isPerfumeSupplier ? "four" : "three")
@@ -228,8 +229,12 @@ jobs:
             </b>
           </div>
           </div>''',
-              "supplier history conditional units",
+              app,
+              count=1,
+              flags=re.S,
           )
+          if count != 1:
+              raise SystemExit("Pattern not found: supplier history conditional units")
 
           rep(
               '''    existingSupplier =
