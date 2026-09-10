@@ -135,13 +135,8 @@ jobs:
           )
 
           rep(
-              '''    supplies: normalizedSupplies,
-            suppliers,
-            brands,''',
-              '''    supplies: normalizedSupplies,
-            suppliers,
-            supplierTypes,
-            brands,''',
+              "    supplies: normalizedSupplies,\n    suppliers,\n    brands,",
+              "    supplies: normalizedSupplies,\n    suppliers,\n    supplierTypes,\n    brands,",
               "normalized return supplier types",
           )
 
