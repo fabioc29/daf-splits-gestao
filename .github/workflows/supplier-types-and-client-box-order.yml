@@ -198,13 +198,13 @@ jobs:
                 : "Sem compras"}
             </b>
           </div>
-        </div>''',
+          </div>''',
               '''        <div
           className={
             "supplierHistoryStats " +
             (isPerfumeSupplier ? "four" : "three")
           }
-        >
+          >
           <div>
             <span>Compras registradas</span>
             <b>{purchases.length}</b>
@@ -227,7 +227,7 @@ jobs:
                 : "Sem compras"}
             </b>
           </div>
-        </div>''',
+          </div>''',
               "supplier history conditional units",
           )
 
