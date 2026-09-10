@@ -627,6 +627,7 @@ const action =
               set={setData}
               add={() => setModal({ type: "supply" })}
               addProduct={() => setModal({ type: "product" })}
+              manageBrands={() => setModal({ type: "brands" })}
               editSupply={(id) => setModal({ type: "supplyEdit", id })}
               edit={(id) => setModal({ type: "product", id })}
               notify={notify}
@@ -665,6 +666,13 @@ const action =
           d={data}
           set={setData}
           close={() => setModal(null)}
+        />
+      ) : modal?.type === "brands" ? (
+        <BrandManager
+          d={data}
+          set={setData}
+          close={() => setModal(null)}
+          notify={notify}
         />
       ) : modal ? (
         <Form
@@ -2025,10 +2033,186 @@ function Receivables({
   );
 }
 
+function BrandManager({
+  d,
+  set,
+  close,
+  notify,
+}: {
+  d: D;
+  set: any;
+  close: () => void;
+  notify: (message: string) => void;
+}) {
+  const brands = Array.from(
+    new Set([
+      ...d.brands,
+      ...d.products.map((product) => product.brand),
+    ].map((brand) => brand.trim()).filter(Boolean)),
+  ).sort((a, b) =>
+    a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
+  );
+  const [editing, setEditing] = useState("");
+  const [draft, setDraft] = useState("");
+
+  function startEdit(brand: string) {
+    setEditing(brand);
+    setDraft(brand);
+  }
+
+  function saveEdit() {
+    const nextBrand = draft.trim();
+    if (!editing || !nextBrand) return;
+    const duplicate = brands.some(
+      (brand) =>
+        brand !== editing &&
+        brand.localeCompare(nextBrand, "pt-BR", { sensitivity: "base" }) === 0,
+    );
+    if (duplicate) {
+      window.alert("Já existe uma marca cadastrada com este nome.");
+      return;
+    }
+    set((state: D) => ({
+      ...state,
+      brands: Array.from(
+        new Set(
+          state.brands.map((brand) =>
+            brand === editing ? nextBrand : brand,
+          ),
+        ),
+      ),
+      products: state.products.map((product) =>
+        product.brand === editing
+          ? { ...product, brand: nextBrand }
+          : product,
+      ),
+      purchases: state.purchases.map((purchase) =>
+        purchase.type === "Perfume" &&
+        purchase.description.startsWith(editing + " ")
+          ? {
+              ...purchase,
+              description:
+                nextBrand + purchase.description.slice(editing.length),
+            }
+          : purchase,
+      ),
+    }));
+    notify("Marca atualizada.");
+    setEditing("");
+    setDraft("");
+  }
+
+  function removeBrand(brand: string) {
+    if (d.products.some((product) => product.brand === brand)) {
+      window.alert(
+        "Esta marca ainda está vinculada a perfumes. Edite ou exclua os perfumes dessa marca antes de removê-la.",
+      );
+      return;
+    }
+    if (!window.confirm(`Excluir a marca “${brand}”?`)) return;
+    set((state: D) => ({
+      ...state,
+      brands: state.brands.filter((item) => item !== brand),
+    }));
+    notify("Marca excluída.");
+  }
+
+  return (
+    <div className="overlay">
+      <div className="systemDialog brandManagerDialog">
+        <header>
+          <div>
+            <small>GESTÃO DE CADASTROS</small>
+            <h2>Marcas</h2>
+          </div>
+          <button type="button" onClick={close} aria-label="Fechar marcas">
+            <X />
+          </button>
+        </header>
+
+        <p className="brandManagerHint">
+          {brands.length} marca(s) cadastrada(s), em ordem alfabética.
+        </p>
+
+        <div className="brandManagerList">
+          {brands.map((brand) => (
+            <div className="brandManagerRow" key={brand}>
+              {editing === brand ? (
+                <input
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  autoFocus
+                  aria-label={`Editar marca ${brand}`}
+                />
+              ) : (
+                <b>{brand}</b>
+              )}
+              <div>
+                {editing === brand ? (
+                  <>
+                    <button
+                      type="button"
+                      className="iconButton"
+                      onClick={saveEdit}
+                    >
+                      <Check />
+                      Salvar
+                    </button>
+                    <button
+                      type="button"
+                      className="iconButton"
+                      onClick={() => {
+                        setEditing("");
+                        setDraft("");
+                      }}
+                    >
+                      <X />
+                      Cancelar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="iconButton"
+                      onClick={() => startEdit(brand)}
+                    >
+                      <Pencil />
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      className="iconButton danger"
+                      onClick={() => removeBrand(brand)}
+                    >
+                      <Trash2 />
+                      Excluir
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+          {!brands.length ? (
+            <p className="empty">Nenhuma marca cadastrada.</p>
+          ) : null}
+        </div>
+
+        <footer>
+          <button type="button" onClick={close}>
+            Fechar
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function Stock({
   d,
   add,
   addProduct,
+  manageBrands,
   editSupply,
   edit,
   set,
@@ -2037,6 +2221,7 @@ function Stock({
   d: D;
   add: () => void;
   addProduct: () => void;
+  manageBrands: () => void;
   editSupply: (id: number) => void;
   edit: (id: number) => void;
   set: any;
@@ -2046,7 +2231,9 @@ function Stock({
     [category, setCategory] = useState("Todos"),
     [brand, setBrand] = useState("Todas"),
     [query, setQuery] = useState("");
-  const brands = Array.from(new Set(d.products.map((p) => p.brand))).sort();
+  const brands = Array.from(new Set(d.products.map((p) => p.brand))).sort(
+    (a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
+  );
   const perfumeInventoryValue = d.products.reduce(
     (total, product) => total + Math.max(0, product.stock) * product.cost,
     0,
@@ -2079,13 +2266,24 @@ function Stock({
           <h2>Estoque</h2>
           <p>Escolha qual tipo de estoque deseja consultar.</p>
         </div>
-        <button
-          className="primary stockAction"
-          onClick={view !== "supplies" ? addProduct : add}
-        >
-          <Plus />
-          {view !== "supplies" ? "Novo perfume" : "Novo suprimento/insumo"}
-        </button>
+        <div className="stockHeadActions">
+          {view !== "supplies" ? (
+            <button
+              type="button"
+              className="brandManagerButton"
+              onClick={manageBrands}
+            >
+              Marcas
+            </button>
+          ) : null}
+          <button
+            className="primary stockAction"
+            onClick={view !== "supplies" ? addProduct : add}
+          >
+            <Plus />
+            {view !== "supplies" ? "Novo perfume" : "Novo suprimento/insumo"}
+          </button>
+        </div>
       </div>
       <div className="segmented stockSwitch">
         <button
@@ -3480,9 +3678,6 @@ function Form({
     [addressCount, setAddressCount] = useState(
       existingClient?.addresses.length || 1,
     ),
-    [newBrand, setNewBrand] = useState(
-      !existingProduct && d.brands.length === 0,
-    ),
     [purchaseCalc, setPurchaseCalc] = useState({ qty: 0, ml: 0, total: 0 }),
     [supplyCalc, setSupplyCalc] = useState({ qty: 0, total: 0 }),
     [installmentLines, setInstallmentLines] = useState(
@@ -3614,7 +3809,7 @@ function Form({
     }
     set((x: D) => {
       if (type === "product") {
-        const brand = newBrand ? String(f.newBrand) : String(f.brand),
+        const brand = String(f.brand || "").trim(),
           product = mkP({ ...f, brand }, existingProduct?.id),
           brands = x.brands.includes(brand) ? x.brands : [...x.brands, brand];
         return {
@@ -3752,7 +3947,7 @@ function Form({
           qty = Number(f.qty || 1),
           mlPerBottle = kind === "Perfume" ? Number(f.mlPerBottle) : undefined,
           total = Number(f.total),
-          brand = newBrand ? String(f.newBrand) : String(f.brand || ""),
+          brand = String(f.brand || "").trim(),
           description =
             kind === "Perfume"
               ? `${brand} ${String(f.productName)}`.trim()
@@ -4378,8 +4573,6 @@ function Form({
           <ProductFields
             product={existingProduct}
             brands={d.brands}
-            newBrand={newBrand}
-            setNewBrand={setNewBrand}
           />
         ) : null}
         {type === "supply" ? (
@@ -4457,11 +4650,7 @@ function Form({
             />
             {kind === "Perfume" ? (
               <>
-                <BrandFields
-                  brands={d.brands}
-                  newBrand={newBrand}
-                  setNewBrand={setNewBrand}
-                />
+                <BrandFields brands={d.brands} />
                 <Field n="productName" l="Nome do perfume" />
                 <Choices
                   name="category"
@@ -4838,57 +5027,44 @@ const mkC = (f: any, n: number, id = Date.now()): C => ({
 });
 function BrandFields({
   brands,
-  newBrand,
-  setNewBrand,
   value,
 }: {
   brands: string[];
-  newBrand: boolean;
-  setNewBrand: (v: boolean) => void;
   value?: string;
 }) {
+  const sortedBrands = Array.from(
+    new Set(brands.map((brand) => brand.trim()).filter(Boolean)),
+  ).sort((a, b) =>
+    a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
+  );
   return (
-    <>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={newBrand}
-          onChange={(e) => setNewBrand(e.target.checked)}
-        />
-        Cadastrar nova marca
-      </label>
-      {newBrand ? (
-        <Field n="newBrand" l="Nova marca" />
-      ) : (
-        <Select
-          n="brand"
-          l="Marca"
-          value={value}
-          o={brands.map((x) => [x, x])}
-        />
-      )}
-    </>
+    <label>
+      <span>Marca</span>
+      <input
+        name="brand"
+        list="brand-options"
+        defaultValue={value || ""}
+        placeholder="Selecione ou digite uma marca"
+        required
+      />
+      <datalist id="brand-options">
+        {sortedBrands.map((brand) => (
+          <option key={brand} value={brand} />
+        ))}
+      </datalist>
+    </label>
   );
 }
 function ProductFields({
   product,
   brands,
-  newBrand,
-  setNewBrand,
 }: {
   product?: P;
   brands: string[];
-  newBrand: boolean;
-  setNewBrand: (v: boolean) => void;
 }) {
   return (
     <>
-      <BrandFields
-        brands={brands}
-        newBrand={newBrand}
-        setNewBrand={setNewBrand}
-        value={product?.brand}
-      />
+      <BrandFields brands={brands} value={product?.brand} />
       <Field n="name" l="Perfume" v={product?.name} />
       <Choices
         name="category"
