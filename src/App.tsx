@@ -4746,23 +4746,236 @@ function Select({
   );
 }
 function History({ id, d, close }: { id: number; d: D; close: () => void }) {
-  const c = d.clients.find((c) => c.id === id);
+  const c = d.clients.find((client) => client.id === id);
+  const [query, setQuery] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [month, setMonth] = useState("");
+  const [saleDay, setSaleDay] = useState("");
+  const customerSales = d.sales
+    .filter((sale) => sale.clientId === id)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const completedSales = customerSales.filter(
+    (sale) => sale.status !== "cancelled",
+  );
+  const filteredSales = customerSales.filter((sale) => {
+    const perfumeText = sale.items
+      .map((item) => {
+        const product = d.products.find(
+          (candidate) => candidate.id === item.productId,
+        );
+        return product
+          ? product.brand + " " + product.name
+          : sale.description || "";
+      })
+      .join(" ")
+      .toLowerCase();
+    return (
+      perfumeText.includes(query.trim().toLowerCase()) &&
+      (!month || sale.date.startsWith(month)) &&
+      (!saleDay || sale.date === saleDay)
+    );
+  });
+  const totalPurchased = completedSales.reduce(
+    (sum, sale) => sum + (isNoCost(sale) ? 0 : Math.max(0, sale.total)),
+    0,
+  );
+  const bottleCount = completedSales.reduce(
+    (sum, sale) => sum + sale.items.length,
+    0,
+  );
+  const lastPurchase = completedSales[0];
+  const lastPurchaseDays = lastPurchase
+    ? Math.max(
+        0,
+        Math.floor(
+          (new Date(today() + "T12:00:00").getTime() -
+            new Date(lastPurchase.date + "T12:00:00").getTime()) /
+            86400000,
+        ),
+      )
+    : null;
   return (
     <div className="overlay">
-      <div className="history">
-        <header>
-          <h2>{c?.name}</h2>
-          <button onClick={close}>
+      <div className="history clientHistory">
+        <header className="clientHistoryHeader">
+          <div className="clientHistoryTitle">
+            <h2>{c?.name}</h2>
+            <span>
+              Cliente desde {c?.date ? dateBR(c.date) : "data não informada"}
+            </span>
+          </div>
+          <button onClick={close} aria-label="Fechar histórico">
             <X />
           </button>
         </header>
-        <p>CEP: {c?.cep}</p>
-        {c?.addresses.map((a, i) => (
-          <p key={i}>
-            <b>{a.label}</b> {a.value}
-          </p>
-        ))}
-        <Sales d={{ ...d, sales: d.sales.filter((s) => s.clientId === id) }} />
+
+        <div className="clientHistoryContact">
+          <span>
+            <b>CEP:</b> {c?.cep || "Não informado"}
+          </span>
+          {c?.addresses.map((address, index) => (
+            <span key={index}>
+              <b>{address.label || "Endereço"}:</b> {address.value}
+            </span>
+          ))}
+        </div>
+
+        <div className="clientHistoryStats">
+          <div>
+            <span>Valor total comprado</span>
+            <b>{brl(totalPurchased)}</b>
+          </div>
+          <div>
+            <span>Frascos comprados</span>
+            <b>{bottleCount}</b>
+          </div>
+          <div>
+            <span>Pedidos realizados</span>
+            <b>{completedSales.length}</b>
+          </div>
+          <div>
+            <span>Última compra em</span>
+            <b>
+              {lastPurchaseDays === null
+                ? "Sem compras"
+                : lastPurchaseDays +
+                  " " +
+                  (lastPurchaseDays === 1 ? "dia" : "dias")}
+            </b>
+          </div>
+        </div>
+
+        <div className="clientHistorySales">
+          <div className="clientHistorySalesHead">
+            <div>
+              <h3>Histórico de compras</h3>
+              <p>
+                {month || saleDay
+                  ? "Exibindo o período selecionado."
+                  : "Histórico completo do cliente (lifetime)."}
+              </p>
+            </div>
+          </div>
+
+          <div className="clientHistoryToolbar">
+            <label className="clientHistorySearch">
+              <Search />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Pesquisar por perfume pedido"
+                aria-label="Pesquisar perfume no histórico do cliente"
+              />
+            </label>
+            <button
+              type="button"
+              className={
+                showFilters || month || saleDay
+                  ? "historyFilterButton active"
+                  : "historyFilterButton"
+              }
+              onClick={() => setShowFilters((visible) => !visible)}
+            >
+              <SlidersHorizontal />
+              Filtrar por data
+            </button>
+          </div>
+
+          {showFilters ? (
+            <div className="clientHistoryFilters">
+              <label>
+                <span>Mês</span>
+                <input
+                  type="month"
+                  value={month}
+                  onChange={(event) => {
+                    setMonth(event.target.value);
+                    if (event.target.value) setSaleDay("");
+                  }}
+                />
+              </label>
+              <label>
+                <span>Data específica</span>
+                <input
+                  type="date"
+                  value={saleDay}
+                  onChange={(event) => {
+                    setSaleDay(event.target.value);
+                    if (event.target.value) setMonth("");
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setMonth("");
+                  setSaleDay("");
+                }}
+              >
+                Limpar filtro
+              </button>
+            </div>
+          ) : null}
+
+          <div className="clientHistoryTable">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pedido</th>
+                  <th>Data</th>
+                  <th>Perfumes</th>
+                  <th>Pagamento</th>
+                  <th>Total</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSales.map((sale) => (
+                  <tr
+                    key={sale.id}
+                    className={
+                      sale.status === "cancelled" ? "cancelled" : ""
+                    }
+                  >
+                    <td>#{orderNo(sale.id)}</td>
+                    <td>{dateBR(sale.date)}</td>
+                    <td>
+                      {sale.items.length ? (
+                        sale.items.map((item, index) => {
+                          const product = d.products.find(
+                            (candidate) =>
+                              candidate.id === item.productId,
+                          );
+                          return (
+                            <small key={index}>
+                              {product
+                                ? product.brand + " " + product.name
+                                : "Perfume"}{" "}
+                              — {item.ml} ml
+                              {item.isApc ? " · APC" : ""}
+                            </small>
+                          );
+                        })
+                      ) : (
+                        <small>
+                          {sale.description || "Venda antiga"}
+                        </small>
+                      )}
+                    </td>
+                    <td>{sale.payment}</td>
+                    <td>{brl(isNoCost(sale) ? 0 : sale.total)}</td>
+                    <td>{saleBadge(sale)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!filteredSales.length ? (
+              <p className="empty">
+                Nenhuma compra encontrada com estes filtros.
+              </p>
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );
