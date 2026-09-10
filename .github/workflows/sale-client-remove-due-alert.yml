@@ -94,7 +94,7 @@ jobs:
           )
 
           sub(
-              r'''              \{navAlerts\[id\] \? \(\n.*?              \) : null\}''',
+              r'''              \{navAlerts\[id\] \? \(\n.*?\n              \) : null\}''',
               '''              {navAlerts[id] || (id === "receivables" && receivableDueAlert) ? (
                 <span className="navAlertGroup">
                   {id === "receivables" && receivableDueAlert ? (
@@ -148,27 +148,14 @@ jobs:
           )
 
           rep(
-              '''    [lines, setLines] = useState(existingSale?.items.length || 1),
-              [apcLines, setApcLines] = useState<boolean[]>(''',
-              '''    [lines, setLines] = useState(existingSale?.items.length || 1),
-              [removedLines, setRemovedLines] = useState<Set<number>>(new Set()),
-              [apcLines, setApcLines] = useState<boolean[]>(''',
+              '    [lines, setLines] = useState(existingSale?.items.length || 1),\n    [apcLines, setApcLines] = useState<boolean[]>(',
+              '    [lines, setLines] = useState(existingSale?.items.length || 1),\n    [removedLines, setRemovedLines] = useState<Set<number>>(new Set()),\n    [apcLines, setApcLines] = useState<boolean[]>(',
               "removed lines state",
           )
 
           rep(
-              '''  const [shippingPaidBy, setShippingPaidBy] = useState<"Cliente" | "DAF">(
-            existingSale?.shippingPaidBy === "daf" || Number(existingSale?.shippingCost || 0) > 0
-              ? "DAF"
-              : "Cliente",
-          );
-          function findClientByCpf''',
-              '''  const [shippingPaidBy, setShippingPaidBy] = useState<"Cliente" | "DAF">(
-            existingSale?.shippingPaidBy === "daf" || Number(existingSale?.shippingCost || 0) > 0
-              ? "DAF"
-              : "Cliente",
-          );
-          const activeLineIndexes = Array.from(
+              '  function findClientByCpf(value: string) {',
+              '''  const activeLineIndexes = Array.from(
             { length: lines },
             (_, index) => index,
           ).filter((index) => !removedLines.has(index));
@@ -180,44 +167,39 @@ jobs:
               return next;
             });
           }
-          function findClientByCpf''',
+          function findClientByCpf(value: string) {''',
               "active lines",
           )
 
-          rep(
-              '''      const invalid = Array.from({ length: lines }, (_, i) =>
-                String(f["productName" + i] || ""),
-              ).find(
-                (typed) => !d.products.some((p) => `${p.brand} ${p.name}` === typed),
-              );''',
+          sub(
+              r'''      const invalid = Array\.from\(\{ length: lines \}, \(_, i\) =>\n        String\(f\["productName" \+ i\] \|\| ""\),\n      \)\.find\(\n        \(typed\) => !d\.products\.some\(\(p\) => .*? === typed\),\n      \);''',
               '''      const invalid = activeLineIndexes
                 .map((i) => String(f["productName" + i] || ""))
                 .find(
-                  (typed) => !d.products.some((p) => `${p.brand} ${p.name}` === typed),
+                  (typed) =>
+                    !d.products.some(
+                      (p) => p.brand + " " + p.name === typed,
+                    ),
                 );''',
-              "active validation",
+              "active product validation",
           )
 
-          rep(
-              '''      const apcProducts = Array.from({ length: lines }, (_, i) => {
-                if (!apcLines[i]) return null;
-                const typed = String(f["productName" + i] || "");
-                return d.products.find((p) => `${p.brand} ${p.name}` === typed);
-              }).filter(Boolean) as P[];''',
+          sub(
+              r'''      const apcProducts = Array\.from\(\{ length: lines \}, \(_, i\) => \{\n        if \(!apcLines\[i\]\) return null;\n        const typed = String\(f\["productName" \+ i\] \|\| ""\);\n        return d\.products\.find\(\(p\) => .*? === typed\);\n      \}\)\.filter\(Boolean\) as P\[\];''',
               '''      const apcProducts = activeLineIndexes
                 .map((i) => {
                   if (!apcLines[i]) return null;
                   const typed = String(f["productName" + i] || "");
-                  return d.products.find((p) => `${p.brand} ${p.name}` === typed);
+                  return d.products.find(
+                    (p) => p.brand + " " + p.name === typed,
+                  );
                 })
                 .filter(Boolean) as P[];''',
               "active apc validation",
           )
 
           rep(
-              '''      let clientId = isMarketplace ? 0 : Number(f.clientId),
-                clients = x.clients;
-              if (newClient && !isMarketplace) {''',
+              '      let clientId = isMarketplace ? 0 : Number(f.clientId),\n        clients = x.clients;\n      if (newClient && !isMarketplace) {',
               '''      const typedClientName = isMarketplace
                 ? ""
                 : String(f.clientName || "").trim();
@@ -234,23 +216,12 @@ jobs:
               "client resolution",
           )
 
-          rep(
-              '''      const items = Array.from({ length: lines }, (_, i) => {
-                const typed = String(f["productName" + i] || "");
-                const product = x.products.find(
-                  (p) => `${p.brand} ${p.name}` === typed,
-                );
-                return {
-                  productId: product?.id || Number(f["product" + i]),
-                  ml: parseDecimal(f["ml" + i]),
-                  isApc: Boolean(apcLines[i]),
-                  unitCost: existingSale?.items[i]?.unitCost ?? product?.cost ?? 0,
-                };
-              });''',
+          sub(
+              r'''      const items = Array\.from\(\{ length: lines \}, \(_, i\) => \{\n        const typed = String\(f\["productName" \+ i\] \|\| ""\);\n        const product = x\.products\.find\(\n          \(p\) => .*? === typed,\n        \);\n        return \{\n          productId: product\?\.id \|\| Number\(f\["product" \+ i\]\),\n          ml: parseDecimal\(f\["ml" \+ i\]\),\n          isApc: Boolean\(apcLines\[i\]\),\n          unitCost: existingSale\?\.items\[i\]\?\.unitCost \?\? product\?\.cost \?\? 0,\n        \};\n      \}\);''',
               '''      const items = activeLineIndexes.map((i) => {
                 const typed = String(f["productName" + i] || "");
                 const product = x.products.find(
-                  (p) => `${p.brand} ${p.name}` === typed,
+                  (p) => p.brand + " " + p.name === typed,
                 );
                 return {
                   productId: product?.id || Number(f["product" + i]),
@@ -263,9 +234,7 @@ jobs:
           )
 
           rep(
-              '''        customerName: isMarketplace
-                  ? String(f.marketplaceCustomer || "").trim()
-                  : undefined,''',
+              '        customerName: isMarketplace\n          ? String(f.marketplaceCustomer || "").trim()\n          : undefined,',
               '''        customerName: isMarketplace
                   ? String(f.marketplaceCustomer || "").trim()
                   : newClient || matchedClient
@@ -374,14 +343,8 @@ jobs:
           rep(old_render, new_render, "per-line perfume removal")
 
           rep(
-              '''              items={Array.from({ length: lines }, (_, index) => ({
-                ml: saleVolumes[index] || 0,
-                isApc: Boolean(apcLines[index]),
-              }))}''',
-              '''              items={activeLineIndexes.map((index) => ({
-                ml: saleVolumes[index] || 0,
-                isApc: Boolean(apcLines[index]),
-              }))}''',
+              '              items={Array.from({ length: lines }, (_, index) => ({\n                ml: saleVolumes[index] || 0,\n                isApc: Boolean(apcLines[index]),\n              }))}',
+              '              items={activeLineIndexes.map((index) => ({\n                ml: saleVolumes[index] || 0,\n                isApc: Boolean(apcLines[index]),\n              }))}',
               "active supply lines",
           )
 
@@ -406,7 +369,7 @@ jobs:
             products: P[];
             value?: number;
           }) {''',
-              "product search display index",
+              "product search visible index",
           )
           rep(
               '      <span>Perfume {index + 1}</span>',
