@@ -2685,3 +2685,24 @@ input[type="number"]::-webkit-outer-spin-button {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Supplier type-aware history cards */
+.supplierHistoryStats.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.supplierHistoryStats.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .supplierHistoryStats.three,
+  .supplierHistoryStats.four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .supplierHistoryStats.three,
+  .supplierHistoryStats.four {
+    grid-template-columns: 1fr;
+  }
+}
