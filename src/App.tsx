@@ -421,8 +421,50 @@ function System({ session }: { session: Session }) {
         !isHistoricalSale(sale),
     ).length,
   };
-  const action =
-    page === "sales"
+  const receivableDueAlert = (() => {
+  const currentDate = today();
+  let dueToday = false;
+  let overdue = false;
+  for (const sale of data.sales) {
+    if (
+      sale.status === "cancelled" ||
+      isNoCost(sale) ||
+      isMarketplaceSale(sale) ||
+      sale.paid >= sale.total
+    )
+      continue;
+    if (sale.installments?.length) {
+      const scheduleTotal = sale.installments.reduce(
+        (sum, installment) =>
+          sum + Math.max(0, Number(installment.amount) || 0),
+        0,
+      );
+      const paidTowardSchedule = Math.max(
+        0,
+        sale.paid - Math.max(0, sale.total - scheduleTotal),
+      );
+      let accumulated = 0;
+      for (const installment of sale.installments) {
+        accumulated += Math.max(
+          0,
+          Number(installment.amount) || 0,
+        );
+        const settled =
+          Boolean(installment.paid) ||
+          accumulated <= paidTowardSchedule + 0.01;
+        if (settled || !installment.date) continue;
+        if (installment.date < currentDate) overdue = true;
+        else if (installment.date === currentDate) dueToday = true;
+      }
+    } else if (sale.dueDate) {
+      if (sale.dueDate < currentDate) overdue = true;
+      else if (sale.dueDate === currentDate) dueToday = true;
+    }
+  }
+  return overdue ? "overdue" : dueToday ? "today" : null;
+})();
+const action =
+  page === "sales"
       ? ["Nova venda", "sale"]
       : page === "purchases"
         ? ["Nova compra/despesa", "purchase"]
@@ -455,14 +497,33 @@ function System({ session }: { session: Session }) {
             >
               <Icon />
               {label}
-              {navAlerts[id] ? (
-                <span
-                  className="navAlert"
-                  aria-label={`${navAlerts[id]} pendente(s)`}
-                >
-                  {navAlerts[id]}
-                </span>
-              ) : null}
+              {navAlerts[id] || (id === "receivables" && receivableDueAlert) ? (
+      <span className="navAlertGroup">
+        {id === "receivables" && receivableDueAlert ? (
+          <span
+            className={"receivableDueAlert " + receivableDueAlert}
+            aria-label={
+              receivableDueAlert === "overdue"
+                ? "Há parcela atrasada"
+                : "Há parcela vencendo hoje"
+            }
+            title={
+              receivableDueAlert === "overdue"
+                ? "Há parcela atrasada"
+                : "Há parcela vencendo hoje"
+            }
+          />
+        ) : null}
+        {navAlerts[id] ? (
+          <span
+            className="navAlert"
+            aria-label={String(navAlerts[id]) + " pendente(s)"}
+          >
+            {navAlerts[id]}
+          </span>
+        ) : null}
+      </span>
+    ) : null}
             </button>
           ))}
         </nav>
@@ -3547,9 +3608,19 @@ function Form({
             : [...x.suppliers, supplier],
         };
       }
-      let clientId = isMarketplace ? 0 : Number(f.clientId),
-        clients = x.clients;
-      if (newClient && !isMarketplace) {
+      const typedClientName = isMarketplace
+      ? ""
+      : String(f.clientName || "").trim();
+    const matchedClient = isMarketplace
+      ? undefined
+      : x.clients.find(
+          (client) =>
+            client.name.trim().toLowerCase() ===
+            typedClientName.toLowerCase(),
+        );
+    let clientId = isMarketplace ? 0 : matchedClient?.id || 0,
+      clients = x.clients;
+    if (newClient && !isMarketplace) {
         clientId = Date.now();
         const address = String(f.newAddress || "");
         clients = [
@@ -3601,8 +3672,10 @@ function Form({
         date: String(f.date),
         clientId,
         customerName: isMarketplace
-          ? String(f.marketplaceCustomer || "").trim()
-          : undefined,
+        ? String(f.marketplaceCustomer || "").trim()
+        : newClient || matchedClient
+          ? undefined
+          : typedClientName || undefined,
         items,
         total: Number(f.total),
         paid: Number(f.paid),
@@ -3809,13 +3882,22 @@ function Form({
                     {clientLookupMessage ? <small className="cepStatus">{clientLookupMessage}</small> : null}
                   </>
                 ) : (
-                  <Select
-                    n="clientId"
-                    l="Cliente"
-                    value={existingSale?.clientId}
-                    o={d.clients.map((c) => [c.id, c.name])}
-                  />
-                )}
+        <label className="saleClientInput">
+          <span>Cliente</span>
+          <input
+            name="clientName"
+            list="sale-client-options"
+            defaultValue={existingSale ? saleCustomer(existingSale, d) : ""}
+            placeholder="Selecione ou digite o nome do cliente"
+            required
+          />
+          <datalist id="sale-client-options">
+            {d.clients.map((client) => (
+              <option key={client.id} value={client.name} />
+            ))}
+          </datalist>
+        </label>
+      )}
               </>
             )}{" "}
             {Array.from({ length: lines }, (_, i) => (
@@ -3860,14 +3942,30 @@ function Form({
                 </div>
               </div>
             ))}
-            <button
-              type="button"
-              className="add"
-              onClick={() => setLines((n) => n + 1)}
-            >
-              <Plus />
-              Adicionar outro perfume
-            </button>
+            <div className="saleItemActions">
+    <button
+      type="button"
+      className="add"
+      onClick={() => setLines((n) => n + 1)}
+    >
+      <Plus />
+      Adicionar outro perfume
+    </button>
+    {lines > 1 ? (
+      <button
+        type="button"
+        className="removeSaleItem"
+        onClick={() => {
+          setLines((n) => Math.max(1, n - 1));
+          setApcLines((current) => current.slice(0, -1));
+          setSaleVolumes((current) => current.slice(0, -1));
+        }}
+      >
+        <Trash2 />
+        Excluir perfume
+      </button>
+    ) : null}
+  </div>
             <SaleSupplyPicker
               items={Array.from({ length: lines }, (_, index) => ({
                 ml: saleVolumes[index] || 0,
