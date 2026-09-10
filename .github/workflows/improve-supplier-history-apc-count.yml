@@ -32,11 +32,9 @@ jobs:
           app = app_path.read_text(encoding="utf-8")
           css = css_path.read_text(encoding="utf-8")
 
-          old_counts = '''  const bottleCount = completedSales.reduce(
-            (sum, sale) => sum + sale.items.length,
-            0,
-          );'''
-          new_counts = '''  const bottleCount = completedSales.reduce(
+          app, count = re.subn(
+              r'''  const bottleCount = completedSales\.reduce\(\n\s*\(sum, sale\) => sum \+ sale\.items\.length,\n\s*0,\n\s*\);''',
+              '''  const bottleCount = completedSales.reduce(
             (sum, sale) =>
               sum + sale.items.filter((item) => !item.isApc).length,
             0,
@@ -45,20 +43,16 @@ jobs:
             (sum, sale) =>
               sum + sale.items.filter((item) => Boolean(item.isApc)).length,
             0,
-          );'''
-          if old_counts not in app:
+          );''',
+              app,
+              count=1,
+          )
+          if count != 1:
               raise SystemExit("Client bottle count block not found")
-          app = app.replace(old_counts, new_counts, 1)
 
-          old_stats = '''          <div>
-            <span>Frascos comprados</span>
-            <b>{bottleCount}</b>
-          </div>
-          <div>
-            <span>Pedidos realizados</span>
-            <b>{completedSales.length}</b>
-          </div>'''
-          new_stats = '''          <div>
+          app, count = re.subn(
+              r'''          <div>\n\s*<span>Frascos comprados</span>\n\s*<b>\{bottleCount\}</b>\n\s*</div>\n\s*<div>\n\s*<span>Pedidos realizados</span>\n\s*<b>\{completedSales\.length\}</b>\n\s*</div>''',
+              '''          <div>
             <span>Frascos comprados</span>
             <b>{bottleCount}</b>
           </div>
@@ -69,10 +63,12 @@ jobs:
           <div>
             <span>Pedidos realizados</span>
             <b>{completedSales.length}</b>
-          </div>'''
-          if old_stats not in app:
+          </div>''',
+              app,
+              count=1,
+          )
+          if count != 1:
               raise SystemExit("Client stats block not found")
-          app = app.replace(old_stats, new_stats, 1)
 
           supplier_pattern = r'''function SupplierHistory\(\{.*?\n\}\n\n(?=function PaymentBreakdown)'''
           supplier_replacement = r'''function SupplierHistory({
