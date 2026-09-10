@@ -18,13 +18,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Apply requested changes
         shell: bash
         run: |
           cat > /tmp/patch.py <<'PY'
           from pathlib import Path
+          import re
 
           app_path = Path("src/App.tsx")
           css_path = Path("src/index.css")
@@ -36,6 +37,12 @@ jobs:
               if old not in app:
                   raise SystemExit("Pattern not found: " + label)
               app = app.replace(old, new, 1)
+
+          def sub(pattern, new, label):
+              global app
+              app, count = re.subn(pattern, new, app, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit("Pattern not found: " + label)
 
           rep(
               '  const action =\n    page === "sales"',
@@ -86,20 +93,13 @@ jobs:
               "due alert calculation",
           )
 
-          rep(
-              '''              {navAlerts[id] ? (
-                <span
-                  className="navAlert"
-                  aria-label={`${navAlerts[id]} pendente(s)`}
-                >
-                  {navAlerts[id]}
-                </span>
-              ) : null}''',
+          sub(
+              r'''              \{navAlerts\[id\] \? \(\n.*?              \) : null\}''',
               '''              {navAlerts[id] || (id === "receivables" && receivableDueAlert) ? (
                 <span className="navAlertGroup">
                   {id === "receivables" && receivableDueAlert ? (
                     <span
-                      className={`receivableDueAlert ${receivableDueAlert}`}
+                      className={"receivableDueAlert " + receivableDueAlert}
                       aria-label={
                         receivableDueAlert === "overdue"
                           ? "Há parcela atrasada"
@@ -115,7 +115,7 @@ jobs:
                   {navAlerts[id] ? (
                     <span
                       className="navAlert"
-                      aria-label={`${navAlerts[id]} pendente(s)`}
+                      aria-label={String(navAlerts[id]) + " pendente(s)"}
                     >
                       {navAlerts[id]}
                     </span>
@@ -125,15 +125,8 @@ jobs:
               "nav alert markup",
           )
 
-          rep(
-              '''                ) : (
-                  <Select
-                    n="clientId"
-                    l="Cliente"
-                    value={existingSale?.clientId}
-                    o={d.clients.map((c) => [c.id, c.name])}
-                  />
-                )}''',
+          sub(
+              r'''                \) : \(\n                  <Select\n                    n="clientId"\n                    l="Cliente"\n                    value=\{existingSale\?\.clientId\}\n                    o=\{d\.clients\.map\(\(c\) => \[c\.id, c\.name\]\)\}\n                  />\n                \)\}''',
               '''                ) : (
                   <label className="saleClientInput">
                     <span>Cliente</span>
@@ -152,6 +145,73 @@ jobs:
                   </label>
                 )}''',
               "typed client field",
+          )
+
+          rep(
+              '''    [lines, setLines] = useState(existingSale?.items.length || 1),
+              [apcLines, setApcLines] = useState<boolean[]>(''',
+              '''    [lines, setLines] = useState(existingSale?.items.length || 1),
+              [removedLines, setRemovedLines] = useState<Set<number>>(new Set()),
+              [apcLines, setApcLines] = useState<boolean[]>(''',
+              "removed lines state",
+          )
+
+          rep(
+              '''  const [shippingPaidBy, setShippingPaidBy] = useState<"Cliente" | "DAF">(
+            existingSale?.shippingPaidBy === "daf" || Number(existingSale?.shippingCost || 0) > 0
+              ? "DAF"
+              : "Cliente",
+          );
+          function findClientByCpf''',
+              '''  const [shippingPaidBy, setShippingPaidBy] = useState<"Cliente" | "DAF">(
+            existingSale?.shippingPaidBy === "daf" || Number(existingSale?.shippingCost || 0) > 0
+              ? "DAF"
+              : "Cliente",
+          );
+          const activeLineIndexes = Array.from(
+            { length: lines },
+            (_, index) => index,
+          ).filter((index) => !removedLines.has(index));
+          function removeSaleLine(index: number) {
+            if (activeLineIndexes.length <= 1) return;
+            setRemovedLines((current) => {
+              const next = new Set(current);
+              next.add(index);
+              return next;
+            });
+          }
+          function findClientByCpf''',
+              "active lines",
+          )
+
+          rep(
+              '''      const invalid = Array.from({ length: lines }, (_, i) =>
+                String(f["productName" + i] || ""),
+              ).find(
+                (typed) => !d.products.some((p) => `${p.brand} ${p.name}` === typed),
+              );''',
+              '''      const invalid = activeLineIndexes
+                .map((i) => String(f["productName" + i] || ""))
+                .find(
+                  (typed) => !d.products.some((p) => `${p.brand} ${p.name}` === typed),
+                );''',
+              "active validation",
+          )
+
+          rep(
+              '''      const apcProducts = Array.from({ length: lines }, (_, i) => {
+                if (!apcLines[i]) return null;
+                const typed = String(f["productName" + i] || "");
+                return d.products.find((p) => `${p.brand} ${p.name}` === typed);
+              }).filter(Boolean) as P[];''',
+              '''      const apcProducts = activeLineIndexes
+                .map((i) => {
+                  if (!apcLines[i]) return null;
+                  const typed = String(f["productName" + i] || "");
+                  return d.products.find((p) => `${p.brand} ${p.name}` === typed);
+                })
+                .filter(Boolean) as P[];''',
+              "active apc validation",
           )
 
           rep(
@@ -175,6 +235,34 @@ jobs:
           )
 
           rep(
+              '''      const items = Array.from({ length: lines }, (_, i) => {
+                const typed = String(f["productName" + i] || "");
+                const product = x.products.find(
+                  (p) => `${p.brand} ${p.name}` === typed,
+                );
+                return {
+                  productId: product?.id || Number(f["product" + i]),
+                  ml: parseDecimal(f["ml" + i]),
+                  isApc: Boolean(apcLines[i]),
+                  unitCost: existingSale?.items[i]?.unitCost ?? product?.cost ?? 0,
+                };
+              });''',
+              '''      const items = activeLineIndexes.map((i) => {
+                const typed = String(f["productName" + i] || "");
+                const product = x.products.find(
+                  (p) => `${p.brand} ${p.name}` === typed,
+                );
+                return {
+                  productId: product?.id || Number(f["product" + i]),
+                  ml: parseDecimal(f["ml" + i]),
+                  isApc: Boolean(apcLines[i]),
+                  unitCost: existingSale?.items[i]?.unitCost ?? product?.cost ?? 0,
+                };
+              });''',
+              "active sale items",
+          )
+
+          rep(
               '''        customerName: isMarketplace
                   ? String(f.marketplaceCustomer || "").trim()
                   : undefined,''',
@@ -183,43 +271,147 @@ jobs:
                   : newClient || matchedClient
                     ? undefined
                     : typedClientName || undefined,''',
-              "manual direct customer name",
+              "manual direct customer",
+          )
+
+          old_render = '''            {Array.from({ length: lines }, (_, i) => (
+              <div className="row item" key={i}>
+                <ProductSearch
+                  index={i}
+                  products={d.products.filter(
+                    (p) =>
+                      p.stock > 0 ||
+                      existingSale?.items.some((x) => x.productId === p.id),
+                  )}
+                  value={existingSale?.items[i]?.productId}
+                />
+                <div className="volumeApc">
+                  <Field
+                    n={"ml" + i}
+                    l="Volume (ml)"
+                    decimalOnly
+                    v={existingSale?.items[i]?.ml}
+                    onChange={(event) =>
+                      setSaleVolumes((current) => {
+                        const next = [...current];
+                        next[i] = parseDecimal(event.target.value);
+                        return next;
+                      })
+                    }
+                  />
+                  <button
+                    type="button"
+                    className={apcLines[i] ? "apcButton active" : "apcButton"}
+                    aria-pressed={Boolean(apcLines[i])}
+                    onClick={() =>
+                      setApcLines((current) => {
+                        const next = [...current];
+                        next[i] = !next[i];
+                        return next;
+                      })
+                    }
+                  >
+                    APC
+                  </button>
+                </div>
+              </div>
+            ))}'''
+          new_render = '''            {activeLineIndexes.map((i, visibleIndex) => (
+              <div className="saleItemGroup" key={i}>
+                <div className="row item">
+                  <ProductSearch
+                    index={i}
+                    labelIndex={visibleIndex}
+                    products={d.products.filter(
+                      (p) =>
+                        p.stock > 0 ||
+                        existingSale?.items.some((x) => x.productId === p.id),
+                    )}
+                    value={existingSale?.items[i]?.productId}
+                  />
+                  <div className="volumeApc">
+                    <Field
+                      n={"ml" + i}
+                      l="Volume (ml)"
+                      decimalOnly
+                      v={existingSale?.items[i]?.ml}
+                      onChange={(event) =>
+                        setSaleVolumes((current) => {
+                          const next = [...current];
+                          next[i] = parseDecimal(event.target.value);
+                          return next;
+                        })
+                      }
+                    />
+                    <button
+                      type="button"
+                      className={apcLines[i] ? "apcButton active" : "apcButton"}
+                      aria-pressed={Boolean(apcLines[i])}
+                      onClick={() =>
+                        setApcLines((current) => {
+                          const next = [...current];
+                          next[i] = !next[i];
+                          return next;
+                        })
+                      }
+                    >
+                      APC
+                    </button>
+                  </div>
+                </div>
+                {activeLineIndexes.length > 1 ? (
+                  <button
+                    type="button"
+                    className="removeSaleItem"
+                    onClick={() => removeSaleLine(i)}
+                  >
+                    <Trash2 />
+                    Excluir perfume
+                  </button>
+                ) : null}
+              </div>
+            ))}'''
+          rep(old_render, new_render, "per-line perfume removal")
+
+          rep(
+              '''              items={Array.from({ length: lines }, (_, index) => ({
+                ml: saleVolumes[index] || 0,
+                isApc: Boolean(apcLines[index]),
+              }))}''',
+              '''              items={activeLineIndexes.map((index) => ({
+                ml: saleVolumes[index] || 0,
+                isApc: Boolean(apcLines[index]),
+              }))}''',
+              "active supply lines",
           )
 
           rep(
-              '''            <button
-              type="button"
-              className="add"
-              onClick={() => setLines((n) => n + 1)}
-            >
-              <Plus />
-              Adicionar outro perfume
-            </button>''',
-              '''            <div className="saleItemActions">
-              <button
-                type="button"
-                className="add"
-                onClick={() => setLines((n) => n + 1)}
-              >
-                <Plus />
-                Adicionar outro perfume
-              </button>
-              {lines > 1 ? (
-                <button
-                  type="button"
-                  className="removeSaleItem"
-                  onClick={() => {
-                    setLines((n) => Math.max(1, n - 1));
-                    setApcLines((current) => current.slice(0, -1));
-                    setSaleVolumes((current) => current.slice(0, -1));
-                  }}
-                >
-                  <Trash2 />
-                  Excluir último perfume
-                </button>
-              ) : null}
-            </div>''',
-              "perfume remove button",
+              '''function ProductSearch({
+            index,
+            products,
+            value,
+          }: {
+            index: number;
+            products: P[];
+            value?: number;
+          }) {''',
+              '''function ProductSearch({
+            index,
+            labelIndex,
+            products,
+            value,
+          }: {
+            index: number;
+            labelIndex?: number;
+            products: P[];
+            value?: number;
+          }) {''',
+              "product search display index",
+          )
+          rep(
+              '      <span>Perfume {index + 1}</span>',
+              '      <span>Perfume {(labelIndex ?? index) + 1}</span>',
+              "product search label",
           )
 
           css += '''
@@ -228,14 +420,12 @@ jobs:
           .saleClientInput input {
             width: 100%;
           }
-          .saleItemActions {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            flex-wrap: wrap;
+          .saleItemGroup {
+            display: grid;
+            gap: 7px;
           }
           .removeSaleItem {
+            justify-self: end;
             border: 0;
             background: transparent;
             color: #d9575d;
@@ -243,7 +433,7 @@ jobs:
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 6px 4px;
+            padding: 2px 4px 7px;
           }
           .removeSaleItem svg {
             width: 14px;
