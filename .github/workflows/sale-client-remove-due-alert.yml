@@ -175,15 +175,8 @@ jobs:
               "manual direct customer",
           )
 
-          rep(
-              '''            <button
-              type="button"
-              className="add"
-              onClick={() => setLines((n) => n + 1)}
-            >
-              <Plus />
-              Adicionar outro perfume
-            </button>''',
+          sub(
+              r'''            <button\s*\n\s*type="button"\n\s*className="add"\n\s*onClick=\{\(\) => setLines\(\(n\) => n \+ 1\)\}\n\s*>\n\s*<Plus />\n\s*Adicionar outro perfume\n\s*</button>''',
               '''            <div className="saleItemActions">
               <button
                 type="button"
