@@ -141,19 +141,8 @@ jobs:
           )
 
           rep(
-              '''    set((state: D) => ({
-              ...state,
-              suppliers: state.suppliers.filter((_, current) => current !== index),
-            }));''',
-              '''    set((state: D) => ({
-              ...state,
-              suppliers: state.suppliers.filter((_, current) => current !== index),
-              supplierTypes: Object.fromEntries(
-                Object.entries(state.supplierTypes || {}).filter(
-                  ([supplierName]) => supplierName !== name,
-                ),
-              ) as Record<string, SupplierType>,
-            }));''',
+              "    set((state: D) => ({\n      ...state,\n      suppliers: state.suppliers.filter((_, current) => current !== index),\n    }));",
+              "    set((state: D) => ({\n      ...state,\n      suppliers: state.suppliers.filter((_, current) => current !== index),\n      supplierTypes: Object.fromEntries(\n        Object.entries(state.supplierTypes || {}).filter(\n          ([supplierName]) => supplierName !== name,\n        ),\n      ) as Record<string, SupplierType>,\n    }));",
               "remove supplier type",
           )
 
