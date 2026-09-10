@@ -2451,56 +2451,195 @@ function SupplierHistory({
   d: D;
   close: () => void;
 }) {
-  const purchases = d.purchases.filter((purchase) => purchase.supplier === name);
-  const total = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
+  const [query, setQuery] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [month, setMonth] = useState("");
+  const [purchaseDay, setPurchaseDay] = useState("");
+  const purchases = d.purchases
+    .filter((purchase) => purchase.supplier === name)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  const supplierSince = purchases.length
+    ? purchases.reduce(
+        (earliest, purchase) =>
+          !earliest || purchase.date < earliest
+            ? purchase.date
+            : earliest,
+        "",
+      )
+    : "";
+  const total = purchases.reduce(
+    (sum, purchase) => sum + purchase.total,
+    0,
+  );
+  const totalUnits = purchases.reduce(
+    (sum, purchase) => sum + Math.max(0, Number(purchase.qty) || 0),
+    0,
+  );
+  const filteredPurchases = purchases.filter((purchase) => {
+    const productText = (
+      purchase.description +
+      " " +
+      purchase.type
+    ).toLowerCase();
+    return (
+      productText.includes(query.trim().toLowerCase()) &&
+      (!month || purchase.date.startsWith(month)) &&
+      (!purchaseDay || purchase.date === purchaseDay)
+    );
+  });
   return (
     <div className="overlay">
-      <div className="history supplierHistory">
-        <header>
+      <div className="history supplierHistory supplierHistoryImproved">
+        <header className="supplierHistoryHeader">
           <div>
             <small>HISTÓRICO DE COMPRAS</small>
-            <h2>{name}</h2>
+            <div className="supplierHistoryTitle">
+              <h2>{name}</h2>
+              <span>
+                Fornecedor desde{" "}
+                {supplierSince
+                  ? dateBR(supplierSince)
+                  : "data não informada"}
+              </span>
+            </div>
           </div>
-          <button onClick={close}>
+          <button onClick={close} aria-label="Fechar histórico">
             <X />
           </button>
         </header>
-        <Cards
-          v={[
-            [String(purchases.length), "Compras registradas"],
-            [brl(total), "Total comprado"],
-          ]}
-        />
-        <div className="supplierHistoryTable">
-          <table>
-            <thead>
-              <tr>
-                <th>Data</th>
-                <th>Tipo</th>
-                <th>Descrição</th>
-                <th>Quantidade</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {purchases.map((purchase) => (
-                <tr key={purchase.id}>
-                  <td>{dateBR(purchase.date)}</td>
-                  <td>{purchase.type}</td>
-                  <td>{purchase.description}</td>
-                  <td>
-                    {purchase.qty}
-                    {purchase.mlPerBottle ? ` × ${purchase.mlPerBottle} ml` : ""}
-                  </td>
-                  <td>{brl(purchase.total)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+
+        <div className="supplierHistoryStats">
+          <div>
+            <span>Compras registradas</span>
+            <b>{purchases.length}</b>
+          </div>
+          <div>
+            <span>Total comprado</span>
+            <b>{brl(total)}</b>
+          </div>
+          <div>
+            <span>Unidades compradas</span>
+            <b>{totalUnits}</b>
+          </div>
+          <div>
+            <span>Última compra</span>
+            <b>
+              {purchases[0]
+                ? dateBR(purchases[0].date)
+                : "Sem compras"}
+            </b>
+          </div>
         </div>
-        {!purchases.length ? (
-          <p className="empty">Nenhuma compra registrada com este fornecedor.</p>
-        ) : null}
+
+        <div className="supplierHistoryContent">
+          <div className="supplierHistoryContentHead">
+            <div>
+              <h3>Compras com este fornecedor</h3>
+              <p>
+                {month || purchaseDay
+                  ? "Exibindo o período selecionado."
+                  : "Histórico completo do fornecedor (lifetime)."}
+              </p>
+            </div>
+          </div>
+
+          <div className="supplierHistoryToolbar">
+            <label className="supplierHistorySearch">
+              <Search />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Pesquisar por produto comprado"
+                aria-label="Pesquisar produto no histórico do fornecedor"
+              />
+            </label>
+            <button
+              type="button"
+              className={
+                showFilters || month || purchaseDay
+                  ? "historyFilterButton active"
+                  : "historyFilterButton"
+              }
+              onClick={() => setShowFilters((visible) => !visible)}
+            >
+              <SlidersHorizontal />
+              Filtrar por data
+            </button>
+          </div>
+
+          {showFilters ? (
+            <div className="supplierHistoryFilters">
+              <label>
+                <span>Mês</span>
+                <input
+                  type="month"
+                  value={month}
+                  onChange={(event) => {
+                    setMonth(event.target.value);
+                    if (event.target.value) setPurchaseDay("");
+                  }}
+                />
+              </label>
+              <label>
+                <span>Data específica</span>
+                <input
+                  type="date"
+                  value={purchaseDay}
+                  onChange={(event) => {
+                    setPurchaseDay(event.target.value);
+                    if (event.target.value) setMonth("");
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setMonth("");
+                  setPurchaseDay("");
+                }}
+              >
+                Limpar filtro
+              </button>
+            </div>
+          ) : null}
+
+          <div className="supplierHistoryTable">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Tipo</th>
+                  <th>Produto</th>
+                  <th>Quantidade</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPurchases.map((purchase) => (
+                  <tr key={purchase.id}>
+                    <td>{dateBR(purchase.date)}</td>
+                    <td>{purchase.type}</td>
+                    <td>{purchase.description}</td>
+                    <td>
+                      {purchase.qty}
+                      {purchase.mlPerBottle
+                        ? " × " + purchase.mlPerBottle + " ml"
+                        : ""}
+                    </td>
+                    <td>
+                      <b>{brl(purchase.total)}</b>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!filteredPurchases.length ? (
+              <p className="empty">
+                Nenhuma compra encontrada com estes filtros.
+              </p>
+            ) : null}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -4780,9 +4919,15 @@ function History({ id, d, close }: { id: number; d: D; close: () => void }) {
     0,
   );
   const bottleCount = completedSales.reduce(
-    (sum, sale) => sum + sale.items.length,
-    0,
-  );
+  (sum, sale) =>
+    sum + sale.items.filter((item) => !item.isApc).length,
+  0,
+);
+const apcCount = completedSales.reduce(
+  (sum, sale) =>
+    sum + sale.items.filter((item) => Boolean(item.isApc)).length,
+  0,
+);
   const lastPurchase = completedSales[0];
   const lastPurchaseDays = lastPurchase
     ? Math.max(
@@ -4826,13 +4971,17 @@ function History({ id, d, close }: { id: number; d: D; close: () => void }) {
             <b>{brl(totalPurchased)}</b>
           </div>
           <div>
-            <span>Frascos comprados</span>
-            <b>{bottleCount}</b>
-          </div>
-          <div>
-            <span>Pedidos realizados</span>
-            <b>{completedSales.length}</b>
-          </div>
+  <span>Frascos comprados</span>
+  <b>{bottleCount}</b>
+</div>
+<div>
+  <span>APC's comprados</span>
+  <b>{apcCount}</b>
+</div>
+<div>
+  <span>Pedidos realizados</span>
+  <b>{completedSales.length}</b>
+</div>
           <div>
             <span>Última compra em</span>
             <b>
