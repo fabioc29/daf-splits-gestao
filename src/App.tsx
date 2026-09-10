@@ -126,6 +126,17 @@ type B = {
   mlPerBottle?: number;
   attachCost?: boolean;
 };
+type SupplierType =
+  | "Fornecedor de perfumes"
+  | "Fornecedor de suprimentos/insumos"
+  | "Fornecedor geral"
+  | "Outros";
+const SUPPLIER_TYPES: SupplierType[] = [
+  "Fornecedor de perfumes",
+  "Fornecedor de suprimentos/insumos",
+  "Fornecedor geral",
+  "Outros",
+];
 type D = {
   products: P[];
   supplies: S[];
@@ -133,6 +144,8 @@ type D = {
   sales: V[];
   purchases: B[];
   suppliers: string[];
+  supplierTypes: Record<string, SupplierType>;
+  supplierDates: Record<string, string>;
   brands: string[];
   orderSequenceVersion?: number;
   supplyInventoryVersion?: number;
@@ -147,6 +160,8 @@ const blank: D = {
   sales: [],
   purchases: [],
   suppliers: [],
+  supplierTypes: {},
+  supplierDates: {},
   brands: [],
   marketplacePayoutDays: { "TikTok Shop": 9, Shopee: 7 },
 };
@@ -714,6 +729,54 @@ function normalizeData(stored: any): D {
       if (!supplierByKey.has(key)) supplierByKey.set(key, name);
     });
   const suppliers = [...supplierByKey.values()];
+  const storedSupplierTypes = merged.supplierTypes || {};
+  const storedSupplierDates = merged.supplierDates || {};
+  const storedSupplierTypeByKey = new Map<string, SupplierType>(
+    Object.entries(storedSupplierTypes).map(
+      ([name, type]) =>
+        [
+          supplierKey(name),
+          SUPPLIER_TYPES.includes(type as SupplierType)
+            ? (type as SupplierType)
+            : "Outros",
+        ] as [string, SupplierType],
+    ),
+  );
+  const storedSupplierDateByKey = new Map<string, string>(
+    Object.entries(storedSupplierDates).map(
+      ([name, date]) => [supplierKey(name), String(date || "")] as [string, string],
+    ),
+  );
+  const supplierTypes = Object.fromEntries(
+    suppliers.map((name) => {
+      const key = supplierKey(name);
+      const forcedType: SupplierType | undefined =
+        key === supplierKey("The King of Parfums") ||
+        key === supplierKey("TW Perfumes")
+          ? "Fornecedor de perfumes"
+          : key === supplierKey("Mercado Livre")
+            ? "Fornecedor geral"
+            : undefined;
+      return [
+        name,
+        forcedType || storedSupplierTypeByKey.get(key) || "Outros",
+      ];
+    }),
+  ) as Record<string, SupplierType>;
+  const supplierDates = Object.fromEntries(
+    suppliers.map((name) => {
+      const key = supplierKey(name);
+      const purchaseDates = (merged.purchases || [])
+        .filter((purchase: B) => supplierKey(purchase.supplier) === key)
+        .map((purchase: B) => purchase.date)
+        .filter(Boolean)
+        .sort();
+      return [
+        name,
+        storedSupplierDateByKey.get(key) || purchaseDates[0] || today(),
+      ];
+    }),
+  ) as Record<string, string>;
   const purchases = (merged.purchases || []).map((purchase: B) => {
     const cleaned = cleanSupplierName(purchase.supplier);
     return {
@@ -809,6 +872,8 @@ function normalizeData(stored: any): D {
     purchases,
     supplies: normalizedSupplies,
     suppliers,
+    supplierTypes,
+    supplierDates,
     brands,
     sales: normalizedSales,
   };
@@ -2386,6 +2451,16 @@ function Suppliers({
     set((state: D) => ({
       ...state,
       suppliers: state.suppliers.filter((_, current) => current !== index),
+      supplierTypes: Object.fromEntries(
+        Object.entries(state.supplierTypes || {}).filter(
+          ([supplierName]) => supplierName !== name,
+        ),
+      ) as Record<string, SupplierType>,
+      supplierDates: Object.fromEntries(
+        Object.entries(state.supplierDates || {}).filter(
+          ([supplierName]) => supplierName !== name,
+        ),
+      ) as Record<string, string>,
     }));
     notify("Fornecedor excluído.");
   }
@@ -2458,7 +2533,11 @@ function SupplierHistory({
   const purchases = d.purchases
     .filter((purchase) => purchase.supplier === name)
     .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
-  const supplierSince = purchases.length
+  const supplierType = d.supplierTypes?.[name] || "Outros";
+  const isPerfumeSupplier = supplierType === "Fornecedor de perfumes";
+  const supplierSince =
+    d.supplierDates?.[name] ||
+    (purchases.length
     ? purchases.reduce(
         (earliest, purchase) =>
           !earliest || purchase.date < earliest
@@ -2466,15 +2545,17 @@ function SupplierHistory({
             : earliest,
         "",
       )
-    : "";
+    : "");
   const total = purchases.reduce(
     (sum, purchase) => sum + purchase.total,
     0,
   );
-  const totalUnits = purchases.reduce(
-    (sum, purchase) => sum + Math.max(0, Number(purchase.qty) || 0),
-    0,
-  );
+  const totalUnits = purchases
+    .filter((purchase) => purchase.type === "Perfume")
+    .reduce(
+      (sum, purchase) => sum + Math.max(0, Number(purchase.qty) || 0),
+      0,
+    );
   const filteredPurchases = purchases.filter((purchase) => {
     const productText = (
       purchase.description +
@@ -2508,7 +2589,12 @@ function SupplierHistory({
           </button>
         </header>
 
-        <div className="supplierHistoryStats">
+        <div
+          className={
+            "supplierHistoryStats " +
+            (isPerfumeSupplier ? "four" : "three")
+          }
+        >
           <div>
             <span>Compras registradas</span>
             <b>{purchases.length}</b>
@@ -2517,16 +2603,16 @@ function SupplierHistory({
             <span>Total comprado</span>
             <b>{brl(total)}</b>
           </div>
-          <div>
-            <span>Unidades compradas</span>
-            <b>{totalUnits}</b>
-          </div>
+          {isPerfumeSupplier ? (
+            <div>
+              <span>Unidades compradas</span>
+              <b>{totalUnits}</b>
+            </div>
+          ) : null}
           <div>
             <span>Última compra</span>
             <b>
-              {purchases[0]
-                ? dateBR(purchases[0].date)
-                : "Sem compras"}
+              {purchases[0] ? dateBR(purchases[0].date) : "Sem compras"}
             </b>
           </div>
         </div>
@@ -3361,6 +3447,10 @@ function Form({
       type === "supplier" && modal!.id !== undefined
         ? d.suppliers[modal!.id]
         : undefined;
+  const existingSupplierType: SupplierType =
+    existingSupplier !== undefined
+      ? d.supplierTypes?.[existingSupplier] || "Outros"
+      : "Outros";
   const isOldSale = type === "oldSale";
   const isSale = type === "sale" || type === "marketplace" || isOldSale;
   const isMarketplace =
@@ -3562,12 +3652,32 @@ function Form({
       }
       if (type === "supplier") {
         const supplierName = String(f.name).trim();
+        const supplierType = SUPPLIER_TYPES.includes(
+          String(f.supplierType) as SupplierType,
+        )
+          ? (String(f.supplierType) as SupplierType)
+          : "Outros";
         if (existingSupplier !== undefined && modal!.id !== undefined) {
+          const supplierTypes = Object.fromEntries(
+            Object.entries(x.supplierTypes || {}).filter(
+              ([name]) => name !== existingSupplier,
+            ),
+          ) as Record<string, SupplierType>;
+          const supplierDates = Object.fromEntries(
+            Object.entries(x.supplierDates || {}).filter(
+              ([name]) => name !== existingSupplier,
+            ),
+          ) as Record<string, string>;
+          supplierTypes[supplierName] = supplierType;
+          supplierDates[supplierName] =
+            x.supplierDates?.[existingSupplier] || today();
           return {
             ...x,
             suppliers: x.suppliers.map((name, index) =>
               index === modal!.id ? supplierName : name,
             ),
+            supplierTypes,
+            supplierDates,
             purchases: x.purchases.map((purchase) =>
               purchase.supplier === existingSupplier
                 ? { ...purchase, supplier: supplierName }
@@ -3575,7 +3685,18 @@ function Form({
             ),
           };
         }
-        return { ...x, suppliers: [...x.suppliers, supplierName] };
+        return {
+          ...x,
+          suppliers: [...x.suppliers, supplierName],
+          supplierTypes: {
+            ...(x.supplierTypes || {}),
+            [supplierName]: supplierType,
+          },
+          supplierDates: {
+            ...(x.supplierDates || {}),
+            [supplierName]: today(),
+          },
+        };
       }
       if (isOldSale) {
         let clientId = Number(f.clientId);
@@ -3734,17 +3855,37 @@ function Form({
                 },
               ];
         }
+        const supplierAlreadyExists = x.suppliers.some(
+          (name) => name.toLowerCase() === supplier.toLowerCase(),
+        );
+        const newSupplierType = newSupplier
+          ? SUPPLIER_TYPES.includes(String(f.newSupplierType) as SupplierType)
+            ? (String(f.newSupplierType) as SupplierType)
+            : "Outros"
+          : undefined;
         return {
           ...x,
           products,
           supplies,
           brands,
           purchases: [purchase, ...x.purchases],
-          suppliers: x.suppliers.some(
-            (name) => name.toLowerCase() === supplier.toLowerCase(),
-          )
+          suppliers: supplierAlreadyExists
             ? x.suppliers
             : [...x.suppliers, supplier],
+          supplierTypes:
+            newSupplier && !supplierAlreadyExists
+              ? {
+                  ...(x.supplierTypes || {}),
+                  [supplier]: newSupplierType || "Outros",
+                }
+              : x.supplierTypes,
+          supplierDates:
+            newSupplier && !supplierAlreadyExists
+              ? {
+                  ...(x.supplierDates || {}),
+                  [supplier]: String(f.date || today()),
+                }
+              : x.supplierDates,
         };
       }
       const typedClientName = isMarketplace
@@ -4291,7 +4432,15 @@ function Form({
               Cadastrar fornecedor novo
             </label>
             {newSupplier ? (
-              <Field n="newSupplier" l="Novo fornecedor" />
+              <>
+                <Field n="newSupplier" l="Novo fornecedor" />
+                <Choices
+                  name="newSupplierType"
+                  label="Tipo de fornecedor"
+                  a={SUPPLIER_TYPES}
+                  v="Outros"
+                />
+              </>
             ) : (
               <Select
                 n="supplier"
@@ -4555,11 +4704,19 @@ function Form({
           </>
         ) : null}
         {type === "supplier" ? (
-          <Field
-            n="name"
-            l="Nome do fornecedor"
-            v={existingSupplier || ""}
-          />
+          <>
+            <Field
+              n="name"
+              l="Nome do fornecedor"
+              v={existingSupplier || ""}
+            />
+            <Choices
+              name="supplierType"
+              label="Tipo de fornecedor"
+              a={SUPPLIER_TYPES}
+              v={existingSupplierType}
+            />
+          </>
         ) : null}
         <footer>
           <button type="button" onClick={close}>
@@ -4971,17 +5128,17 @@ const apcCount = completedSales.reduce(
             <b>{brl(totalPurchased)}</b>
           </div>
           <div>
-  <span>Frascos comprados</span>
-  <b>{bottleCount}</b>
-</div>
-<div>
-  <span>APC's comprados</span>
-  <b>{apcCount}</b>
-</div>
-<div>
-  <span>Pedidos realizados</span>
-  <b>{completedSales.length}</b>
-</div>
+            <span>Pedidos realizados</span>
+            <b>{completedSales.length}</b>
+          </div>
+          <div>
+            <span>Frascos comprados</span>
+            <b>{bottleCount}</b>
+          </div>
+          <div>
+            <span>APC's comprados</span>
+            <b>{apcCount}</b>
+          </div>
           <div>
             <span>Última compra em</span>
             <b>
