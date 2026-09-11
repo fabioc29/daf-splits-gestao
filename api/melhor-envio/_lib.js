@@ -137,13 +137,54 @@ function unseal(value, config) {
 }
 
 export function createState(res) {
-  const state = crypto.randomBytes(24).toString("base64url");
+  const config = getConfig();
+  if (!config.configured) {
+    const error = new Error("Integração do Melhor Envio ainda não configurada.");
+    error.status = 503;
+    error.details = { missing: config.missing };
+    throw error;
+  }
+  const issuedAt = Date.now().toString(36);
+  const nonce = crypto.randomBytes(24).toString("base64url");
+  const payload = issuedAt + "." + nonce;
+  const signature = crypto
+    .createHmac("sha256", keyFor(config))
+    .update(payload, "utf8")
+    .digest("base64url");
+  const state = payload + "." + signature;
+
+  // O cookie continua sendo gravado como camada adicional, mas a validação
+  // principal é criptográfica. Isso permite que o callback estático funcione
+  // mesmo quando o OAuth é iniciado por um domínio de preview da Vercel.
   setCookie(res, STATE_COOKIE, state, { maxAge: 600 });
   return state;
 }
 
-export function readState(req) {
-  return parseCookies(req)[STATE_COOKIE] || "";
+export function validateState(returnedState) {
+  const config = getConfig();
+  if (!config.configured || !returnedState) return false;
+  try {
+    const [issuedAtRaw, nonce, signature] = String(returnedState).split(".");
+    if (!issuedAtRaw || !nonce || !signature) return false;
+
+    const issuedAt = parseInt(issuedAtRaw, 36);
+    if (!Number.isFinite(issuedAt)) return false;
+    const age = Date.now() - issuedAt;
+    if (age < -60000 || age > 10 * 60 * 1000) return false;
+
+    const payload = issuedAtRaw + "." + nonce;
+    const expected = crypto
+      .createHmac("sha256", keyFor(config))
+      .update(payload, "utf8")
+      .digest();
+    const received = Buffer.from(signature, "base64url");
+    return (
+      received.length === expected.length &&
+      crypto.timingSafeEqual(received, expected)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function readSession(req) {
