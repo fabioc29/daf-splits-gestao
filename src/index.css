@@ -3056,3 +3056,121 @@ input[type="number"]::-webkit-outer-spin-button {
     display: grid;
   }
 }
+
+
+/* Stock availability report */
+.stockReportHeaderButton {
+  border-color: var(--gold);
+  color: #e7c15c;
+}
+.stockReportDialog {
+  width: min(860px, 100%);
+}
+.stockReportDialog header small {
+  color: #b98412;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+.stockReportTableWrap {
+  max-height: min(60vh, 560px);
+  overflow: auto;
+  border: 1px solid #d8dde5;
+  border-radius: 12px;
+  background: white;
+}
+.stockReportTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+.stockReportTable th,
+.stockReportTable td {
+  padding: 11px 13px;
+  border-bottom: 1px solid #e3e7ec;
+  text-align: left;
+  color: #172233;
+}
+.stockReportTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f4f1e9;
+  color: #718096;
+  font-size: 10px;
+}
+.stockReportTable td {
+  font-size: 12px;
+}
+.reportApcYes {
+  color: #198f68;
+}
+.reportApcNo {
+  color: #c34c53;
+}
+.stockReportSummary {
+  border-radius: 10px;
+  background: #eee8d9;
+  color: #596477;
+  padding: 12px 14px;
+  font-size: 12px;
+}
+.stockReportSummary b {
+  color: #172233;
+  font-size: 16px;
+}
+.stockReportFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.stockReportFooter > button:not(.primary) {
+  border: 1px solid #cfd5dd;
+  border-radius: 9px;
+  background: white;
+  color: #172233;
+  padding: 10px 13px;
+  font-weight: 800;
+}
+
+/* Purchases month navigation follows Sales */
+.purchaseMonthFilters {
+  display: grid;
+  grid-template-columns: minmax(220px, 360px) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #111a28;
+}
+.purchaseMonthFilters label > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.purchaseMonthFilters select {
+  width: 100%;
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #0c1421;
+  color: var(--text);
+  padding: 0 12px;
+}
+.purchaseMonthFilters > button {
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  padding: 0 14px;
+  font-weight: 800;
+}
+@media (max-width: 720px) {
+  .purchaseMonthFilters {
+    grid-template-columns: 1fr;
+  }
+}
