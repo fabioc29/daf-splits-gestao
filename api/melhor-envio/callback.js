@@ -1,39 +1,61 @@
-export default function handler(req, res) {
-  const code = typeof req.query?.code === "string" ? req.query.code : "";
-  const error = typeof req.query?.error === "string" ? req.query.error : "";
+import {
+  clearCookie,
+  getConfig,
+  readState,
+  requestToken,
+  saveSession,
+  sendError,
+  STATE_COOKIE,
+} from "./_lib.js";
 
-  res.setHeader("Cache-Control", "no-store");
+export default async function handler(req, res) {
+  try {
+    const config = getConfig();
+    if (!config.configured) {
+      const error = new Error("As chaves do Melhor Envio não estão configuradas.");
+      error.status = 503;
+      error.details = { missing: config.missing };
+      throw error;
+    }
 
-  if (error) {
-    res.status(400).send(`
-      <!doctype html>
-      <html lang="pt-BR">
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width,initial-scale=1" />
-          <title>DAF Splits · Melhor Envio</title>
-        </head>
-        <body style="font-family:Arial,sans-serif;background:#0b1421;color:#fff;padding:40px">
-          <h1>Não foi possível autorizar o Melhor Envio</h1>
-          <p>Volte ao sistema DAF Splits e tente novamente.</p>
-        </body>
-      </html>
-    `);
-    return;
+    const errorParam =
+      typeof req.query?.error === "string" ? req.query.error : "";
+    if (errorParam) {
+      res.redirect(
+        302,
+        "/?melhor_envio=error&message=" +
+          encodeURIComponent(errorParam),
+      );
+      return;
+    }
+
+    const code = typeof req.query?.code === "string" ? req.query.code : "";
+    const state = typeof req.query?.state === "string" ? req.query.state : "";
+    const expectedState = readState(req);
+
+    if (!code) {
+      const error = new Error("Código OAuth não recebido pelo Melhor Envio.");
+      error.status = 400;
+      throw error;
+    }
+    if (!state || !expectedState || state !== expectedState) {
+      const error = new Error(
+        "Não foi possível validar o retorno de autorização do Melhor Envio.",
+      );
+      error.status = 400;
+      throw error;
+    }
+
+    const tokenData = await requestToken({
+      grant_type: "authorization_code",
+      redirect_uri: config.redirectUri,
+      code,
+    });
+    saveSession(res, tokenData);
+    clearCookie(res, STATE_COOKIE);
+    res.redirect(302, "/?melhor_envio=connected");
+  } catch (error) {
+    if (res.headersSent) return;
+    sendError(res, error);
   }
-
-  res.status(200).send(`
-    <!doctype html>
-    <html lang="pt-BR">
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>DAF Splits · Melhor Envio</title>
-      </head>
-      <body style="font-family:Arial,sans-serif;background:#0b1421;color:#fff;padding:40px">
-        <h1>Callback do Melhor Envio configurado</h1>
-        <p>${code ? "Autorização recebida. A integração será finalizada dentro do sistema DAF Splits." : "Esta URL está pronta para receber o redirecionamento OAuth do Melhor Envio."}</p>
-      </body>
-    </html>
-  `);
 }
