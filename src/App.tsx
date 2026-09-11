@@ -115,6 +115,15 @@ type V = {
     | "Shopee";
   accumulatingDecants?: boolean;
   preparationStatus?: "preparing" | "accumulating" | "waiting";
+  melhorEnvio?: {
+    orderId: string;
+    printUrl?: string;
+    tracking?: string;
+    serviceId?: number;
+    serviceName?: string;
+    price?: number;
+    createdAt?: string;
+  };
   historical?: boolean;
   description?: string;
 };
@@ -1863,7 +1872,69 @@ function Shipping({
   set: any;
   notify: (s: string) => void;
 }) {
+  type MeStatus = {
+    loading: boolean;
+    configured: boolean;
+    connected: boolean;
+    environment?: string;
+    user?: { name?: string; email?: string };
+    reason?: string;
+  };
+  type MeQuote = {
+    id: number;
+    name: string;
+    company: string;
+    price: number;
+    deliveryTime: number;
+  };
+  type Sender = {
+    name: string;
+    email: string;
+    phone: string;
+    document: string;
+    postal_code: string;
+    address: string;
+    number: string;
+    complement: string;
+    district: string;
+    city: string;
+    state_abbr: string;
+  };
+
   const [tab, setTab] = useState("pending");
+  const [addressIndex, setAddressIndex] = useState<Record<number, number>>({});
+  const [meStatus, setMeStatus] = useState<MeStatus>({
+    loading: true,
+    configured: false,
+    connected: false,
+  });
+  const [labelSale, setLabelSale] = useState<V | null>(null);
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [quotes, setQuotes] = useState<MeQuote[]>([]);
+  const [selectedService, setSelectedService] = useState<number | null>(null);
+  const [contentValues, setContentValues] = useState<number[]>([]);
+  const [meBusy, setMeBusy] = useState("");
+  const [meError, setMeError] = useState("");
+  const [sender, setSender] = useState<Sender>({
+    name: "",
+    email: "",
+    phone: "",
+    document: "",
+    postal_code: "",
+    address: "",
+    number: "",
+    complement: "",
+    district: "",
+    city: "",
+    state_abbr: "",
+  });
+  const [packageData, setPackageData] = useState({
+    width: "",
+    height: "",
+    length: "",
+    weight: "",
+  });
+
   const list = d.sales.filter(
     (s) =>
       s.status !== "cancelled" &&
@@ -1871,6 +1942,63 @@ function Shipping({
       !isHistoricalSale(s) &&
       (tab === "sent" ? s.sent : !s.sent),
   );
+
+  async function refreshMeStatus() {
+    setMeStatus((current) => ({ ...current, loading: true }));
+    try {
+      const response = await fetch("/api/melhor-envio/status", {
+        credentials: "include",
+      });
+      const data = await response.json();
+      setMeStatus({
+        loading: false,
+        configured: Boolean(data.configured),
+        connected: Boolean(data.connected),
+        environment: data.environment,
+        user: data.user,
+        reason: data.reason,
+      });
+    } catch {
+      setMeStatus({
+        loading: false,
+        configured: false,
+        connected: false,
+        reason: "Não foi possível consultar a integração.",
+      });
+    }
+  }
+
+  useEffect(() => {
+    try {
+      const storedSender = localStorage.getItem("daf-me-sender-v1");
+      if (storedSender) {
+        setSender((current) => ({
+          ...current,
+          ...JSON.parse(storedSender),
+        }));
+      }
+      const storedPackage = localStorage.getItem("daf-me-package-v1");
+      if (storedPackage) {
+        setPackageData((current) => ({
+          ...current,
+          ...JSON.parse(storedPackage),
+        }));
+      }
+    } catch {
+      // Mantém os campos vazios caso o navegador não permita armazenamento local.
+    }
+
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("melhor_envio") === "connected") {
+      notify("Melhor Envio conectado com sucesso.");
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (query.get("melhor_envio") === "error") {
+      notify("Não foi possível conectar o Melhor Envio.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    refreshMeStatus();
+  }, []);
+
   function toggle(s: V) {
     const sent = !s.sent;
     set((x: D) => ({
@@ -1883,7 +2011,11 @@ function Shipping({
         : `Pedido #${orderNo(s.id)} voltou para A enviar.`,
     );
   }
-  function changeShippingMethod(saleId: number, shippingMethod: V["shippingMethod"]) {
+
+  function changeShippingMethod(
+    saleId: number,
+    shippingMethod: V["shippingMethod"],
+  ) {
     set((state: D) => ({
       ...state,
       sales: state.sales.map((sale) =>
@@ -1892,118 +2024,807 @@ function Shipping({
     }));
     notify("Forma de envio atualizada.");
   }
+
+  function connectMelhorEnvio() {
+    window.location.href = "/api/melhor-envio/auth";
+  }
+
+  async function disconnectMelhorEnvio() {
+    if (!window.confirm("Desconectar a conta do Melhor Envio deste navegador?"))
+      return;
+    await fetch("/api/melhor-envio/disconnect", {
+      method: "POST",
+      credentials: "include",
+    });
+    await refreshMeStatus();
+    notify("Melhor Envio desconectado.");
+  }
+
+  function openLabelDialog(sale: V) {
+    if (!meStatus.connected) {
+      connectMelhorEnvio();
+      return;
+    }
+    setLabelSale(sale);
+    setRecipientEmail("");
+    setQuotes([]);
+    setSelectedService(null);
+    setMeError("");
+    const count = Math.max(1, sale.items.length);
+    const average = Math.max(0.01, sale.total / count);
+    setContentValues(sale.items.map(() => Number(average.toFixed(2))));
+  }
+
+  function closeLabelDialog() {
+    if (meBusy) return;
+    setLabelSale(null);
+    setQuotes([]);
+    setSelectedService(null);
+    setMeError("");
+  }
+
+  function updateSender(field: keyof Sender, value: string) {
+    setSender((current) => ({ ...current, [field]: value }));
+  }
+
+  function saveLabelDefaults() {
+    try {
+      localStorage.setItem("daf-me-sender-v1", JSON.stringify(sender));
+      localStorage.setItem("daf-me-package-v1", JSON.stringify(packageData));
+    } catch {
+      // A integração continua funcionando mesmo sem persistência local.
+    }
+  }
+
+  async function quoteMelhorEnvio() {
+    if (!labelSale) return;
+    const client = d.clients.find((item) => item.id === labelSale.clientId);
+    if (!client?.cep) {
+      setMeError("O cliente precisa ter um CEP cadastrado.");
+      return;
+    }
+    setMeBusy("quote");
+    setMeError("");
+    saveLabelDefaults();
+    try {
+      const response = await fetch("/api/melhor-envio/quote", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromPostalCode: sender.postal_code,
+          toPostalCode: client.cep,
+          width: packageData.width,
+          height: packageData.height,
+          length: packageData.length,
+          weight: packageData.weight,
+          insuranceValue: contentValues.reduce(
+            (sum, value) => sum + Math.max(0, Number(value) || 0),
+            0,
+          ),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível cotar o frete.");
+      }
+      setQuotes(data.services || []);
+      setSelectedService(null);
+      if (!(data.services || []).length) {
+        setMeError("Nenhum serviço disponível para este envio.");
+      }
+    } catch (error: any) {
+      setMeError(error?.message || "Falha ao cotar frete.");
+    } finally {
+      setMeBusy("");
+    }
+  }
+
+  async function generateMelhorEnvioLabel() {
+    if (!labelSale || !selectedService) return;
+    const client = d.clients.find((item) => item.id === labelSale.clientId);
+    const selectedAddress =
+      client?.addresses[addressIndex[labelSale.id] || 0] ||
+      client?.addresses[0];
+    if (!client || !selectedAddress) {
+      setMeError("O cliente precisa ter um endereço cadastrado.");
+      return;
+    }
+    if (!recipientEmail.trim()) {
+      setMeError("Informe o e-mail do destinatário.");
+      return;
+    }
+    if (!client.cpf?.trim()) {
+      setMeError(
+        "O CPF do cliente é obrigatório para a declaração de conteúdo do Melhor Envio.",
+      );
+      return;
+    }
+    const selectedQuote = quotes.find(
+      (quote) => quote.id === selectedService,
+    );
+    if (
+      !window.confirm(
+        `Confirmar a compra da etiqueta ${selectedQuote ? "por " + brl(selectedQuote.price) : ""}? O valor será debitado da carteira do Melhor Envio.`,
+      )
+    )
+      return;
+
+    setMeBusy("label");
+    setMeError("");
+    saveLabelDefaults();
+    try {
+      const products = labelSale.items.map((item, index) => {
+        const product = d.products.find(
+          (candidate) => candidate.id === item.productId,
+        );
+        return {
+          name: `${product ? product.brand + " " + product.name : "Perfume"} · ${item.ml} ml${item.isApc ? " · APC" : ""}`,
+          quantity: 1,
+          unitary_value: Math.max(
+            0.01,
+            Number(contentValues[index] || 0),
+          ),
+        };
+      });
+      const response = await fetch("/api/melhor-envio/label", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          confirmPurchase: true,
+          service: selectedService,
+          orderNumber: orderNo(labelSale.id),
+          from: sender,
+          to: {
+            name: saleCustomer(labelSale, d),
+            email: recipientEmail.trim(),
+            phone: client.phone,
+            document: client.cpf,
+            postal_code: client.cep,
+            address: selectedAddress.value,
+            number: client.number || "",
+            complement: "",
+            district:
+              selectedAddress.district || client.district || "",
+            city: selectedAddress.city || client.city || "",
+            state_abbr: selectedAddress.state || client.state || "",
+          },
+          products,
+          volume: packageData,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(
+          data.error ||
+            data.details?.message ||
+            "Não foi possível gerar a etiqueta.",
+        );
+      }
+
+      const metadata = {
+        orderId: String(data.orderId),
+        printUrl: data.printUrl || "",
+        tracking: data.tracking || "",
+        serviceId: selectedService,
+        serviceName: selectedQuote
+          ? `${selectedQuote.company} · ${selectedQuote.name}`
+          : "Melhor Envio",
+        price: selectedQuote?.price || Number(data.price || 0),
+        createdAt: today(),
+      };
+      set((state: D) => ({
+        ...state,
+        sales: state.sales.map((sale) =>
+          sale.id === labelSale.id
+            ? { ...sale, melhorEnvio: metadata }
+            : sale,
+        ),
+      }));
+
+      if (data.pendingPrint) {
+        notify(
+          "Etiqueta comprada. O Melhor Envio ainda está processando o arquivo de impressão.",
+        );
+      } else {
+        notify("Etiqueta do Melhor Envio gerada com sucesso.");
+      }
+      setLabelSale(null);
+      setQuotes([]);
+      setSelectedService(null);
+    } catch (error: any) {
+      setMeError(error?.message || "Falha ao gerar etiqueta.");
+    } finally {
+      setMeBusy("");
+    }
+  }
+
+  async function fetchPrintUrl(sale: V) {
+    if (!sale.melhorEnvio?.orderId) return;
+    try {
+      const response = await fetch("/api/melhor-envio/print", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: sale.melhorEnvio.orderId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.printUrl) {
+        throw new Error(data.error || "A etiqueta ainda não está pronta.");
+      }
+      set((state: D) => ({
+        ...state,
+        sales: state.sales.map((item) =>
+          item.id === sale.id && item.melhorEnvio
+            ? {
+                ...item,
+                melhorEnvio: {
+                  ...item.melhorEnvio,
+                  printUrl: data.printUrl,
+                },
+              }
+            : item,
+        ),
+      }));
+      window.open(data.printUrl, "_blank", "noopener,noreferrer");
+    } catch (error: any) {
+      notify(error?.message || "Não foi possível abrir a etiqueta.");
+    }
+  }
+
+  const labelClient = labelSale
+    ? d.clients.find((client) => client.id === labelSale.clientId)
+    : undefined;
+  const labelAddress = labelSale
+    ? labelClient?.addresses[addressIndex[labelSale.id] || 0] ||
+      labelClient?.addresses[0]
+    : undefined;
+
   return (
-    <div className="panel">
-      <h2>Envios</h2>
-      <p>Apenas pedidos já preparados aparecem aqui.</p>
-      <div className="segmented">
-        <button
-          className={tab === "pending" ? "active" : ""}
-          onClick={() => setTab("pending")}
-        >
-          A enviar
-        </button>
-        <button
-          className={tab === "sent" ? "active" : ""}
-          onClick={() => setTab("sent")}
-        >
-          Enviados
-        </button>
-      </div>
-      <div className="shipping">
-        {list.map((s) => {
-          const c = d.clients.find((x) => x.id === s.clientId);
-          return (
-            <div className={`shippingItem ${s.sent ? "done" : ""}`} key={s.id}>
-              <button
-                className="checkButton"
-                aria-label={
-                  s.sent ? "Marcar como não enviado" : "Marcar como enviado"
-                }
-                onClick={() => toggle(s)}
+    <>
+      <div className="panel">
+        <div className="shippingPageHead">
+          <div>
+            <h2>Envios</h2>
+            <p>Apenas pedidos já preparados aparecem aqui.</p>
+          </div>
+          <div
+            className={
+              "melhorEnvioStatus " +
+              (meStatus.connected ? "connected" : "")
+            }
+          >
+            <span />
+            {meStatus.loading
+              ? "Melhor Envio: verificando..."
+              : !meStatus.configured
+                ? "Melhor Envio: configurar chaves"
+                : meStatus.connected
+                  ? `Melhor Envio conectado${meStatus.environment === "sandbox" ? " · Sandbox" : ""}`
+                  : "Melhor Envio desconectado"}
+          </div>
+        </div>
+        <div className="segmented">
+          <button
+            className={tab === "pending" ? "active" : ""}
+            onClick={() => setTab("pending")}
+          >
+            A enviar
+          </button>
+          <button
+            className={tab === "sent" ? "active" : ""}
+            onClick={() => setTab("sent")}
+          >
+            Enviados
+          </button>
+        </div>
+        <div className="shipping">
+          {list.map((s) => {
+            const c = d.clients.find((x) => x.id === s.clientId);
+            const selectedAddressIndex = addressIndex[s.id] || 0;
+            return (
+              <div
+                className={`shippingItem ${s.sent ? "done" : ""}`}
+                key={s.id}
               >
-                {s.sent ? <Check /> : null}
-              </button>
-              <details>
-                <summary>
-                  <span className="shippingCustomer">
-                    <b>
-                      Pedido #{orderNo(s.id)} · {saleCustomer(s, d)}
-                    </b>
-                    <small>
-                      {s.items
-                        .map(
-                          (x) =>
-                            `${d.products.find((p) => p.id === x.productId)?.name} — ${x.ml} ml`,
-                        )
-                        .join(" · ")}
-                    </small>
-                  </span>
-                  <strong
-                    className={`shippingMethod ${shippingClass(
-                      isMarketplaceSale(s) ? s.marketplace : s.shippingMethod,
-                    )}`}
-                  >
-                    {isMarketplaceSale(s)
-                      ? s.marketplace || "Marketplace"
-                      : s.shippingMethod || "Envio não informado"}
-                  </strong>
-                  <strong className="deliveryTitle">Informações de entrega</strong>
-                </summary>
-                <div className="delivery">
-                  <label>
-                    <span>Forma de envio</span>
-                    <select
-                      value={isMarketplaceSale(s) ? s.marketplace || "" : s.shippingMethod || ""}
-                      disabled={isMarketplaceSale(s)}
-                      onChange={(event) =>
-                        changeShippingMethod(
-                          s.id,
-                          event.target.value as V["shippingMethod"],
-                        )
-                      }
+                <button
+                  className="checkButton"
+                  aria-label={
+                    s.sent
+                      ? "Marcar como não enviado"
+                      : "Marcar como enviado"
+                  }
+                  onClick={() => toggle(s)}
+                >
+                  {s.sent ? <Check /> : null}
+                </button>
+                <details>
+                  <summary>
+                    <span className="shippingCustomer">
+                      <b>
+                        Pedido #{orderNo(s.id)} · {saleCustomer(s, d)}
+                      </b>
+                      <small>
+                        {s.items
+                          .map(
+                            (x) =>
+                              `${d.products.find((p) => p.id === x.productId)?.name} — ${x.ml} ml`,
+                          )
+                          .join(" · ")}
+                      </small>
+                    </span>
+                    <strong
+                      className={`shippingMethod ${shippingClass(
+                        isMarketplaceSale(s)
+                          ? s.marketplace
+                          : s.shippingMethod,
+                      )}`}
                     >
-                      <option value="" disabled>Selecione...</option>
-                      <option>Correios</option>
-                      <option>Correios Sedex</option>
-                      <option>Correios PAC</option>
-                      <option>Correios Mini</option>
-                      <option>Loggi</option>
-                      <option>Jadlog</option>
-                      <option>Uber/Pessoalmente</option>
-                      <option>TikTok Shop</option>
-                      <option>Shopee</option>
-                    </select>
-                  </label>
-                  <FieldView label="Nome" value={saleCustomer(s, d)} />
-                  <FieldView label="CPF" value={c?.cpf} />
-                  <FieldView label="Telefone" value={c?.phone} />
-                  <label>
-                    <span>Endereço</span>
-                    <select defaultValue={c?.addresses[0]?.value}>
-                      {c?.addresses.map((a, i) => (
-                        <option key={i} value={a.value}>
-                          {a.label ? `${a.label} — ` : ""}
-                          {a.value}
+                      {isMarketplaceSale(s)
+                        ? s.marketplace || "Marketplace"
+                        : s.shippingMethod || "Envio não informado"}
+                    </strong>
+                    <strong className="deliveryTitle">
+                      Informações de entrega
+                    </strong>
+                  </summary>
+                  <div className="delivery">
+                    <label>
+                      <span>Forma de envio</span>
+                      <select
+                        value={
+                          isMarketplaceSale(s)
+                            ? s.marketplace || ""
+                            : s.shippingMethod || ""
+                        }
+                        disabled={isMarketplaceSale(s)}
+                        onChange={(event) =>
+                          changeShippingMethod(
+                            s.id,
+                            event.target.value as V["shippingMethod"],
+                          )
+                        }
+                      >
+                        <option value="" disabled>
+                          Selecione...
                         </option>
-                      ))}
-                    </select>
-                  </label>
-                  <FieldView label="CEP" value={c?.cep} />
-                  <FieldView label="Número" value={c?.number} />
-                  <FieldView label="Bairro" value={c?.district} />
-                  <FieldView
-                    label="Cidade / Estado"
-                    value={[c?.city, c?.state].filter(Boolean).join(" / ")}
-                  />
-                </div>
-              </details>
-            </div>
-          );
-        })}
-        {!list.length ? <p>Nenhum pedido nesta lista.</p> : null}
+                        <option>Correios</option>
+                        <option>Correios Sedex</option>
+                        <option>Correios PAC</option>
+                        <option>Correios Mini</option>
+                        <option>Loggi</option>
+                        <option>Jadlog</option>
+                        <option>Uber/Pessoalmente</option>
+                        <option>TikTok Shop</option>
+                        <option>Shopee</option>
+                      </select>
+                    </label>
+                    <FieldView label="Nome" value={saleCustomer(s, d)} />
+                    <FieldView label="CPF" value={c?.cpf} />
+                    <FieldView label="Telefone" value={c?.phone} />
+                    <label>
+                      <span>Endereço</span>
+                      <select
+                        value={selectedAddressIndex}
+                        onChange={(event) =>
+                          setAddressIndex((current) => ({
+                            ...current,
+                            [s.id]: Number(event.target.value),
+                          }))
+                        }
+                      >
+                        {c?.addresses.map((a, i) => (
+                          <option key={i} value={i}>
+                            {a.label ? `${a.label} — ` : ""}
+                            {a.value}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <FieldView label="CEP" value={c?.cep} />
+                    <FieldView label="Número" value={c?.number} />
+                    <FieldView label="Bairro" value={c?.district} />
+                    <FieldView
+                      label="Cidade / Estado"
+                      value={[c?.city, c?.state]
+                        .filter(Boolean)
+                        .join(" / ")}
+                    />
+                  </div>
+
+                  {!isMarketplaceSale(s) ? (
+                    <div className="melhorEnvioOrderPanel">
+                      <div>
+                        <b>Etiqueta Melhor Envio</b>
+                        <small>
+                          {s.melhorEnvio?.orderId
+                            ? `Etiqueta #${s.melhorEnvio.orderId}${s.melhorEnvio.serviceName ? " · " + s.melhorEnvio.serviceName : ""}`
+                            : meStatus.connected
+                              ? "Use os dados deste pedido para cotar e gerar a etiqueta."
+                              : "Conecte sua conta para gerar etiquetas sem sair do sistema."}
+                        </small>
+                        {s.melhorEnvio?.tracking ? (
+                          <small>
+                            Rastreio: {s.melhorEnvio.tracking}
+                          </small>
+                        ) : null}
+                      </div>
+                      <div>
+                        {!meStatus.configured ? (
+                          <span className="meConfigWarning">
+                            Chaves ainda não configuradas na Vercel
+                          </span>
+                        ) : !meStatus.connected ? (
+                          <button
+                            type="button"
+                            className="meConnectButton"
+                            onClick={connectMelhorEnvio}
+                          >
+                            Conectar Melhor Envio
+                          </button>
+                        ) : s.melhorEnvio?.printUrl ? (
+                          <a
+                            className="meLabelButton"
+                            href={s.melhorEnvio.printUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            Abrir etiqueta
+                          </a>
+                        ) : s.melhorEnvio?.orderId ? (
+                          <button
+                            type="button"
+                            className="meLabelButton"
+                            onClick={() => fetchPrintUrl(s)}
+                          >
+                            Obter etiqueta
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="meLabelButton"
+                            onClick={() => openLabelDialog(s)}
+                          >
+                            Gerar etiqueta
+                          </button>
+                        )}
+                        {meStatus.connected ? (
+                          <button
+                            type="button"
+                            className="meDisconnectButton"
+                            onClick={disconnectMelhorEnvio}
+                          >
+                            Desconectar
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </details>
+              </div>
+            );
+          })}
+          {!list.length ? <p>Nenhum pedido nesta lista.</p> : null}
+        </div>
       </div>
-    </div>
+
+      {labelSale ? (
+        <div className="overlay">
+          <div className="systemDialog melhorEnvioLabelDialog">
+            <header>
+              <div>
+                <small>MELHOR ENVIO</small>
+                <h2>
+                  Gerar etiqueta do pedido #{orderNo(labelSale.id)}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeLabelDialog}
+                aria-label="Fechar geração de etiqueta"
+              >
+                <X />
+              </button>
+            </header>
+
+            {meStatus.environment === "sandbox" ? (
+              <div className="meSandboxNotice">
+                Ambiente Sandbox: nenhuma cobrança ou postagem real será
+                realizada.
+              </div>
+            ) : (
+              <div className="meProductionNotice">
+                Ambiente de produção. A compra da etiqueta utilizará o saldo da
+                sua carteira Melhor Envio.
+              </div>
+            )}
+
+            {meError ? <div className="meError">{meError}</div> : null}
+
+            <section className="meSection">
+              <div className="meSectionHead">
+                <div>
+                  <b>Remetente</b>
+                  <small>
+                    Estes dados ficam salvos apenas neste navegador para os
+                    próximos envios.
+                  </small>
+                </div>
+              </div>
+              <div className="meFormGrid">
+                <label>
+                  <span>Nome</span>
+                  <input
+                    value={sender.name}
+                    onChange={(e) => updateSender("name", e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>E-mail</span>
+                  <input
+                    type="email"
+                    value={sender.email}
+                    onChange={(e) => updateSender("email", e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Telefone</span>
+                  <input
+                    value={sender.phone}
+                    onChange={(e) => updateSender("phone", e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>CPF</span>
+                  <input
+                    value={sender.document}
+                    onChange={(e) => updateSender("document", e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>CEP</span>
+                  <input
+                    value={sender.postal_code}
+                    onChange={(e) =>
+                      updateSender("postal_code", e.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Endereço</span>
+                  <input
+                    value={sender.address}
+                    onChange={(e) => updateSender("address", e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Número</span>
+                  <input
+                    value={sender.number}
+                    onChange={(e) => updateSender("number", e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Complemento</span>
+                  <input
+                    value={sender.complement}
+                    onChange={(e) =>
+                      updateSender("complement", e.target.value)
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Bairro</span>
+                  <input
+                    value={sender.district}
+                    onChange={(e) => updateSender("district", e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Cidade</span>
+                  <input
+                    value={sender.city}
+                    onChange={(e) => updateSender("city", e.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Estado</span>
+                  <input
+                    maxLength={2}
+                    value={sender.state_abbr}
+                    onChange={(e) =>
+                      updateSender(
+                        "state_abbr",
+                        e.target.value.toUpperCase(),
+                      )
+                    }
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="meSection">
+              <div className="meSectionHead">
+                <div>
+                  <b>Destinatário</b>
+                  <small>
+                    {saleCustomer(labelSale, d)} ·{" "}
+                    {labelAddress?.value || "Endereço não informado"}
+                  </small>
+                </div>
+              </div>
+              <div className="meFormGrid two">
+                <label>
+                  <span>E-mail do destinatário</span>
+                  <input
+                    type="email"
+                    value={recipientEmail}
+                    onChange={(e) => setRecipientEmail(e.target.value)}
+                    placeholder="Obrigatório para a etiqueta"
+                  />
+                </label>
+                <label>
+                  <span>CPF</span>
+                  <input readOnly value={labelClient?.cpf || ""} />
+                </label>
+              </div>
+            </section>
+
+            <section className="meSection">
+              <div className="meSectionHead">
+                <div>
+                  <b>Pacote</b>
+                  <small>Dimensões em cm e peso em kg.</small>
+                </div>
+              </div>
+              <div className="mePackageGrid">
+                {(["width", "height", "length", "weight"] as const).map(
+                  (field) => (
+                    <label key={field}>
+                      <span>
+                        {field === "width"
+                          ? "Largura"
+                          : field === "height"
+                            ? "Altura"
+                            : field === "length"
+                              ? "Comprimento"
+                              : "Peso"}
+                      </span>
+                      <input
+                        inputMode="decimal"
+                        value={packageData[field]}
+                        onChange={(e) =>
+                          setPackageData((current) => ({
+                            ...current,
+                            [field]: e.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  ),
+                )}
+              </div>
+            </section>
+
+            <section className="meSection">
+              <div className="meSectionHead">
+                <div>
+                  <b>Declaração de conteúdo</b>
+                  <small>
+                    Confira e ajuste os valores individuais antes da compra.
+                  </small>
+                </div>
+              </div>
+              <div className="meContents">
+                {labelSale.items.map((item, index) => {
+                  const product = d.products.find(
+                    (candidate) => candidate.id === item.productId,
+                  );
+                  return (
+                    <div key={index}>
+                      <span>
+                        {product
+                          ? `${product.brand} ${product.name}`
+                          : "Perfume"}{" "}
+                        · {item.ml} ml{item.isApc ? " · APC" : ""}
+                      </span>
+                      <label>
+                        <small>Valor</small>
+                        <input
+                          inputMode="decimal"
+                          value={contentValues[index] ?? ""}
+                          onChange={(e) =>
+                            setContentValues((current) => {
+                              const next = [...current];
+                              next[index] = Number(
+                                e.target.value.replace(",", "."),
+                              );
+                              return next;
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
+                  );
+                })}
+                <div className="meContentTotal">
+                  <span>Total declarado</span>
+                  <b>
+                    {brl(
+                      contentValues.reduce(
+                        (sum, value) =>
+                          sum + Math.max(0, Number(value) || 0),
+                        0,
+                      ),
+                    )}
+                  </b>
+                </div>
+              </div>
+            </section>
+
+            <div className="meQuoteActions">
+              <button
+                type="button"
+                className="secondary"
+                disabled={Boolean(meBusy)}
+                onClick={quoteMelhorEnvio}
+              >
+                {meBusy === "quote" ? "Cotando..." : "Cotar frete"}
+              </button>
+            </div>
+
+            {quotes.length ? (
+              <div className="meQuotes">
+                {quotes.map((quote) => (
+                  <button
+                    type="button"
+                    key={quote.id}
+                    className={
+                      selectedService === quote.id ? "selected" : ""
+                    }
+                    onClick={() => setSelectedService(quote.id)}
+                  >
+                    <span>
+                      <b>{quote.company}</b>
+                      <small>{quote.name}</small>
+                    </span>
+                    <span>
+                      <b>{brl(quote.price)}</b>
+                      <small>
+                        {quote.deliveryTime
+                          ? `${quote.deliveryTime} dia(s)`
+                          : "Prazo não informado"}
+                      </small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            <footer className="meLabelFooter">
+              <button type="button" onClick={closeLabelDialog}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={
+                  !selectedService ||
+                  Boolean(meBusy) ||
+                  !quotes.length
+                }
+                onClick={generateMelhorEnvioLabel}
+              >
+                {meBusy === "label"
+                  ? "Gerando..."
+                  : "Comprar e gerar etiqueta"}
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 function FieldView({ label, value }: { label: string; value?: string }) {
