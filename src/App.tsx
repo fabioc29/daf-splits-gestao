@@ -1934,6 +1934,12 @@ function Shipping({
     length: "",
     weight: "",
   });
+  const [quickQuoteOpen, setQuickQuoteOpen] = useState(false);
+  const [quickQuoteToPostalCode, setQuickQuoteToPostalCode] = useState("");
+  const [quickQuoteInsuranceValue, setQuickQuoteInsuranceValue] = useState("");
+  const [quickQuotes, setQuickQuotes] = useState<MeQuote[]>([]);
+  const [quickQuoteBusy, setQuickQuoteBusy] = useState(false);
+  const [quickQuoteError, setQuickQuoteError] = useState("");
 
   const list = d.sales.filter(
     (s) =>
@@ -1942,6 +1948,24 @@ function Shipping({
       !isHistoricalSale(s) &&
       (tab === "sent" ? s.sent : !s.sent),
   );
+
+  function labelUnavailableReason(sale: V) {
+    const method = String(
+      isMarketplaceSale(sale)
+        ? sale.marketplace || sale.shippingMethod || ""
+        : sale.shippingMethod || "",
+    ).toLowerCase();
+    if (method.includes("uber") || method.includes("pessoalmente")) {
+      return "Indisponível para pedidos Uber/Pessoalmente.";
+    }
+    if (method.includes("tiktok")) {
+      return "Indisponível para pedidos do TikTok Shop.";
+    }
+    if (method.includes("shopee")) {
+      return "Indisponível para pedidos da Shopee.";
+    }
+    return "";
+  }
 
   async function refreshMeStatus() {
     setMeStatus((current) => ({ ...current, loading: true }));
@@ -2041,6 +2065,11 @@ function Shipping({
   }
 
   function openLabelDialog(sale: V) {
+    const unavailableReason = labelUnavailableReason(sale);
+    if (unavailableReason) {
+      notify(unavailableReason);
+      return;
+    }
     if (!meStatus.connected) {
       connectMelhorEnvio();
       return;
@@ -2117,6 +2146,45 @@ function Shipping({
       setMeError(error?.message || "Falha ao cotar frete.");
     } finally {
       setMeBusy("");
+    }
+  }
+
+  async function quoteQuickFreight() {
+    if (!meStatus.connected) {
+      connectMelhorEnvio();
+      return;
+    }
+    setQuickQuoteBusy(true);
+    setQuickQuoteError("");
+    setQuickQuotes([]);
+    saveLabelDefaults();
+    try {
+      const response = await fetch("/api/melhor-envio/quote", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromPostalCode: sender.postal_code,
+          toPostalCode: quickQuoteToPostalCode,
+          width: packageData.width,
+          height: packageData.height,
+          length: packageData.length,
+          weight: packageData.weight,
+          insuranceValue: quickQuoteInsuranceValue,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível cotar o frete.");
+      }
+      setQuickQuotes(data.services || []);
+      if (!(data.services || []).length) {
+        setQuickQuoteError("Nenhum serviço disponível para esta rota.");
+      }
+    } catch (error: any) {
+      setQuickQuoteError(error?.message || "Falha ao cotar frete.");
+    } finally {
+      setQuickQuoteBusy(false);
     }
   }
 
@@ -2305,18 +2373,31 @@ function Shipping({
                   : "Melhor Envio desconectado"}
           </div>
         </div>
-        <div className="segmented">
+        <div className="shippingTabsRow">
+          <div className="segmented">
+            <button
+              className={tab === "pending" ? "active" : ""}
+              onClick={() => setTab("pending")}
+            >
+              A enviar
+            </button>
+            <button
+              className={tab === "sent" ? "active" : ""}
+              onClick={() => setTab("sent")}
+            >
+              Enviados
+            </button>
+          </div>
           <button
-            className={tab === "pending" ? "active" : ""}
-            onClick={() => setTab("pending")}
+            type="button"
+            className="quickQuoteButton"
+            onClick={() => {
+              setQuickQuoteError("");
+              setQuickQuotes([]);
+              setQuickQuoteOpen(true);
+            }}
           >
-            A enviar
-          </button>
-          <button
-            className={tab === "sent" ? "active" : ""}
-            onClick={() => setTab("sent")}
-          >
-            Enviados
+            Cotar frete
           </button>
         </div>
         <div className="shipping">
@@ -2433,74 +2514,82 @@ function Shipping({
                     />
                   </div>
 
-                  {!isMarketplaceSale(s) ? (
-                    <div className="melhorEnvioOrderPanel">
-                      <div>
-                        <b>Etiqueta Melhor Envio</b>
-                        <small>
-                          {s.melhorEnvio?.orderId
+                  <div
+                    className={
+                      "melhorEnvioOrderPanel " +
+                      (labelUnavailableReason(s) ? "disabled" : "")
+                    }
+                  >
+                    <div>
+                      <b>Etiqueta Melhor Envio</b>
+                      <small>
+                        {labelUnavailableReason(s)
+                          ? labelUnavailableReason(s)
+                          : s.melhorEnvio?.orderId
                             ? `Etiqueta #${s.melhorEnvio.orderId}${s.melhorEnvio.serviceName ? " · " + s.melhorEnvio.serviceName : ""}`
                             : meStatus.connected
                               ? "Use os dados deste pedido para cotar e gerar a etiqueta."
                               : "Conecte sua conta para gerar etiquetas sem sair do sistema."}
+                      </small>
+                      {s.melhorEnvio?.tracking ? (
+                        <small>
+                          Rastreio: {s.melhorEnvio.tracking}
                         </small>
-                        {s.melhorEnvio?.tracking ? (
-                          <small>
-                            Rastreio: {s.melhorEnvio.tracking}
-                          </small>
-                        ) : null}
-                      </div>
-                      <div>
-                        {!meStatus.configured ? (
-                          <span className="meConfigWarning">
-                            Chaves ainda não configuradas na Vercel
-                          </span>
-                        ) : !meStatus.connected ? (
-                          <button
-                            type="button"
-                            className="meConnectButton"
-                            onClick={connectMelhorEnvio}
-                          >
-                            Conectar Melhor Envio
-                          </button>
-                        ) : s.melhorEnvio?.printUrl ? (
-                          <a
-                            className="meLabelButton"
-                            href={s.melhorEnvio.printUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Abrir etiqueta
-                          </a>
-                        ) : s.melhorEnvio?.orderId ? (
-                          <button
-                            type="button"
-                            className="meLabelButton"
-                            onClick={() => fetchPrintUrl(s)}
-                          >
-                            Obter etiqueta
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="meLabelButton"
-                            onClick={() => openLabelDialog(s)}
-                          >
-                            Gerar etiqueta
-                          </button>
-                        )}
-                        {meStatus.connected ? (
-                          <button
-                            type="button"
-                            className="meDisconnectButton"
-                            onClick={disconnectMelhorEnvio}
-                          >
-                            Desconectar
-                          </button>
-                        ) : null}
-                      </div>
+                      ) : null}
                     </div>
-                  ) : null}
+                    <div>
+                      {!meStatus.configured ? (
+                        <span className="meConfigWarning">
+                          Chaves ainda não configuradas na Vercel
+                        </span>
+                      ) : !meStatus.connected ? (
+                        <button
+                          type="button"
+                          className="meConnectButton"
+                          onClick={connectMelhorEnvio}
+                          disabled={Boolean(labelUnavailableReason(s))}
+                        >
+                          Conectar Melhor Envio
+                        </button>
+                      ) : s.melhorEnvio?.printUrl ? (
+                        <a
+                          className="meLabelButton"
+                          href={s.melhorEnvio.printUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Abrir etiqueta
+                        </a>
+                      ) : s.melhorEnvio?.orderId ? (
+                        <button
+                          type="button"
+                          className="meLabelButton"
+                          onClick={() => fetchPrintUrl(s)}
+                        >
+                          Obter etiqueta
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="meLabelButton"
+                          disabled={Boolean(labelUnavailableReason(s))}
+                          title={labelUnavailableReason(s)}
+                          onClick={() => openLabelDialog(s)}
+                        >
+                          Gerar etiqueta
+                        </button>
+                      )}
+                      {meStatus.connected ? (
+                        <button
+                          type="button"
+                          className="meDisconnectButton"
+                          onClick={disconnectMelhorEnvio}
+                        >
+                          Desconectar
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
                 </details>
               </div>
             );
@@ -2508,6 +2597,154 @@ function Shipping({
           {!list.length ? <p>Nenhum pedido nesta lista.</p> : null}
         </div>
       </div>
+
+      {quickQuoteOpen ? (
+        <div className="overlay">
+          <div className="systemDialog quickQuoteDialog">
+            <header>
+              <div>
+                <small>MELHOR ENVIO</small>
+                <h2>Cotar frete</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickQuoteOpen(false)}
+                aria-label="Fechar cotação"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="quickQuoteScroll">
+              {!meStatus.configured ? (
+                <div className="meError">
+                  Configure as chaves do Melhor Envio antes de realizar cotações.
+                </div>
+              ) : !meStatus.connected ? (
+                <div className="quickQuoteConnect">
+                  <p>Conecte sua conta do Melhor Envio para realizar a cotação.</p>
+                  <button
+                    type="button"
+                    className="meConnectButton"
+                    onClick={connectMelhorEnvio}
+                  >
+                    Conectar Melhor Envio
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {quickQuoteError ? (
+                    <div className="meError">{quickQuoteError}</div>
+                  ) : null}
+                  <section className="quickQuoteCard">
+                    <div>
+                      <b>Rota</b>
+                      <small>Informe o CEP de origem e o CEP de destino.</small>
+                    </div>
+                    <div className="meFormGrid two">
+                      <label>
+                        <span>CEP de origem</span>
+                        <input
+                          value={sender.postal_code}
+                          onChange={(e) =>
+                            updateSender("postal_code", e.target.value)
+                          }
+                          placeholder="00000-000"
+                        />
+                      </label>
+                      <label>
+                        <span>CEP de destino</span>
+                        <input
+                          value={quickQuoteToPostalCode}
+                          onChange={(e) =>
+                            setQuickQuoteToPostalCode(e.target.value)
+                          }
+                          placeholder="00000-000"
+                        />
+                      </label>
+                    </div>
+                  </section>
+
+                  <section className="quickQuoteCard">
+                    <div>
+                      <b>Pacote</b>
+                      <small>Dimensões em cm e peso em kg.</small>
+                    </div>
+                    <div className="mePackageGrid">
+                      {(["width", "height", "length", "weight"] as const).map(
+                        (field) => (
+                          <label key={field}>
+                            <span>
+                              {field === "width"
+                                ? "Largura"
+                                : field === "height"
+                                  ? "Altura"
+                                  : field === "length"
+                                    ? "Comprimento"
+                                    : "Peso"}
+                            </span>
+                            <input
+                              inputMode="decimal"
+                              value={packageData[field]}
+                              onChange={(e) =>
+                                setPackageData((current) => ({
+                                  ...current,
+                                  [field]: e.target.value,
+                                }))
+                              }
+                            />
+                          </label>
+                        ),
+                      )}
+                    </div>
+                    <label className="quickQuoteInsurance">
+                      <span>Valor declarado</span>
+                      <input
+                        inputMode="decimal"
+                        value={quickQuoteInsuranceValue}
+                        onChange={(e) =>
+                          setQuickQuoteInsuranceValue(e.target.value)
+                        }
+                        placeholder="0,00"
+                      />
+                    </label>
+                  </section>
+
+                  <button
+                    type="button"
+                    className="quickQuoteSubmit"
+                    disabled={quickQuoteBusy}
+                    onClick={quoteQuickFreight}
+                  >
+                    {quickQuoteBusy ? "Cotando..." : "Consultar valores"}
+                  </button>
+
+                  {quickQuotes.length ? (
+                    <div className="meQuotes quickQuoteResults">
+                      {quickQuotes.map((quote) => (
+                        <div key={quote.id} className="quickQuoteResult">
+                          <span>
+                            <b>{quote.company}</b>
+                            <small>{quote.name}</small>
+                          </span>
+                          <span>
+                            <b>{brl(quote.price)}</b>
+                            <small>
+                              {quote.deliveryTime
+                                ? `${quote.deliveryTime} dia(s)`
+                                : "Prazo não informado"}
+                            </small>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {labelSale ? (
         <div className="overlay">
@@ -2528,6 +2765,7 @@ function Shipping({
               </button>
             </header>
 
+            <div className="meLabelScroll">
             {meStatus.environment === "sandbox" ? (
               <div className="meSandboxNotice">
                 Ambiente Sandbox: nenhuma cobrança ou postagem real será
@@ -2802,6 +3040,7 @@ function Shipping({
               </div>
             ) : null}
 
+            </div>
             <footer className="meLabelFooter">
               <button type="button" onClick={closeLabelDialog}>
                 Cancelar
