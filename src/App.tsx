@@ -592,6 +592,14 @@ const action =
                 <ShoppingBag /> Marketplace
               </button>
             ) : null}
+            {page === "stock" ? (
+              <button
+                className="secondary stockReportHeaderButton"
+                onClick={() => setModal({ type: "stockReport" })}
+              >
+                <ReceiptText /> Relatório
+              </button>
+            ) : null}
             {action ? (
               <button
                 className="primary"
@@ -676,6 +684,11 @@ const action =
           set={setData}
           close={() => setModal(null)}
           notify={notify}
+        />
+      ) : modal?.type === "stockReport" ? (
+        <StockReport
+          d={data}
+          close={() => setModal(null)}
         />
       ) : modal ? (
         <Form
@@ -1220,15 +1233,13 @@ function Sales({
     month: "long",
     year: "numeric",
   }).format(new Date(`${month}-01T12:00:00`));
-  const currentMonthKey = today().slice(0, 7);
-  const currentMonthRevenue = d.sales
+  const selectedMonthRevenue = d.sales
     .filter(
       (sale) =>
         sale.status !== "cancelled" &&
         !isNoCost(sale) &&
         !isHistoricalSale(sale) &&
-        sale.date.startsWith(currentMonthKey) &&
-        sale.date <= today(),
+        sale.date.startsWith(month),
     )
     .reduce((sum, sale) => sum + sale.total, 0);
   function shiftMonth(delta: number) {
@@ -1317,7 +1328,7 @@ function Sales({
       <div className="salesTitleRow">
         <h2>Vendas</h2>
         <span>
-          Faturamento do mês: <b>{brl(currentMonthRevenue)}</b>
+          Faturamento do mês: <b>{brl(selectedMonthRevenue)}</b>
         </span>
       </div>
       <div className="salesToolbar">
@@ -2211,6 +2222,122 @@ function Receivables({
   );
 }
 
+function StockReport({
+  d,
+  close,
+}: {
+  d: D;
+  close: () => void;
+}) {
+  const availableProducts = d.products
+    .filter((product) => product.stock > 0)
+    .sort((a, b) =>
+      `${a.brand} ${a.name}`.localeCompare(
+        `${b.brand} ${b.name}`,
+        "pt-BR",
+        { sensitivity: "base" },
+      ),
+    );
+
+  function buildReportText() {
+    const generatedAt = new Date().toLocaleString("pt-BR");
+    const lines = [
+      "DAF SPLITS - RELATÓRIO DE ESTOQUE",
+      `Gerado em: ${generatedAt}`,
+      "",
+      ...availableProducts.map(
+        (product, index) =>
+          `${index + 1}. ${product.brand} ${product.name} | ${product.stock.toLocaleString(
+            "pt-BR",
+            { maximumFractionDigits: 2 },
+          )} ml | APC: ${product.apc > 0 ? "SIM" : "NÃO"}`,
+      ),
+      "",
+      `Total de perfumes disponíveis: ${availableProducts.length}`,
+    ];
+    return lines.join("\n");
+  }
+
+  function downloadTxt() {
+    const blob = new Blob([buildReportText()], {
+      type: "text/plain;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `daf-splits-relatorio-estoque-${today()}.txt`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="overlay">
+      <div className="systemDialog stockReportDialog">
+        <header>
+          <div>
+            <small>RELATÓRIO DE ESTOQUE</small>
+            <h2>Perfumes disponíveis</h2>
+          </div>
+          <button
+            type="button"
+            onClick={close}
+            aria-label="Fechar relatório de estoque"
+          >
+            <X />
+          </button>
+        </header>
+
+        <div className="stockReportTableWrap">
+          <table className="stockReportTable">
+            <thead>
+              <tr>
+                <th>Perfume</th>
+                <th>ML disponíveis</th>
+                <th>APC?</th>
+              </tr>
+            </thead>
+            <tbody>
+              {availableProducts.map((product) => (
+                <tr key={product.id}>
+                  <td>{product.brand} {product.name}</td>
+                  <td>
+                    {product.stock.toLocaleString("pt-BR", {
+                      maximumFractionDigits: 2,
+                    })} ml
+                  </td>
+                  <td>
+                    <b className={product.apc > 0 ? "reportApcYes" : "reportApcNo"}>
+                      {product.apc > 0 ? "SIM" : "NÃO"}
+                    </b>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!availableProducts.length ? (
+            <p className="empty">Nenhum perfume disponível no estoque.</p>
+          ) : null}
+        </div>
+
+        <div className="stockReportSummary">
+          Total de perfumes disponíveis: <b>{availableProducts.length}</b>
+        </div>
+
+        <footer className="stockReportFooter">
+          <button type="button" onClick={close}>
+            Fechar
+          </button>
+          <button type="button" className="primary" onClick={downloadTxt}>
+            Baixar .txt
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function BrandManager({
   d,
   set,
@@ -2795,21 +2922,47 @@ function Purchases({
 }) {
   const [supplierFilter, setSupplierFilter] = useState("Todos");
   const [purchaseQuery, setPurchaseQuery] = useState("");
-  const month = today().slice(0, 7),
-    monthly = d.purchases.filter((p) => p.date.startsWith(month)),
-    spent = monthly.reduce((n, p) => n + p.total, 0);
+  const [month, setMonth] = useState(today().slice(0, 7));
+  const [showFilters, setShowFilters] = useState(false);
+  const monthLabel = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${month}-01T12:00:00`));
+  function shiftMonth(delta: number) {
+    const base = new Date(`${month}-01T12:00:00`);
+    base.setMonth(base.getMonth() + delta);
+    setMonth(
+      `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}`,
+    );
+  }
+  const monthly = d.purchases.filter((purchase) =>
+    purchase.date.startsWith(month),
+  );
+  const spent = monthly.reduce(
+    (sum, purchase) => sum + purchase.total,
+    0,
+  );
   const suppliers = Array.from(
     new Set(d.purchases.map((purchase) => purchase.supplier).filter(Boolean)),
-  ).sort();
-  const filteredPurchases = d.purchases.filter((purchase) => {
-    const matchesSupplier =
-      supplierFilter === "Todos" || purchase.supplier === supplierFilter;
-    const searchable =
-      `${purchase.date} ${purchase.supplier} ${purchase.type} ${purchase.description}`.toLowerCase();
-    return (
-      matchesSupplier && searchable.includes(purchaseQuery.trim().toLowerCase())
+  ).sort((a, b) =>
+    a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
+  );
+  const filteredPurchases = d.purchases
+    .filter((purchase) => {
+      const matchesSupplier =
+        supplierFilter === "Todos" || purchase.supplier === supplierFilter;
+      const searchable =
+        `${purchase.date} ${purchase.supplier} ${purchase.type} ${purchase.description}`.toLowerCase();
+      return (
+        purchase.date.startsWith(month) &&
+        matchesSupplier &&
+        searchable.includes(purchaseQuery.trim().toLowerCase())
+      );
+    })
+    .sort(
+      (a, b) =>
+        b.date.localeCompare(a.date) || b.id - a.id,
     );
-  });
   function remove(id: number) {
     if (
       !window.confirm(
@@ -2822,7 +2975,9 @@ function Purchases({
       purchases: x.purchases.filter((p) => p.id !== id),
       supplies: x.supplies.map((supply) => ({
         ...supply,
-        pendingLots: (supply.pendingLots || []).filter((lot) => lot.purchaseId !== id),
+        pendingLots: (supply.pendingLots || []).filter(
+          (lot) => lot.purchaseId !== id,
+        ),
       })),
     }));
     notify("Registro de compra excluído.");
@@ -2831,14 +2986,14 @@ function Purchases({
     <>
       <Cards
         v={[
-          [brl(spent), "Gasto em compras neste mês"],
+          [brl(spent), "Gasto em compras no mês"],
           [String(monthly.length), "Compras no mês"],
         ]}
       />
       <div className="panel table">
         <h2>Histórico de compras</h2>
-        <div className="purchaseFilters">
-          <label>
+        <div className="salesToolbar purchaseMonthToolbar">
+          <label className="salesSearch">
             <Search />
             <input
               value={purchaseQuery}
@@ -2847,17 +3002,56 @@ function Purchases({
               aria-label="Pesquisar no histórico de compras"
             />
           </label>
-          <select
-            value={supplierFilter}
-            onChange={(event) => setSupplierFilter(event.target.value)}
-            aria-label="Filtrar compras por fornecedor"
+          <div className="monthPicker" aria-label="Mês das compras">
+            <button
+              type="button"
+              onClick={() => shiftMonth(-1)}
+              aria-label="Mês anterior"
+            >
+              <ChevronLeft />
+            </button>
+            <b>{monthLabel}</b>
+            <button
+              type="button"
+              onClick={() => shiftMonth(1)}
+              aria-label="Próximo mês"
+            >
+              <ChevronRight />
+            </button>
+          </div>
+          <button
+            type="button"
+            className="filterButton"
+            onClick={() => setShowFilters((visible) => !visible)}
           >
-            <option>Todos</option>
-            {suppliers.map((supplier) => (
-              <option key={supplier}>{supplier}</option>
-            ))}
-          </select>
+            <SlidersHorizontal /> Filtrar
+          </button>
         </div>
+
+        {showFilters ? (
+          <div className="purchaseMonthFilters">
+            <label>
+              <span>Fornecedor</span>
+              <select
+                value={supplierFilter}
+                onChange={(event) => setSupplierFilter(event.target.value)}
+                aria-label="Filtrar compras por fornecedor"
+              >
+                <option>Todos</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier}>{supplier}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => setSupplierFilter("Todos")}
+            >
+              Limpar filtro
+            </button>
+          </div>
+        ) : null}
+
         <table>
           <thead>
             <tr>
@@ -2900,7 +3094,9 @@ function Purchases({
           </tbody>
         </table>
         {!filteredPurchases.length ? (
-          <p className="empty">Nenhuma compra encontrada.</p>
+          <p className="empty">
+            Nenhuma compra encontrada para o mês selecionado.
+          </p>
         ) : null}
       </div>
     </>
@@ -3392,8 +3588,8 @@ function Finance({
     <>
       <Cards
         v={[
-          [brl(totals.paid), "Faturamento"],
-          [brl(totals.gross), "Total vendido"],
+          [brl(totals.gross), "Faturamento"],
+          [brl(totals.paid), "Total vendido"],
           [brl(totals.gross - totals.paid), "A receber"],
           [brl(balance), "Saldo"],
         ]}
