@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     const services = (Array.isArray(data) ? data : [])
       .filter((service) => !service?.error && service?.id)
       .map((service) => ({
-        id: service.id,
+        id: Number(service.id),
         name: service.name || "Serviço",
         company:
           service.company?.name ||
