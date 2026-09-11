@@ -3174,3 +3174,303 @@ input[type="number"]::-webkit-outer-spin-button {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Melhor Envio integration */
+.shippingPageHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.shippingPageHead h2 {
+  margin: 0;
+}
+.shippingPageHead p {
+  margin: 5px 0 0;
+}
+.melhorEnvioStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #111a28;
+  color: var(--muted);
+  padding: 7px 10px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.melhorEnvioStatus > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7d8898;
+}
+.melhorEnvioStatus.connected {
+  color: #76d7b2;
+  border-color: #2b735b;
+}
+.melhorEnvioStatus.connected > span {
+  background: #39c98d;
+  box-shadow: 0 0 0 4px rgb(57 201 141 / 12%);
+}
+.melhorEnvioOrderPanel {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--line);
+  margin-top: 3px;
+  padding-top: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.melhorEnvioOrderPanel > div:first-child {
+  min-width: 0;
+}
+.melhorEnvioOrderPanel b,
+.melhorEnvioOrderPanel small {
+  display: block;
+}
+.melhorEnvioOrderPanel b {
+  color: #e7c15c;
+}
+.melhorEnvioOrderPanel small {
+  margin-top: 4px;
+  color: var(--muted);
+}
+.melhorEnvioOrderPanel > div:last-child {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.meConnectButton,
+.meLabelButton {
+  border: 1px solid #d8ae43;
+  border-radius: 9px;
+  background: #d8ae43;
+  color: #111927;
+  padding: 9px 12px;
+  font-weight: 900;
+  text-decoration: none;
+}
+.meDisconnectButton {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px;
+  font-weight: 800;
+}
+.meConfigWarning {
+  color: #e9a84b;
+  font-size: 10px;
+  font-weight: 800;
+}
+.melhorEnvioLabelDialog {
+  width: min(920px, 100%);
+  max-height: calc(100vh - 30px);
+}
+.melhorEnvioLabelDialog header small {
+  color: #b98412;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.13em;
+}
+.meSandboxNotice,
+.meProductionNotice,
+.meError {
+  border-radius: 10px;
+  padding: 11px 13px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.meSandboxNotice {
+  background: #edf7ff;
+  color: #27638b;
+  border: 1px solid #b9ddf4;
+}
+.meProductionNotice {
+  background: #fff5dd;
+  color: #8c6200;
+  border: 1px solid #ead08c;
+}
+.meError {
+  background: #fff0f0;
+  color: #b33c43;
+  border: 1px solid #e5b8bb;
+}
+.meSection {
+  border: 1px solid #d8dde5;
+  border-radius: 13px;
+  background: #fff;
+  padding: 15px;
+  display: grid;
+  gap: 12px;
+}
+.meSectionHead b,
+.meSectionHead small {
+  display: block;
+}
+.meSectionHead b {
+  color: #172233;
+}
+.meSectionHead small {
+  margin-top: 4px;
+  color: #647185;
+}
+.meFormGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.meFormGrid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.meFormGrid input,
+.mePackageGrid input,
+.meContents input {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  border: 1px solid #cfd5dd;
+  border-radius: 9px;
+  background: #fff;
+  color: #172233;
+  padding: 0 10px;
+}
+.mePackageGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.meContents {
+  display: grid;
+  gap: 8px;
+}
+.meContents > div:not(.meContentTotal) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: 12px;
+  align-items: end;
+  border-bottom: 1px solid #e5e8ec;
+  padding-bottom: 8px;
+}
+.meContents > div > span {
+  color: #445064;
+  font-size: 12px;
+}
+.meContents label small {
+  display: block;
+  margin-bottom: 4px;
+  color: #647185;
+  font-size: 10px;
+  font-weight: 800;
+}
+.meContentTotal {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 9px;
+  background: #f4f1e9;
+  padding: 10px 12px;
+}
+.meContentTotal span {
+  color: #647185;
+  font-size: 11px;
+  font-weight: 800;
+}
+.meContentTotal b {
+  color: #172233;
+}
+.meQuoteActions {
+  display: flex;
+  justify-content: flex-end;
+}
+.meQuotes {
+  display: grid;
+  gap: 8px;
+}
+.meQuotes > button {
+  border: 1px solid #d8dde5;
+  border-radius: 11px;
+  background: #fff;
+  color: #172233;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  text-align: left;
+}
+.meQuotes > button.selected {
+  border-color: #d8ae43;
+  background: #fff9e8;
+  box-shadow: inset 0 0 0 1px #d8ae43;
+}
+.meQuotes b,
+.meQuotes small {
+  display: block;
+}
+.meQuotes small {
+  margin-top: 3px;
+  color: #647185;
+}
+.meQuotes > button > span:last-child {
+  text-align: right;
+}
+.meLabelFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.meLabelFooter > button:not(.primary) {
+  border: 1px solid #cfd5dd;
+  border-radius: 9px;
+  background: #fff;
+  color: #172233;
+  padding: 10px 13px;
+  font-weight: 800;
+}
+.meLabelFooter button:disabled,
+.meQuoteActions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 780px) {
+  .shippingPageHead,
+  .melhorEnvioOrderPanel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .melhorEnvioStatus {
+    align-self: flex-start;
+  }
+  .melhorEnvioOrderPanel > div:last-child {
+    justify-content: flex-start;
+  }
+  .meFormGrid,
+  .meFormGrid.two {
+    grid-template-columns: 1fr;
+  }
+  .mePackageGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .mePackageGrid {
+    grid-template-columns: 1fr;
+  }
+  .meContents > div:not(.meContentTotal) {
+    grid-template-columns: 1fr;
+  }
+  .meQuotes > button {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .meQuotes > button > span:last-child {
+    text-align: left;
+  }
+}
