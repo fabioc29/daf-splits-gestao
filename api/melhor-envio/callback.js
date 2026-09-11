@@ -1,7 +1,7 @@
 import {
   clearCookie,
   getConfig,
-  readState,
+  validateState,
   requestToken,
   saveSession,
   sendError,
@@ -31,14 +31,13 @@ export default async function handler(req, res) {
 
     const code = typeof req.query?.code === "string" ? req.query.code : "";
     const state = typeof req.query?.state === "string" ? req.query.state : "";
-    const expectedState = readState(req);
 
     if (!code) {
       const error = new Error("Código OAuth não recebido pelo Melhor Envio.");
       error.status = 400;
       throw error;
     }
-    if (!state || !expectedState || state !== expectedState) {
+    if (!validateState(state)) {
       const error = new Error(
         "Não foi possível validar o retorno de autorização do Melhor Envio.",
       );
