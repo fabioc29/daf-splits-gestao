@@ -105,6 +105,9 @@ type V = {
   shippingPaidBy?: "client" | "daf";
   shippingMethod?:
     | "Correios"
+    | "Correios Sedex"
+    | "Correios PAC"
+    | "Correios Mini"
     | "Loggi"
     | "Jadlog"
     | "Uber/Pessoalmente"
@@ -589,6 +592,14 @@ const action =
                 <ShoppingBag /> Marketplace
               </button>
             ) : null}
+            {page === "stock" ? (
+              <button
+                className="secondary stockReportHeaderButton"
+                onClick={() => setModal({ type: "stockReport" })}
+              >
+                <ReceiptText /> Relatório
+              </button>
+            ) : null}
             {action ? (
               <button
                 className="primary"
@@ -673,6 +684,11 @@ const action =
           set={setData}
           close={() => setModal(null)}
           notify={notify}
+        />
+      ) : modal?.type === "stockReport" ? (
+        <StockReport
+          d={data}
+          close={() => setModal(null)}
         />
       ) : modal ? (
         <Form
@@ -1217,6 +1233,15 @@ function Sales({
     month: "long",
     year: "numeric",
   }).format(new Date(`${month}-01T12:00:00`));
+  const selectedMonthRevenue = d.sales
+    .filter(
+      (sale) =>
+        sale.status !== "cancelled" &&
+        !isNoCost(sale) &&
+        !isHistoricalSale(sale) &&
+        sale.date.startsWith(month),
+    )
+    .reduce((sum, sale) => sum + sale.total, 0);
   function shiftMonth(delta: number) {
     const base = new Date(`${month}-01T12:00:00`);
     base.setMonth(base.getMonth() + delta);
@@ -1300,7 +1325,12 @@ function Sales({
   }
   return (
     <div className="panel table">
-      <h2>Vendas</h2>
+      <div className="salesTitleRow">
+        <h2>Vendas</h2>
+        <span>
+          Faturamento do mês: <b>{brl(selectedMonthRevenue)}</b>
+        </span>
+      </div>
       <div className="salesToolbar">
         <label className="salesSearch">
           <Search />
@@ -1502,6 +1532,8 @@ function Prepare({
 }) {
   const [tab, setTab] = useState("pending");
   const [shippingSale, setShippingSale] = useState<V | null>(null);
+  const [simplifiedOpen, setSimplifiedOpen] = useState(false);
+  const [correiosModeOpen, setCorreiosModeOpen] = useState(false);
   const list = d.sales.filter(
     (s) =>
       s.status !== "cancelled" &&
@@ -1553,6 +1585,7 @@ function Prepare({
       ),
     }));
     notify(`Pedido #${orderNo(shippingSale.id)} finalizado para envio por ${method}.`);
+    setCorreiosModeOpen(false);
     setShippingSale(null);
   }
   function setPreparationStatus(
@@ -1579,11 +1612,63 @@ function Prepare({
           : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
     );
   }
+  const simplifiedMap = new Map<
+    number,
+    { product: P; volumes: Map<number, number>; totalDecants: number }
+  >();
+  d.sales
+    .filter(
+      (sale) =>
+        sale.status !== "cancelled" &&
+        !isHistoricalSale(sale) &&
+        !sale.prepared &&
+        getPreparationStatus(sale) === "preparing",
+    )
+    .forEach((sale) => {
+      sale.items
+        .filter((item) => !item.isApc)
+        .forEach((item) => {
+          const product = d.products.find(
+            (candidate) => candidate.id === item.productId,
+          );
+          if (!product) return;
+          const current = simplifiedMap.get(product.id) || {
+            product,
+            volumes: new Map<number, number>(),
+            totalDecants: 0,
+          };
+          current.volumes.set(
+            item.ml,
+            (current.volumes.get(item.ml) || 0) + 1,
+          );
+          current.totalDecants += 1;
+          simplifiedMap.set(product.id, current);
+        });
+    });
+  const simplifiedDecants = Array.from(simplifiedMap.values()).sort((a, b) =>
+    `${a.product.brand} ${a.product.name}`.localeCompare(
+      `${b.product.brand} ${b.product.name}`,
+      "pt-BR",
+      { sensitivity: "base" },
+    ),
+  );
+
   return (
     <>
     <div className="panel">
-      <h2>Pedidos para preparar</h2>
-      <p>Lista alimentada exclusivamente pelas vendas.</p>
+      <div className="preparePanelHead">
+        <div>
+          <h2>Pedidos para preparar</h2>
+          <p>Lista alimentada exclusivamente pelas vendas.</p>
+        </div>
+        <button
+          type="button"
+          className="simplifiedPrepareButton"
+          onClick={() => setSimplifiedOpen(true)}
+        >
+          Simplificado
+        </button>
+      </div>
       <div className="segmented">
         <button
           className={tab === "pending" ? "active" : ""}
@@ -1646,20 +1731,121 @@ function Prepare({
         {!list.length ? <p>Nenhum pedido nesta lista.</p> : null}
       </div>
     </div>
+    {simplifiedOpen ? (
+      <div className="overlay">
+        <div className="systemDialog simplifiedPrepareDialog">
+          <header>
+            <div>
+              <small>PREPARAÇÃO DE DECANTES</small>
+              <h2>Visualização simplificada</h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSimplifiedOpen(false)}
+              aria-label="Fechar visualização simplificada"
+            >
+              <X />
+            </button>
+          </header>
+          <p>
+            Apenas pedidos marcados como <b>A preparar</b>. APC's não entram
+            nesta contagem.
+          </p>
+          <div className="simplifiedPrepareList">
+            {simplifiedDecants.map(({ product, volumes, totalDecants }) => (
+              <div key={product.id}>
+                <div>
+                  <b>{product.brand} {product.name}</b>
+                  <span>{totalDecants} decante(s)</span>
+                </div>
+                <div className="simplifiedVolumes">
+                  {Array.from(volumes.entries())
+                    .sort(([a], [b]) => a - b)
+                    .map(([ml, quantity]) => (
+                      <span key={ml}>
+                        <b>{ml} ml</b> · {quantity} decante(s)
+                      </span>
+                    ))}
+                </div>
+              </div>
+            ))}
+            {!simplifiedDecants.length ? (
+              <p className="empty">Nenhum decante marcado como A preparar.</p>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    ) : null}
     {shippingSale ? (
       <div className="overlay">
         <div className="systemDialog">
           <header>
             <div><small>FORMA DE ENVIO</small><h2>Como o pedido será enviado?</h2></div>
-            <button type="button" onClick={() => setShippingSale(null)}><X /></button>
+            <button
+              type="button"
+              onClick={() => {
+                setCorreiosModeOpen(false);
+                setShippingSale(null);
+              }}
+            >
+              <X />
+            </button>
           </header>
           <p>Pedido #{orderNo(shippingSale.id)} · {saleCustomer(shippingSale, d)}</p>
           <div className="shippingChoices">
-            {(["Correios", "Loggi", "Jadlog", "Uber/Pessoalmente"] as const).map((method) => (
+            <button
+              type="button"
+              onClick={() => setCorreiosModeOpen(true)}
+            >
+              Correios
+            </button>
+            {(["Loggi", "Jadlog", "Uber/Pessoalmente"] as const).map((method) => (
               <button type="button" key={method} onClick={() => finishWithShipping(method)}>
                 {method}
               </button>
             ))}
+          </div>
+        </div>
+      </div>
+    ) : null}
+    {shippingSale && correiosModeOpen ? (
+      <div className="overlay nestedOverlay">
+        <div className="systemDialog correiosModeDialog">
+          <header>
+            <div>
+              <small>CORREIOS</small>
+              <h2>Selecione a modalidade</h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCorreiosModeOpen(false)}
+              aria-label="Voltar para formas de envio"
+            >
+              <X />
+            </button>
+          </header>
+          <p>
+            Pedido #{orderNo(shippingSale.id)} · {saleCustomer(shippingSale, d)}
+          </p>
+          <div className="shippingChoices correiosChoices">
+            <button
+              type="button"
+              onClick={() => finishWithShipping("Correios Sedex")}
+            >
+              Sedex
+            </button>
+            <button
+              type="button"
+              onClick={() => finishWithShipping("Correios PAC")}
+            >
+              PAC
+            </button>
+            <button
+              type="button"
+              onClick={() => finishWithShipping("Correios Mini")}
+            >
+              Mini Envios
+            </button>
           </div>
         </div>
       </div>
@@ -1779,6 +1965,9 @@ function Shipping({
                     >
                       <option value="" disabled>Selecione...</option>
                       <option>Correios</option>
+                      <option>Correios Sedex</option>
+                      <option>Correios PAC</option>
+                      <option>Correios Mini</option>
                       <option>Loggi</option>
                       <option>Jadlog</option>
                       <option>Uber/Pessoalmente</option>
@@ -2033,6 +2222,122 @@ function Receivables({
   );
 }
 
+function StockReport({
+  d,
+  close,
+}: {
+  d: D;
+  close: () => void;
+}) {
+  const availableProducts = d.products
+    .filter((product) => product.stock > 0)
+    .sort((a, b) =>
+      `${a.brand} ${a.name}`.localeCompare(
+        `${b.brand} ${b.name}`,
+        "pt-BR",
+        { sensitivity: "base" },
+      ),
+    );
+
+  function buildReportText() {
+    const generatedAt = new Date().toLocaleString("pt-BR");
+    const lines = [
+      "DAF SPLITS - RELATÓRIO DE ESTOQUE",
+      `Gerado em: ${generatedAt}`,
+      "",
+      ...availableProducts.map(
+        (product, index) =>
+          `${index + 1}. ${product.brand} ${product.name} | ${product.stock.toLocaleString(
+            "pt-BR",
+            { maximumFractionDigits: 2 },
+          )} ml | APC: ${product.apc > 0 ? "SIM" : "NÃO"}`,
+      ),
+      "",
+      `Total de perfumes disponíveis: ${availableProducts.length}`,
+    ];
+    return lines.join("\n");
+  }
+
+  function downloadTxt() {
+    const blob = new Blob([buildReportText()], {
+      type: "text/plain;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `daf-splits-relatorio-estoque-${today()}.txt`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="overlay">
+      <div className="systemDialog stockReportDialog">
+        <header>
+          <div>
+            <small>RELATÓRIO DE ESTOQUE</small>
+            <h2>Perfumes disponíveis</h2>
+          </div>
+          <button
+            type="button"
+            onClick={close}
+            aria-label="Fechar relatório de estoque"
+          >
+            <X />
+          </button>
+        </header>
+
+        <div className="stockReportTableWrap">
+          <table className="stockReportTable">
+            <thead>
+              <tr>
+                <th>Perfume</th>
+                <th>ML disponíveis</th>
+                <th>APC?</th>
+              </tr>
+            </thead>
+            <tbody>
+              {availableProducts.map((product) => (
+                <tr key={product.id}>
+                  <td>{product.brand} {product.name}</td>
+                  <td>
+                    {product.stock.toLocaleString("pt-BR", {
+                      maximumFractionDigits: 2,
+                    })} ml
+                  </td>
+                  <td>
+                    <b className={product.apc > 0 ? "reportApcYes" : "reportApcNo"}>
+                      {product.apc > 0 ? "SIM" : "NÃO"}
+                    </b>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!availableProducts.length ? (
+            <p className="empty">Nenhum perfume disponível no estoque.</p>
+          ) : null}
+        </div>
+
+        <div className="stockReportSummary">
+          Total de perfumes disponíveis: <b>{availableProducts.length}</b>
+        </div>
+
+        <footer className="stockReportFooter">
+          <button type="button" onClick={close}>
+            Fechar
+          </button>
+          <button type="button" className="primary" onClick={downloadTxt}>
+            Baixar .txt
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function BrandManager({
   d,
   set,
@@ -2230,7 +2535,9 @@ function Stock({
   const [view, setView] = useState("perfumes"),
     [category, setCategory] = useState("Todos"),
     [brand, setBrand] = useState("Todas"),
-    [query, setQuery] = useState("");
+    [query, setQuery] = useState(""),
+    [productHistoryPickerOpen, setProductHistoryPickerOpen] = useState(false),
+    [productHistoryId, setProductHistoryId] = useState<number | null>(null);
   const brands = Array.from(new Set(d.products.map((p) => p.brand))).sort(
     (a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
   );
@@ -2238,6 +2545,41 @@ function Stock({
     (total, product) => total + Math.max(0, product.stock) * product.cost,
     0,
   );
+  const historyProduct = productHistoryId
+    ? d.products.find((product) => product.id === productHistoryId)
+    : undefined;
+  const productHistoryRows = historyProduct
+    ? d.sales
+        .filter(
+          (sale) =>
+            sale.status !== "cancelled" &&
+            !isHistoricalSale(sale) &&
+            sale.items.some((item) => item.productId === historyProduct.id),
+        )
+        .map((sale) => {
+          const matchingItems = sale.items.filter(
+            (item) => item.productId === historyProduct.id,
+          );
+          return {
+            sale,
+            ml: matchingItems.reduce((sum, item) => sum + item.ml, 0),
+            hasApc: matchingItems.some((item) => item.isApc),
+          };
+        })
+        .sort(
+          (a, b) =>
+            b.sale.date.localeCompare(a.sale.date) || b.sale.id - a.sale.id,
+        )
+    : [];
+  const historySoldMl = productHistoryRows.reduce(
+    (sum, row) => sum + row.ml,
+    0,
+  );
+  const historyRegisteredMl = historyProduct
+    ? Math.max(0, historyProduct.stock) + historySoldMl
+    : 0;
+  const formatMl = (value: number) =>
+    `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ml`;
   const filtered = d.products.filter(
     (p) =>
       (view === "out"
@@ -2318,16 +2660,29 @@ function Stock({
       ) : null}
       {view !== "supplies" ? (
         <>
-          <Cards
-            v={[
-              [String(d.products.length), "Perfumes"],
-              [
-                d.products.reduce((n, p) => n + p.stock, 0) + " ml",
-                "Volume disponível",
-              ],
-              [brl(perfumeInventoryValue), "Valor em estoque"],
-            ]}
-          />
+          <div className="stockSummaryRow">
+            <Cards
+              v={[
+                [String(d.products.length), "Perfumes"],
+                [
+                  d.products.reduce((n, p) => n + p.stock, 0) + " ml",
+                  "Volume disponível",
+                ],
+                [brl(perfumeInventoryValue), "Valor em estoque"],
+              ]}
+            />
+            <button
+              type="button"
+              className="productSalesHistoryButton"
+              onClick={() => setProductHistoryPickerOpen(true)}
+            >
+              <ReceiptText />
+              <span>
+                <b>Histórico por perfume</b>
+                <small>Clientes, ml vendidos e datas</small>
+              </span>
+            </button>
+          </div>
           <div className="stockFilters">
             <label>
               <Search />
@@ -2418,6 +2773,138 @@ function Stock({
           </div>
         </>
       )}
+      {productHistoryPickerOpen ? (
+        <div className="overlay">
+          <div className="systemDialog productHistoryPickerDialog">
+            <header>
+              <div>
+                <small>HISTÓRICO DE VENDAS</small>
+                <h2>Selecionar perfume</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProductHistoryPickerOpen(false)}
+                aria-label="Fechar seleção de perfume"
+              >
+                <X />
+              </button>
+            </header>
+            <label>
+              <span>Perfume</span>
+              <select
+                defaultValue=""
+                onChange={(event) => {
+                  const id = Number(event.target.value);
+                  if (!id) return;
+                  setProductHistoryPickerOpen(false);
+                  setProductHistoryId(id);
+                }}
+              >
+                <option value="" disabled>
+                  Selecione...
+                </option>
+                {[...d.products]
+                  .sort((a, b) =>
+                    `${a.brand} ${a.name}`.localeCompare(
+                      `${b.brand} ${b.name}`,
+                      "pt-BR",
+                      { sensitivity: "base" },
+                    ),
+                  )
+                  .map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.brand} {product.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          </div>
+        </div>
+      ) : null}
+      {historyProduct ? (
+        <div className="overlay">
+          <div className="systemDialog productSalesHistoryDialog">
+            <header>
+              <div>
+                <small>HISTÓRICO DO PERFUME</small>
+                <h2>{historyProduct.brand} {historyProduct.name}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProductHistoryId(null)}
+                aria-label="Fechar histórico do perfume"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="productHistoryStats">
+              <div>
+                <span>ML cadastrados</span>
+                <b>{formatMl(historyRegisteredMl)}</b>
+              </div>
+              <div>
+                <span>ML vendidos</span>
+                <b>{formatMl(historySoldMl)}</b>
+              </div>
+              <div>
+                <span>ML restantes</span>
+                <b>{formatMl(Math.max(0, historyProduct.stock))}</b>
+              </div>
+            </div>
+
+            <div className="productHistoryTableWrap">
+              <table className="productHistoryTable">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>ML vendidos</th>
+                    <th>Data</th>
+                    <th>Pedido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {productHistoryRows.map(({ sale, ml, hasApc }) => (
+                    <tr key={sale.id}>
+                      <td>{saleCustomer(sale, d)}</td>
+                      <td>
+                        {formatMl(ml)}
+                        {hasApc ? <small>APC</small> : null}
+                      </td>
+                      <td>{dateBR(sale.date)}</td>
+                      <td>#{orderNo(sale.id)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!productHistoryRows.length ? (
+                <p className="empty">
+                  Nenhuma venda registrada para este perfume.
+                </p>
+              ) : null}
+            </div>
+
+            <footer className="productHistoryFooter">
+              <button
+                type="button"
+                onClick={() => {
+                  setProductHistoryId(null);
+                  setProductHistoryPickerOpen(true);
+                }}
+              >
+                Trocar perfume
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setProductHistoryId(null)}
+              >
+                Fechar
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -2435,21 +2922,47 @@ function Purchases({
 }) {
   const [supplierFilter, setSupplierFilter] = useState("Todos");
   const [purchaseQuery, setPurchaseQuery] = useState("");
-  const month = today().slice(0, 7),
-    monthly = d.purchases.filter((p) => p.date.startsWith(month)),
-    spent = monthly.reduce((n, p) => n + p.total, 0);
+  const [month, setMonth] = useState(today().slice(0, 7));
+  const [showFilters, setShowFilters] = useState(false);
+  const monthLabel = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${month}-01T12:00:00`));
+  function shiftMonth(delta: number) {
+    const base = new Date(`${month}-01T12:00:00`);
+    base.setMonth(base.getMonth() + delta);
+    setMonth(
+      `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}`,
+    );
+  }
+  const monthly = d.purchases.filter((purchase) =>
+    purchase.date.startsWith(month),
+  );
+  const spent = monthly.reduce(
+    (sum, purchase) => sum + purchase.total,
+    0,
+  );
   const suppliers = Array.from(
     new Set(d.purchases.map((purchase) => purchase.supplier).filter(Boolean)),
-  ).sort();
-  const filteredPurchases = d.purchases.filter((purchase) => {
-    const matchesSupplier =
-      supplierFilter === "Todos" || purchase.supplier === supplierFilter;
-    const searchable =
-      `${purchase.date} ${purchase.supplier} ${purchase.type} ${purchase.description}`.toLowerCase();
-    return (
-      matchesSupplier && searchable.includes(purchaseQuery.trim().toLowerCase())
+  ).sort((a, b) =>
+    a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
+  );
+  const filteredPurchases = d.purchases
+    .filter((purchase) => {
+      const matchesSupplier =
+        supplierFilter === "Todos" || purchase.supplier === supplierFilter;
+      const searchable =
+        `${purchase.date} ${purchase.supplier} ${purchase.type} ${purchase.description}`.toLowerCase();
+      return (
+        purchase.date.startsWith(month) &&
+        matchesSupplier &&
+        searchable.includes(purchaseQuery.trim().toLowerCase())
+      );
+    })
+    .sort(
+      (a, b) =>
+        b.date.localeCompare(a.date) || b.id - a.id,
     );
-  });
   function remove(id: number) {
     if (
       !window.confirm(
@@ -2462,7 +2975,9 @@ function Purchases({
       purchases: x.purchases.filter((p) => p.id !== id),
       supplies: x.supplies.map((supply) => ({
         ...supply,
-        pendingLots: (supply.pendingLots || []).filter((lot) => lot.purchaseId !== id),
+        pendingLots: (supply.pendingLots || []).filter(
+          (lot) => lot.purchaseId !== id,
+        ),
       })),
     }));
     notify("Registro de compra excluído.");
@@ -2471,14 +2986,14 @@ function Purchases({
     <>
       <Cards
         v={[
-          [brl(spent), "Gasto em compras neste mês"],
+          [brl(spent), "Gasto em compras no mês"],
           [String(monthly.length), "Compras no mês"],
         ]}
       />
       <div className="panel table">
         <h2>Histórico de compras</h2>
-        <div className="purchaseFilters">
-          <label>
+        <div className="salesToolbar purchaseMonthToolbar">
+          <label className="salesSearch">
             <Search />
             <input
               value={purchaseQuery}
@@ -2487,17 +3002,56 @@ function Purchases({
               aria-label="Pesquisar no histórico de compras"
             />
           </label>
-          <select
-            value={supplierFilter}
-            onChange={(event) => setSupplierFilter(event.target.value)}
-            aria-label="Filtrar compras por fornecedor"
+          <div className="monthPicker" aria-label="Mês das compras">
+            <button
+              type="button"
+              onClick={() => shiftMonth(-1)}
+              aria-label="Mês anterior"
+            >
+              <ChevronLeft />
+            </button>
+            <b>{monthLabel}</b>
+            <button
+              type="button"
+              onClick={() => shiftMonth(1)}
+              aria-label="Próximo mês"
+            >
+              <ChevronRight />
+            </button>
+          </div>
+          <button
+            type="button"
+            className="filterButton"
+            onClick={() => setShowFilters((visible) => !visible)}
           >
-            <option>Todos</option>
-            {suppliers.map((supplier) => (
-              <option key={supplier}>{supplier}</option>
-            ))}
-          </select>
+            <SlidersHorizontal /> Filtrar
+          </button>
         </div>
+
+        {showFilters ? (
+          <div className="purchaseMonthFilters">
+            <label>
+              <span>Fornecedor</span>
+              <select
+                value={supplierFilter}
+                onChange={(event) => setSupplierFilter(event.target.value)}
+                aria-label="Filtrar compras por fornecedor"
+              >
+                <option>Todos</option>
+                {suppliers.map((supplier) => (
+                  <option key={supplier}>{supplier}</option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => setSupplierFilter("Todos")}
+            >
+              Limpar filtro
+            </button>
+          </div>
+        ) : null}
+
         <table>
           <thead>
             <tr>
@@ -2540,7 +3094,9 @@ function Purchases({
           </tbody>
         </table>
         {!filteredPurchases.length ? (
-          <p className="empty">Nenhuma compra encontrada.</p>
+          <p className="empty">
+            Nenhuma compra encontrada para o mês selecionado.
+          </p>
         ) : null}
       </div>
     </>
@@ -3032,8 +3588,8 @@ function Finance({
     <>
       <Cards
         v={[
-          [brl(totals.paid), "Faturamento"],
-          [brl(totals.gross), "Total vendido"],
+          [brl(totals.gross), "Faturamento"],
+          [brl(totals.paid), "Total vendido"],
           [brl(totals.gross - totals.paid), "A receber"],
           [brl(balance), "Saldo"],
         ]}

@@ -2793,3 +2793,384 @@ input[type="number"]::-webkit-outer-spin-button {
     justify-content: flex-end;
   }
 }
+
+
+/* Sales monthly revenue */
+.salesTitleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+.salesTitleRow h2 {
+  margin: 0;
+}
+.salesTitleRow > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.salesTitleRow > span b {
+  color: var(--text);
+}
+
+/* Simplified preparation view */
+.preparePanelHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.preparePanelHead h2 {
+  margin: 0;
+}
+.preparePanelHead p {
+  margin: 5px 0 0;
+}
+.simplifiedPrepareButton {
+  border: 1px solid var(--gold);
+  border-radius: 10px;
+  background: #080c12;
+  color: #edc557;
+  padding: 10px 16px;
+  font-weight: 900;
+}
+.simplifiedPrepareDialog {
+  width: min(720px, 100%);
+}
+.simplifiedPrepareDialog > p {
+  margin: 0;
+  color: #647185;
+  font-size: 12px;
+}
+.simplifiedPrepareList {
+  display: grid;
+  gap: 10px;
+  max-height: min(62vh, 560px);
+  overflow: auto;
+}
+.simplifiedPrepareList > div {
+  border: 1px solid #d8dde5;
+  border-radius: 12px;
+  background: white;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+.simplifiedPrepareList > div > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+.simplifiedPrepareList > div > div:first-child > b {
+  color: #172233;
+}
+.simplifiedPrepareList > div > div:first-child > span {
+  color: #8a6508;
+  font-size: 12px;
+  font-weight: 900;
+}
+.simplifiedVolumes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.simplifiedVolumes span {
+  border-radius: 999px;
+  background: #f4f1e9;
+  color: #596477;
+  padding: 7px 10px;
+  font-size: 11px;
+}
+.simplifiedVolumes b {
+  color: #172233;
+}
+.correiosModeDialog {
+  width: min(520px, 100%);
+}
+.correiosChoices {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* Correios labels are yellow only */
+.shippingMethod.correios,
+.shippingMethod.correios-sedex,
+.shippingMethod.correios-pac,
+.shippingMethod.correios-mini {
+  color: #f3c634;
+  background: none;
+  background-clip: border-box;
+  -webkit-background-clip: border-box;
+}
+
+/* Stock product sales history */
+.stockSummaryRow {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+.stockSummaryRow > .cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.productSalesHistoryButton {
+  border: 1px solid var(--gold);
+  border-radius: 17px;
+  background: #111a28;
+  color: #edc557;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+.productSalesHistoryButton svg {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+.productSalesHistoryButton span,
+.productSalesHistoryButton b,
+.productSalesHistoryButton small {
+  display: block;
+}
+.productSalesHistoryButton b {
+  font-size: 14px;
+}
+.productSalesHistoryButton small {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.productHistoryPickerDialog {
+  width: min(560px, 100%);
+}
+.productHistoryPickerDialog select {
+  width: 100%;
+  height: 46px;
+  border: 1px solid #cfd5dd;
+  border-radius: 10px;
+  background: white;
+  color: #172233;
+  padding: 0 12px;
+}
+.productSalesHistoryDialog {
+  width: min(900px, 100%);
+}
+.productHistoryStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.productHistoryStats > div {
+  border: 1px solid #d8dde5;
+  border-radius: 12px;
+  background: white;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+}
+.productHistoryStats span {
+  color: #647185;
+  font-size: 10px;
+  font-weight: 800;
+}
+.productHistoryStats b {
+  color: #172233;
+  font-size: 20px;
+}
+.productHistoryTableWrap {
+  border: 1px solid #d8dde5;
+  border-radius: 12px;
+  overflow: auto;
+  background: white;
+}
+.productHistoryTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+.productHistoryTable th,
+.productHistoryTable td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #e3e7ec;
+  text-align: left;
+  color: #172233;
+}
+.productHistoryTable th {
+  color: #718096;
+  font-size: 10px;
+}
+.productHistoryTable td {
+  font-size: 12px;
+}
+.productHistoryTable td small {
+  display: inline-block;
+  margin-left: 7px;
+  border-radius: 999px;
+  background: #fff3c7;
+  color: #8a6508;
+  padding: 2px 6px;
+  font-size: 9px;
+  font-weight: 900;
+}
+.productHistoryFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.productHistoryFooter > button:not(.primary) {
+  border: 1px solid #cfd5dd;
+  border-radius: 9px;
+  background: white;
+  color: #172233;
+  padding: 10px 13px;
+  font-weight: 800;
+}
+
+@media (max-width: 800px) {
+  .salesTitleRow,
+  .preparePanelHead {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .simplifiedPrepareButton {
+    align-self: flex-start;
+  }
+  .stockSummaryRow {
+    grid-template-columns: 1fr;
+  }
+  .stockSummaryRow > .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .productHistoryStats {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 520px) {
+  .correiosChoices {
+    grid-template-columns: 1fr;
+  }
+  .stockSummaryRow > .cards {
+    grid-template-columns: 1fr;
+  }
+  .simplifiedPrepareList > div > div:first-child {
+    display: grid;
+  }
+}
+
+
+/* Stock availability report */
+.stockReportHeaderButton {
+  border-color: var(--gold);
+  color: #e7c15c;
+}
+.stockReportDialog {
+  width: min(860px, 100%);
+}
+.stockReportDialog header small {
+  color: #b98412;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+.stockReportTableWrap {
+  max-height: min(60vh, 560px);
+  overflow: auto;
+  border: 1px solid #d8dde5;
+  border-radius: 12px;
+  background: white;
+}
+.stockReportTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+.stockReportTable th,
+.stockReportTable td {
+  padding: 11px 13px;
+  border-bottom: 1px solid #e3e7ec;
+  text-align: left;
+  color: #172233;
+}
+.stockReportTable th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f4f1e9;
+  color: #718096;
+  font-size: 10px;
+}
+.stockReportTable td {
+  font-size: 12px;
+}
+.reportApcYes {
+  color: #198f68;
+}
+.reportApcNo {
+  color: #c34c53;
+}
+.stockReportSummary {
+  border-radius: 10px;
+  background: #eee8d9;
+  color: #596477;
+  padding: 12px 14px;
+  font-size: 12px;
+}
+.stockReportSummary b {
+  color: #172233;
+  font-size: 16px;
+}
+.stockReportFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.stockReportFooter > button:not(.primary) {
+  border: 1px solid #cfd5dd;
+  border-radius: 9px;
+  background: white;
+  color: #172233;
+  padding: 10px 13px;
+  font-weight: 800;
+}
+
+/* Purchases month navigation follows Sales */
+.purchaseMonthFilters {
+  display: grid;
+  grid-template-columns: minmax(220px, 360px) auto;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #111a28;
+}
+.purchaseMonthFilters label > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+.purchaseMonthFilters select {
+  width: 100%;
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #0c1421;
+  color: var(--text);
+  padding: 0 12px;
+}
+.purchaseMonthFilters > button {
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  padding: 0 14px;
+  font-weight: 800;
+}
+@media (max-width: 720px) {
+  .purchaseMonthFilters {
+    grid-template-columns: 1fr;
+  }
+}
