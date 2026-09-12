@@ -1929,11 +1929,16 @@ function Shipping({
     state_abbr: "",
   });
   const [packageData, setPackageData] = useState({
-    width: "",
-    height: "",
-    length: "",
+    width: "11",
+    height: "3",
+    length: "16",
     weight: "",
   });
+  const [shippingQuery, setShippingQuery] = useState("");
+  const [trackingSale, setTrackingSale] = useState<V | null>(null);
+  const [trackingInfo, setTrackingInfo] = useState<any>(null);
+  const [trackingBusy, setTrackingBusy] = useState(false);
+  const [trackingError, setTrackingError] = useState("");
   const [quickQuoteOpen, setQuickQuoteOpen] = useState(false);
   const [quickQuoteToPostalCode, setQuickQuoteToPostalCode] = useState("");
   const [quickQuoteInsuranceValue, setQuickQuoteInsuranceValue] = useState("");
@@ -1946,7 +1951,10 @@ function Shipping({
       s.status !== "cancelled" &&
       s.prepared &&
       !isHistoricalSale(s) &&
-      (tab === "sent" ? s.sent : !s.sent),
+      (tab === "sent" ? s.sent : !s.sent) &&
+      saleCustomer(s, d)
+        .toLowerCase()
+        .includes(shippingQuery.trim().toLowerCase()),
   );
 
   function labelUnavailableReason(sale: V) {
@@ -2079,6 +2087,13 @@ function Shipping({
     setQuotes([]);
     setSelectedService(null);
     setMeError("");
+    const hasApc = sale.items.some((item) => item.isApc);
+    setPackageData({
+      width: hasApc ? "20" : "11",
+      height: "3",
+      length: hasApc ? "30" : "16",
+      weight: "",
+    });
     const count = Math.max(1, sale.items.length);
     const average = Math.max(0.01, sale.total / count);
     setContentValues(sale.items.map(() => Number(average.toFixed(2))));
@@ -2308,6 +2323,56 @@ function Shipping({
     }
   }
 
+  function trackingStatusLabel(status?: string) {
+    const labels: Record<string, string> = {
+      pending: "Pendente",
+      released: "Liberado",
+      paid: "Pago",
+      generated: "Etiqueta gerada",
+      received: "Recebido",
+      posted: "Postado",
+      delivered: "Entregue",
+      undelivered: "Não entregue",
+      suspended: "Suspenso",
+      paused: "Pausado",
+      canceled: "Cancelado",
+      cancelled: "Cancelado",
+    };
+    return labels[String(status || "").toLowerCase()] || status || "Não informado";
+  }
+
+  async function openTrackingStatus(sale: V) {
+    if (!sale.melhorEnvio?.orderId) {
+      notify("Este pedido não possui uma etiqueta do Melhor Envio vinculada.");
+      return;
+    }
+    if (!meStatus.connected) {
+      connectMelhorEnvio();
+      return;
+    }
+    setTrackingSale(sale);
+    setTrackingInfo(null);
+    setTrackingError("");
+    setTrackingBusy(true);
+    try {
+      const response = await fetch("/api/melhor-envio/tracking", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: sale.melhorEnvio.orderId }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Não foi possível consultar o rastreio.");
+      }
+      setTrackingInfo(data.tracking);
+    } catch (error: any) {
+      setTrackingError(error?.message || "Falha ao consultar o status da entrega.");
+    } finally {
+      setTrackingBusy(false);
+    }
+  }
+
   async function fetchPrintUrl(sale: V) {
     if (!sale.melhorEnvio?.orderId) return;
     try {
@@ -2394,12 +2459,29 @@ function Shipping({
             onClick={() => {
               setQuickQuoteError("");
               setQuickQuotes([]);
+              setPackageData({
+                width: "11",
+                height: "3",
+                length: "16",
+                weight: "",
+              });
               setQuickQuoteOpen(true);
             }}
           >
             Cotar frete
           </button>
         </div>
+
+        <label className="shippingSearch">
+          <Search />
+          <input
+            value={shippingQuery}
+            onChange={(event) => setShippingQuery(event.target.value)}
+            placeholder="Pesquisar pelo nome do cliente"
+            aria-label="Pesquisar cliente nos envios"
+          />
+        </label>
+
         <div className="shipping">
           {list.map((s) => {
             const c = d.clients.find((x) => x.id === s.clientId);
@@ -2450,69 +2532,110 @@ function Shipping({
                       Informações de entrega
                     </strong>
                   </summary>
-                  <div className="delivery">
-                    <label>
-                      <span>Forma de envio</span>
-                      <select
-                        value={
-                          isMarketplaceSale(s)
-                            ? s.marketplace || ""
-                            : s.shippingMethod || ""
-                        }
-                        disabled={isMarketplaceSale(s)}
-                        onChange={(event) =>
-                          changeShippingMethod(
-                            s.id,
-                            event.target.value as V["shippingMethod"],
-                          )
-                        }
-                      >
-                        <option value="" disabled>
-                          Selecione...
-                        </option>
-                        <option>Correios</option>
-                        <option>Correios Sedex</option>
-                        <option>Correios PAC</option>
-                        <option>Correios Mini</option>
-                        <option>Loggi</option>
-                        <option>Jadlog</option>
-                        <option>Uber/Pessoalmente</option>
-                        <option>TikTok Shop</option>
-                        <option>Shopee</option>
-                      </select>
-                    </label>
-                    <FieldView label="Nome" value={saleCustomer(s, d)} />
-                    <FieldView label="CPF" value={c?.cpf} />
-                    <FieldView label="Telefone" value={c?.phone} />
-                    <label>
-                      <span>Endereço</span>
-                      <select
-                        value={selectedAddressIndex}
-                        onChange={(event) =>
-                          setAddressIndex((current) => ({
-                            ...current,
-                            [s.id]: Number(event.target.value),
-                          }))
-                        }
-                      >
-                        {c?.addresses.map((a, i) => (
-                          <option key={i} value={i}>
-                            {a.label ? `${a.label} — ` : ""}
-                            {a.value}
+                  {tab === "sent" ? (
+                    <div className="sentDeliverySummary">
+                      <div className="sentDeliveryCard customer">
+                        <span>Cliente</span>
+                        <b>{saleCustomer(s, d)}</b>
+                        <small>
+                          {[c?.phone, c?.cpf]
+                            .filter(Boolean)
+                            .join(" · ") || "Telefone e CPF não informados"}
+                        </small>
+                      </div>
+                      <div className="sentDeliveryCard address">
+                        <span>Endereço de entrega</span>
+                        <b>
+                          {c?.addresses[selectedAddressIndex]?.value ||
+                            c?.addresses[0]?.value ||
+                            "Endereço não informado"}
+                          {c?.number ? `, ${c.number}` : ""}
+                        </b>
+                        <small>
+                          {[
+                            c?.district,
+                            [c?.city, c?.state].filter(Boolean).join(" / "),
+                            c?.cep ? `CEP ${c.cep}` : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ") || "Dados complementares não informados"}
+                        </small>
+                      </div>
+                      <div className="sentDeliveryCard shippingMethodCard">
+                        <span>Forma de envio</span>
+                        <b>
+                          {isMarketplaceSale(s)
+                            ? s.marketplace || "Marketplace"
+                            : s.shippingMethod || "Envio não informado"}
+                        </b>
+                        <small>Pedido já despachado</small>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="delivery">
+                      <label>
+                        <span>Forma de envio</span>
+                        <select
+                          value={
+                            isMarketplaceSale(s)
+                              ? s.marketplace || ""
+                              : s.shippingMethod || ""
+                          }
+                          disabled={isMarketplaceSale(s)}
+                          onChange={(event) =>
+                            changeShippingMethod(
+                              s.id,
+                              event.target.value as V["shippingMethod"],
+                            )
+                          }
+                        >
+                          <option value="" disabled>
+                            Selecione...
                           </option>
-                        ))}
-                      </select>
-                    </label>
-                    <FieldView label="CEP" value={c?.cep} />
-                    <FieldView label="Número" value={c?.number} />
-                    <FieldView label="Bairro" value={c?.district} />
-                    <FieldView
-                      label="Cidade / Estado"
-                      value={[c?.city, c?.state]
-                        .filter(Boolean)
-                        .join(" / ")}
-                    />
-                  </div>
+                          <option>Correios</option>
+                          <option>Correios Sedex</option>
+                          <option>Correios PAC</option>
+                          <option>Correios Mini</option>
+                          <option>Loggi</option>
+                          <option>Jadlog</option>
+                          <option>Uber/Pessoalmente</option>
+                          <option>TikTok Shop</option>
+                          <option>Shopee</option>
+                        </select>
+                      </label>
+                      <FieldView label="Nome" value={saleCustomer(s, d)} />
+                      <FieldView label="CPF" value={c?.cpf} />
+                      <FieldView label="Telefone" value={c?.phone} />
+                      <label>
+                        <span>Endereço</span>
+                        <select
+                          value={selectedAddressIndex}
+                          onChange={(event) =>
+                            setAddressIndex((current) => ({
+                              ...current,
+                              [s.id]: Number(event.target.value),
+                            }))
+                          }
+                        >
+                          {c?.addresses.map((a, i) => (
+                            <option key={i} value={i}>
+                              {a.label ? `${a.label} — ` : ""}
+                              {a.value}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <FieldView label="CEP" value={c?.cep} />
+                      <FieldView label="Número" value={c?.number} />
+                      <FieldView label="Bairro" value={c?.district} />
+                      <FieldView
+                        label="Cidade / Estado"
+                        value={[c?.city, c?.state]
+                          .filter(Boolean)
+                          .join(" / ")}
+                      />
+                    </div>
+                  )}
 
                   <div
                     className={
@@ -2521,15 +2644,23 @@ function Shipping({
                     }
                   >
                     <div>
-                      <b>Etiqueta Melhor Envio</b>
+                      <b>
+                        {tab === "sent"
+                          ? "Acompanhamento da entrega"
+                          : "Etiqueta Melhor Envio"}
+                      </b>
                       <small>
-                        {labelUnavailableReason(s)
-                          ? labelUnavailableReason(s)
-                          : s.melhorEnvio?.orderId
-                            ? `Etiqueta #${s.melhorEnvio.orderId}${s.melhorEnvio.serviceName ? " · " + s.melhorEnvio.serviceName : ""}`
-                            : meStatus.connected
-                              ? "Use os dados deste pedido para cotar e gerar a etiqueta."
-                              : "Conecte sua conta para gerar etiquetas sem sair do sistema."}
+                        {tab === "sent"
+                          ? s.melhorEnvio?.orderId
+                            ? "Consulte o status atual da etiqueta vinculada a este pedido."
+                            : "Este pedido não possui etiqueta do Melhor Envio vinculada."
+                          : labelUnavailableReason(s)
+                            ? labelUnavailableReason(s)
+                            : s.melhorEnvio?.orderId
+                              ? `Etiqueta #${s.melhorEnvio.orderId}${s.melhorEnvio.serviceName ? " · " + s.melhorEnvio.serviceName : ""}`
+                              : meStatus.connected
+                                ? "Use os dados deste pedido para cotar e gerar a etiqueta."
+                                : "Conecte sua conta para gerar etiquetas sem sair do sistema."}
                       </small>
                       {s.melhorEnvio?.tracking ? (
                         <small>
@@ -2538,7 +2669,29 @@ function Shipping({
                       ) : null}
                     </div>
                     <div>
-                      {!meStatus.configured ? (
+                      {tab === "sent" ? (
+                        <button
+                          type="button"
+                          className="meTrackingButton"
+                          disabled={
+                            !s.melhorEnvio?.orderId ||
+                            !meStatus.configured ||
+                            !meStatus.connected
+                          }
+                          title={
+                            !s.melhorEnvio?.orderId
+                              ? "Sem etiqueta vinculada"
+                              : !meStatus.connected
+                                ? "Conecte o Melhor Envio"
+                                : ""
+                          }
+                          onClick={() => openTrackingStatus(s)}
+                        >
+                          {s.melhorEnvio?.orderId
+                            ? "Status da entrega"
+                            : "Sem etiqueta vinculada"}
+                        </button>
+                      ) : !meStatus.configured ? (
                         <span className="meConfigWarning">
                           Chaves ainda não configuradas na Vercel
                         </span>
@@ -2579,7 +2732,7 @@ function Shipping({
                           Gerar etiqueta
                         </button>
                       )}
-                      {meStatus.connected ? (
+                      {meStatus.connected && tab !== "sent" ? (
                         <button
                           type="button"
                           className="meDisconnectButton"
@@ -2597,6 +2750,114 @@ function Shipping({
           {!list.length ? <p>Nenhum pedido nesta lista.</p> : null}
         </div>
       </div>
+
+      {trackingSale ? (
+        <div className="overlay">
+          <div className="systemDialog trackingStatusDialog">
+            <header>
+              <div>
+                <small>MELHOR ENVIO</small>
+                <h2>Status da entrega</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (trackingBusy) return;
+                  setTrackingSale(null);
+                  setTrackingInfo(null);
+                  setTrackingError("");
+                }}
+                aria-label="Fechar status da entrega"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="trackingStatusBody">
+              <div className="trackingOrderSummary">
+                <span>Pedido #{orderNo(trackingSale.id)}</span>
+                <b>{saleCustomer(trackingSale, d)}</b>
+                <small>
+                  {trackingSale.melhorEnvio?.serviceName || "Melhor Envio"}
+                </small>
+              </div>
+
+              {trackingBusy ? (
+                <div className="trackingLoading">Consultando status...</div>
+              ) : trackingError ? (
+                <div className="meError">{trackingError}</div>
+              ) : trackingInfo ? (
+                <>
+                  <div
+                    className={
+                      "trackingMainStatus " +
+                      String(trackingInfo.status || "unknown").toLowerCase()
+                    }
+                  >
+                    <span>Status atual</span>
+                    <b>{trackingStatusLabel(trackingInfo.status)}</b>
+                  </div>
+                  <div className="trackingDetailsGrid">
+                    <div>
+                      <span>Código de rastreio</span>
+                      <b>
+                        {trackingInfo.tracking ||
+                          trackingSale.melhorEnvio?.tracking ||
+                          "Ainda não disponível"}
+                      </b>
+                    </div>
+                    <div>
+                      <span>Protocolo</span>
+                      <b>{trackingInfo.protocol || "Não informado"}</b>
+                    </div>
+                    <div>
+                      <span>Postado em</span>
+                      <b>
+                        {trackingInfo.postedAt
+                          ? new Date(trackingInfo.postedAt).toLocaleString("pt-BR")
+                          : "Ainda não postado"}
+                      </b>
+                    </div>
+                    <div>
+                      <span>Entregue em</span>
+                      <b>
+                        {trackingInfo.deliveredAt
+                          ? new Date(trackingInfo.deliveredAt).toLocaleString("pt-BR")
+                          : "Ainda não entregue"}
+                      </b>
+                    </div>
+                  </div>
+                  <p className="trackingCacheNote">
+                    O status é consultado diretamente no Melhor Envio. A API de
+                    rastreio pode manter cache temporário das informações.
+                  </p>
+                </>
+              ) : null}
+            </div>
+
+            <footer className="trackingStatusFooter">
+              <button
+                type="button"
+                disabled={trackingBusy}
+                onClick={() => openTrackingStatus(trackingSale)}
+              >
+                {trackingBusy ? "Atualizando..." : "Atualizar status"}
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  setTrackingSale(null);
+                  setTrackingInfo(null);
+                  setTrackingError("");
+                }}
+              >
+                Fechar
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
 
       {quickQuoteOpen ? (
         <div className="overlay">
