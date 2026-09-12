@@ -3981,3 +3981,97 @@ input[type="number"]::-webkit-outer-spin-button {
     width: 100%;
   }
 }
+
+
+/* Shipping month navigation and editable pending cards */
+.shippingToolbar {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 480px);
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.shippingToolbar .shippingSearch {
+  margin: 0;
+}
+.shippingToolbar .shippingSearch input {
+  width: 100%;
+}
+.shippingMonthPicker {
+  margin: 0;
+  min-height: 44px;
+}
+.shippingMonthPicker b {
+  text-transform: capitalize;
+}
+.pendingDeliverySummary {
+  align-items: stretch;
+}
+.editableDeliveryCard {
+  gap: 10px;
+}
+.editableDeliveryCard label {
+  display: grid;
+  gap: 5px;
+}
+.editableDeliveryCard label > small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.editableDeliveryCard input,
+.editableDeliveryCard select {
+  width: 100%;
+  min-width: 0;
+  height: 39px;
+  border: 1px solid #2b3a4f;
+  border-radius: 9px;
+  background: #101927;
+  color: var(--text);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+}
+.editableDeliveryCard input:focus,
+.editableDeliveryCard select:focus {
+  outline: 2px solid rgb(216 174 67 / 12%);
+  border-color: #d8ae43;
+}
+.editableDeliveryCard input:disabled,
+.editableDeliveryCard select:disabled {
+  opacity: .65;
+  cursor: not-allowed;
+}
+.editableDeliveryFields {
+  display: grid;
+  gap: 8px;
+}
+.editableDeliveryFields.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.editableDeliveryFields.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.pendingDeliverySummary .sentDeliveryCard.address {
+  min-width: 0;
+}
+.pendingDeliverySummary .shippingMethodCard {
+  align-content: start;
+}
+.pendingDeliverySummary .shippingMethodCard > small {
+  margin-top: 2px;
+}
+
+@media (max-width: 980px) {
+  .shippingToolbar {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 620px) {
+  .editableDeliveryFields.two,
+  .editableDeliveryFields.three {
+    grid-template-columns: 1fr;
+  }
+}
