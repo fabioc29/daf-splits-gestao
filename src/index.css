@@ -3743,3 +3743,241 @@ input[type="number"]::-webkit-outer-spin-button {
     text-align: left;
   }
 }
+
+
+/* Shipping refinement: search, sent summary and tracking */
+.shippingPageHead {
+  margin-bottom: 18px;
+}
+.shippingPageHead p {
+  margin: 7px 0 0;
+}
+.shippingTabsRow {
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.shippingTabsRow .segmented {
+  gap: 8px;
+}
+.shippingSearch {
+  position: relative;
+  display: block;
+  margin: 0 0 16px;
+}
+.shippingSearch svg {
+  position: absolute;
+  left: 14px;
+  top: 13px;
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.shippingSearch input {
+  width: min(520px, 100%);
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #101927;
+  color: var(--text);
+  padding: 0 14px 0 42px;
+  font: inherit;
+}
+.shippingSearch input::placeholder {
+  color: var(--muted);
+}
+.sentDeliverySummary {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(320px, 2fr) minmax(190px, .8fr);
+  gap: 12px;
+  padding: 16px 0 4px;
+}
+.sentDeliveryCard {
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #0f1826;
+  padding: 14px 15px;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+}
+.sentDeliveryCard > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.sentDeliveryCard > b {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.sentDeliveryCard > small {
+  color: #91a0b5;
+  line-height: 1.4;
+}
+.sentDeliveryCard.shippingMethodCard > b {
+  color: #e7c15c;
+}
+.meTrackingButton {
+  border: 1px solid #d8ae43;
+  border-radius: 9px;
+  background: #d8ae43;
+  color: #111927;
+  padding: 9px 13px;
+  font-weight: 900;
+}
+.meTrackingButton:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+.trackingStatusDialog {
+  width: min(640px, calc(100vw - 28px));
+  padding: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #f4f8fc;
+}
+.trackingStatusDialog > header {
+  margin: 0;
+  padding: 20px 22px;
+  border: 0;
+  background: linear-gradient(135deg, #07549a, #0b6fbd);
+  color: #fff;
+}
+.trackingStatusDialog > header h2 {
+  color: #fff;
+  margin: 3px 0 0;
+}
+.trackingStatusDialog > header small {
+  color: #ffd447;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .13em;
+}
+.trackingStatusDialog > header button {
+  color: #fff;
+}
+.trackingStatusBody {
+  padding: 18px 20px;
+  display: grid;
+  gap: 13px;
+}
+.trackingOrderSummary {
+  display: grid;
+  gap: 4px;
+}
+.trackingOrderSummary > span,
+.trackingOrderSummary > small {
+  color: #688096;
+  font-size: 11px;
+}
+.trackingOrderSummary > b {
+  color: #172233;
+  font-size: 18px;
+}
+.trackingMainStatus {
+  border: 1px solid #d8e4ee;
+  border-radius: 13px;
+  background: #fff;
+  padding: 15px;
+  display: grid;
+  gap: 6px;
+}
+.trackingMainStatus > span {
+  color: #688096;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.trackingMainStatus > b {
+  color: #07549a;
+  font-size: 22px;
+}
+.trackingMainStatus.delivered {
+  border-color: #9fd7c3;
+  background: #eefaf5;
+}
+.trackingMainStatus.delivered > b {
+  color: #167b59;
+}
+.trackingMainStatus.undelivered,
+.trackingMainStatus.canceled,
+.trackingMainStatus.cancelled,
+.trackingMainStatus.suspended {
+  border-color: #e8b1b6;
+  background: #fff2f3;
+}
+.trackingMainStatus.undelivered > b,
+.trackingMainStatus.canceled > b,
+.trackingMainStatus.cancelled > b,
+.trackingMainStatus.suspended > b {
+  color: #b33c43;
+}
+.trackingDetailsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.trackingDetailsGrid > div {
+  border: 1px solid #d8e4ee;
+  border-radius: 11px;
+  background: #fff;
+  padding: 12px;
+  display: grid;
+  gap: 5px;
+}
+.trackingDetailsGrid span {
+  color: #688096;
+  font-size: 10px;
+  font-weight: 800;
+}
+.trackingDetailsGrid b {
+  color: #172233;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.trackingCacheNote {
+  margin: 0;
+  color: #71869a;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.trackingLoading {
+  border-radius: 11px;
+  background: #fff;
+  color: #07549a;
+  padding: 18px;
+  text-align: center;
+  font-weight: 800;
+}
+.trackingStatusFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid #d8e4ee;
+  background: #fff;
+}
+.trackingStatusFooter > button:not(.primary) {
+  border: 1px solid #c9d8e5;
+  border-radius: 9px;
+  background: #fff;
+  color: #07549a;
+  padding: 10px 13px;
+  font-weight: 900;
+}
+@media (max-width: 850px) {
+  .sentDeliverySummary {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 560px) {
+  .trackingDetailsGrid {
+    grid-template-columns: 1fr;
+  }
+  .shippingSearch input {
+    width: 100%;
+  }
+}
