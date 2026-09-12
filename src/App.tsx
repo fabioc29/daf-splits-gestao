@@ -1935,6 +1935,7 @@ function Shipping({
     weight: "",
   });
   const [shippingQuery, setShippingQuery] = useState("");
+  const [shippingMonth, setShippingMonth] = useState(today().slice(0, 7));
   const [trackingSale, setTrackingSale] = useState<V | null>(null);
   const [trackingInfo, setTrackingInfo] = useState<any>(null);
   const [trackingBusy, setTrackingBusy] = useState(false);
@@ -1946,11 +1947,25 @@ function Shipping({
   const [quickQuoteBusy, setQuickQuoteBusy] = useState(false);
   const [quickQuoteError, setQuickQuoteError] = useState("");
 
+  const shippingMonthLabel = new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${shippingMonth}-01T12:00:00`));
+
+  function shiftShippingMonth(delta: number) {
+    const base = new Date(`${shippingMonth}-01T12:00:00`);
+    base.setMonth(base.getMonth() + delta);
+    setShippingMonth(
+      `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}`,
+    );
+  }
+
   const list = d.sales.filter(
     (s) =>
       s.status !== "cancelled" &&
       s.prepared &&
       !isHistoricalSale(s) &&
+      s.date.startsWith(shippingMonth) &&
       (tab === "sent" ? s.sent : !s.sent) &&
       saleCustomer(s, d)
         .toLowerCase()
@@ -1973,6 +1988,52 @@ function Shipping({
       return "Indisponível para pedidos da Shopee.";
     }
     return "";
+  }
+
+  function updateShippingClientField(
+    clientId: number,
+    field: "name" | "phone" | "cpf" | "cep" | "number" | "district" | "city" | "state",
+    value: string,
+  ) {
+    set((state: D) => ({
+      ...state,
+      clients: state.clients.map((client) =>
+        client.id === clientId ? { ...client, [field]: value } : client,
+      ),
+    }));
+  }
+
+  function updateShippingCustomerName(sale: V, value: string) {
+    if (sale.clientId && d.clients.some((client) => client.id === sale.clientId)) {
+      updateShippingClientField(sale.clientId, "name", value);
+      return;
+    }
+    set((state: D) => ({
+      ...state,
+      sales: state.sales.map((item) =>
+        item.id === sale.id ? { ...item, customerName: value } : item,
+      ),
+    }));
+  }
+
+  function updateShippingAddress(
+    clientId: number,
+    index: number,
+    field: "value" | "label" | "district" | "city" | "state",
+    value: string,
+  ) {
+    set((state: D) => ({
+      ...state,
+      clients: state.clients.map((client) => {
+        if (client.id !== clientId) return client;
+        const addresses = [...client.addresses];
+        if (!addresses[index]) {
+          addresses[index] = { label: "Principal", value: "" };
+        }
+        addresses[index] = { ...addresses[index], [field]: value };
+        return { ...client, addresses };
+      }),
+    }));
   }
 
   async function refreshMeStatus() {
@@ -2472,15 +2533,34 @@ function Shipping({
           </button>
         </div>
 
-        <label className="shippingSearch">
-          <Search />
-          <input
-            value={shippingQuery}
-            onChange={(event) => setShippingQuery(event.target.value)}
-            placeholder="Pesquisar pelo nome do cliente"
-            aria-label="Pesquisar cliente nos envios"
-          />
-        </label>
+        <div className="shippingToolbar">
+          <label className="shippingSearch">
+            <Search />
+            <input
+              value={shippingQuery}
+              onChange={(event) => setShippingQuery(event.target.value)}
+              placeholder="Pesquisar pelo nome do cliente"
+              aria-label="Pesquisar cliente nos envios"
+            />
+          </label>
+          <div className="monthPicker shippingMonthPicker" aria-label="Mês dos envios">
+            <button
+              type="button"
+              onClick={() => shiftShippingMonth(-1)}
+              aria-label="Mês anterior"
+            >
+              <ChevronLeft />
+            </button>
+            <b>{shippingMonthLabel}</b>
+            <button
+              type="button"
+              onClick={() => shiftShippingMonth(1)}
+              aria-label="Próximo mês"
+            >
+              <ChevronRight />
+            </button>
+          </div>
+        </div>
 
         <div className="shipping">
           {list.map((s) => {
@@ -2572,68 +2652,260 @@ function Shipping({
                       </div>
                     </div>
                   ) : (
-                    <div className="delivery">
-                      <label>
+                    <div className="sentDeliverySummary pendingDeliverySummary">
+                      <div className="sentDeliveryCard editableDeliveryCard customer">
+                        <span>Cliente</span>
+                        <label>
+                          <small>Nome</small>
+                          <input
+                            value={saleCustomer(s, d)}
+                            onChange={(event) =>
+                              updateShippingCustomerName(s, event.target.value)
+                            }
+                          />
+                        </label>
+                        <div className="editableDeliveryFields two">
+                          <label>
+                            <small>CPF</small>
+                            <input
+                              value={c?.cpf || ""}
+                              onChange={(event) =>
+                                c
+                                  ? updateShippingClientField(
+                                      c.id,
+                                      "cpf",
+                                      event.target.value,
+                                    )
+                                  : undefined
+                              }
+                              placeholder="Não informado"
+                              disabled={!c}
+                            />
+                          </label>
+                          <label>
+                            <small>Telefone</small>
+                            <input
+                              value={c?.phone || ""}
+                              onChange={(event) =>
+                                c
+                                  ? updateShippingClientField(
+                                      c.id,
+                                      "phone",
+                                      event.target.value,
+                                    )
+                                  : undefined
+                              }
+                              placeholder="Não informado"
+                              disabled={!c}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="sentDeliveryCard editableDeliveryCard address">
+                        <span>Endereço de entrega</span>
+                        {c?.addresses.length ? (
+                          <label>
+                            <small>Endereço cadastrado</small>
+                            <select
+                              value={selectedAddressIndex}
+                              onChange={(event) =>
+                                setAddressIndex((current) => ({
+                                  ...current,
+                                  [s.id]: Number(event.target.value),
+                                }))
+                              }
+                            >
+                              {c.addresses.map((address, index) => (
+                                <option key={index} value={index}>
+                                  {address.label
+                                    ? `${address.label} — `
+                                    : ""}
+                                  {address.value}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ) : null}
+
+                        <label>
+                          <small>Logradouro</small>
+                          <input
+                            value={
+                              c?.addresses[selectedAddressIndex]?.value ||
+                              c?.addresses[0]?.value ||
+                              ""
+                            }
+                            onChange={(event) =>
+                              c
+                                ? updateShippingAddress(
+                                    c.id,
+                                    selectedAddressIndex,
+                                    "value",
+                                    event.target.value,
+                                  )
+                                : undefined
+                            }
+                            placeholder="Endereço não informado"
+                            disabled={!c}
+                          />
+                        </label>
+
+                        <div className="editableDeliveryFields three">
+                          <label>
+                            <small>Número</small>
+                            <input
+                              value={c?.number || ""}
+                              onChange={(event) =>
+                                c
+                                  ? updateShippingClientField(
+                                      c.id,
+                                      "number",
+                                      event.target.value,
+                                    )
+                                  : undefined
+                              }
+                              placeholder="Não informado"
+                              disabled={!c}
+                            />
+                          </label>
+                          <label>
+                            <small>CEP</small>
+                            <input
+                              value={c?.cep || ""}
+                              onChange={(event) =>
+                                c
+                                  ? updateShippingClientField(
+                                      c.id,
+                                      "cep",
+                                      event.target.value,
+                                    )
+                                  : undefined
+                              }
+                              placeholder="Não informado"
+                              disabled={!c}
+                            />
+                          </label>
+                          <label>
+                            <small>Bairro</small>
+                            <input
+                              value={
+                                c?.addresses[selectedAddressIndex]?.district ||
+                                c?.district ||
+                                ""
+                              }
+                              onChange={(event) => {
+                                if (!c) return;
+                                updateShippingAddress(
+                                  c.id,
+                                  selectedAddressIndex,
+                                  "district",
+                                  event.target.value,
+                                );
+                                updateShippingClientField(
+                                  c.id,
+                                  "district",
+                                  event.target.value,
+                                );
+                              }}
+                              placeholder="Não informado"
+                              disabled={!c}
+                            />
+                          </label>
+                        </div>
+
+                        <div className="editableDeliveryFields two">
+                          <label>
+                            <small>Cidade</small>
+                            <input
+                              value={
+                                c?.addresses[selectedAddressIndex]?.city ||
+                                c?.city ||
+                                ""
+                              }
+                              onChange={(event) => {
+                                if (!c) return;
+                                updateShippingAddress(
+                                  c.id,
+                                  selectedAddressIndex,
+                                  "city",
+                                  event.target.value,
+                                );
+                                updateShippingClientField(
+                                  c.id,
+                                  "city",
+                                  event.target.value,
+                                );
+                              }}
+                              placeholder="Não informado"
+                              disabled={!c}
+                            />
+                          </label>
+                          <label>
+                            <small>Estado</small>
+                            <input
+                              maxLength={2}
+                              value={
+                                c?.addresses[selectedAddressIndex]?.state ||
+                                c?.state ||
+                                ""
+                              }
+                              onChange={(event) => {
+                                if (!c) return;
+                                const value = event.target.value.toUpperCase();
+                                updateShippingAddress(
+                                  c.id,
+                                  selectedAddressIndex,
+                                  "state",
+                                  value,
+                                );
+                                updateShippingClientField(c.id, "state", value);
+                              }}
+                              placeholder="UF"
+                              disabled={!c}
+                            />
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="sentDeliveryCard editableDeliveryCard shippingMethodCard">
                         <span>Forma de envio</span>
-                        <select
-                          value={
-                            isMarketplaceSale(s)
-                              ? s.marketplace || ""
-                              : s.shippingMethod || ""
-                          }
-                          disabled={isMarketplaceSale(s)}
-                          onChange={(event) =>
-                            changeShippingMethod(
-                              s.id,
-                              event.target.value as V["shippingMethod"],
-                            )
-                          }
-                        >
-                          <option value="" disabled>
-                            Selecione...
-                          </option>
-                          <option>Correios</option>
-                          <option>Correios Sedex</option>
-                          <option>Correios PAC</option>
-                          <option>Correios Mini</option>
-                          <option>Loggi</option>
-                          <option>Jadlog</option>
-                          <option>Uber/Pessoalmente</option>
-                          <option>TikTok Shop</option>
-                          <option>Shopee</option>
-                        </select>
-                      </label>
-                      <FieldView label="Nome" value={saleCustomer(s, d)} />
-                      <FieldView label="CPF" value={c?.cpf} />
-                      <FieldView label="Telefone" value={c?.phone} />
-                      <label>
-                        <span>Endereço</span>
-                        <select
-                          value={selectedAddressIndex}
-                          onChange={(event) =>
-                            setAddressIndex((current) => ({
-                              ...current,
-                              [s.id]: Number(event.target.value),
-                            }))
-                          }
-                        >
-                          {c?.addresses.map((a, i) => (
-                            <option key={i} value={i}>
-                              {a.label ? `${a.label} — ` : ""}
-                              {a.value}
+                        <label>
+                          <small>Modalidade</small>
+                          <select
+                            value={
+                              isMarketplaceSale(s)
+                                ? s.marketplace || ""
+                                : s.shippingMethod || ""
+                            }
+                            disabled={isMarketplaceSale(s)}
+                            onChange={(event) =>
+                              changeShippingMethod(
+                                s.id,
+                                event.target.value as V["shippingMethod"],
+                              )
+                            }
+                          >
+                            <option value="" disabled>
+                              Selecione...
                             </option>
-                          ))}
-                        </select>
-                      </label>
-                      <FieldView label="CEP" value={c?.cep} />
-                      <FieldView label="Número" value={c?.number} />
-                      <FieldView label="Bairro" value={c?.district} />
-                      <FieldView
-                        label="Cidade / Estado"
-                        value={[c?.city, c?.state]
-                          .filter(Boolean)
-                          .join(" / ")}
-                      />
+                            <option>Correios</option>
+                            <option>Correios Sedex</option>
+                            <option>Correios PAC</option>
+                            <option>Correios Mini</option>
+                            <option>Loggi</option>
+                            <option>Jadlog</option>
+                            <option>Uber/Pessoalmente</option>
+                            <option>TikTok Shop</option>
+                            <option>Shopee</option>
+                          </select>
+                        </label>
+                        <small>
+                          {isMarketplaceSale(s)
+                            ? "Definido automaticamente pela origem da venda."
+                            : "Você pode ajustar antes do despacho."}
+                        </small>
+                      </div>
                     </div>
                   )}
 
