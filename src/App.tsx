@@ -1025,15 +1025,18 @@ function InteractiveDonutChart({
   centerTop,
   centerBottom,
   className = "",
+  infoPrefix = "Selecionado",
 }: {
   segments: InteractiveDonutSegment[];
   centerTop: string;
   centerBottom: string;
   className?: string;
+  infoPrefix?: string;
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const active = hovered ?? selected;
+  const activeSegment = active === null ? null : segments[active] || null;
   const total = segments.reduce(
     (sum, segment) => sum + Math.max(0, segment.value),
     0,
@@ -1127,6 +1130,12 @@ function InteractiveDonutChart({
           {centerBottom}
         </text>
       </svg>
+      {activeSegment ? (
+        <div className="interactiveDonutInfo" role="status">
+          <small>{infoPrefix}</small>
+          <b>{activeSegment.label}</b>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1318,6 +1327,7 @@ function Dash({ d }: { d: D }) {
               centerTop="Total"
               centerBottom={`${summaryCount} pedidos`}
               className="sideInteractiveDonut"
+              infoPrefix="Origem"
             />
             <div className="orderOriginLegend">
               <p className="direct">
@@ -1353,8 +1363,7 @@ function Dash({ d }: { d: D }) {
           <div className="panel categories">
             <h2>Vendas por categoria</h2>
             <p className="chartExplanation chartExplanationTop">
-              Distribuição dos mls vendidos no mês entre perfumes de Nicho,
-              Árabes e Designers.
+              Distribuição dos mls vendidos no mês.
             </p>
             <InteractiveDonutChart
               segments={categories.map((item) => ({
@@ -1370,6 +1379,7 @@ function Dash({ d }: { d: D }) {
               centerTop="Total vendido"
               centerBottom={`${catTotal.toLocaleString("pt-BR")}mls`}
               className="sideInteractiveDonut"
+              infoPrefix="Categoria"
             />
             <div className="categoryLegend categoryPercentLegend">
               {categories.map((x) => {
@@ -5349,6 +5359,7 @@ function PaymentBreakdown({ d }: { d: D }) {
           centerTop="Total vendido"
           centerBottom={brl(total)}
           className="paymentInteractiveDonut"
+          infoPrefix="Forma de pagamento"
         />
       </div>
       <div className="paymentLegend">
