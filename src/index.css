@@ -4372,3 +4372,41 @@ input[type="number"]::-webkit-outer-spin-button {
   font-size: 8px;
   font-weight: 800;
 }
+
+
+/* Interação refinada: gráficos controlados pelas legendas */
+.chartExplanationTop {
+  margin: 2px 0 12px !important;
+  text-align: left !important;
+}
+.interactiveLegend > *,
+.paymentLegend > div {
+  cursor: pointer;
+  transition:
+    border-color .14s ease,
+    background-color .14s ease,
+    transform .14s ease,
+    box-shadow .14s ease;
+}
+.interactiveLegend > *:hover,
+.interactiveLegend > *.active,
+.paymentLegend > div:hover,
+.paymentLegend > div.active {
+  border-color: #d8ae43 !important;
+  background: #162234 !important;
+  box-shadow: 0 0 0 1px rgb(216 174 67 / 10%);
+}
+.interactiveLegend > *:active,
+.paymentLegend > div:active {
+  transform: translateY(1px);
+}
+.orderOriginLegend p.active,
+.categoryPercentLegend > div.active {
+  border-color: #d8ae43;
+}
+.paymentLegend > div {
+  border-radius: 10px;
+}
+.interactiveDonut {
+  cursor: default;
+}
