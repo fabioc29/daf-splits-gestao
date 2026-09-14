@@ -4559,3 +4559,53 @@ input[type="number"]::-webkit-outer-spin-button {
   margin-top: 2px;
   margin-bottom: 18px;
 }
+
+
+/* Corrige fluxo do balão externo e iguala textos explicativos */
+.interactiveSvgDonut {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  overflow: visible;
+}
+.sideInteractiveDonut,
+.paymentInteractiveDonut,
+.dashboardMain .paymentInteractiveDonut {
+  height: auto !important;
+}
+.sideInteractiveDonut svg {
+  width: 132px !important;
+  height: 132px !important;
+  flex: none;
+}
+.paymentInteractiveDonut svg {
+  width: 230px !important;
+  height: 230px !important;
+  flex: none;
+}
+.dashboardMain .paymentInteractiveDonut svg {
+  width: 190px !important;
+  height: 190px !important;
+}
+.interactiveDonutInfo {
+  position: static;
+  z-index: 5;
+  margin-top: 10px;
+}
+.orderOriginSummary .chartExplanationTop,
+.categories .chartExplanationTop {
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+@media (max-width: 720px) {
+  .paymentInteractiveDonut svg {
+    width: 190px !important;
+    height: 190px !important;
+  }
+}
+@media (max-width: 480px) {
+  .paymentInteractiveDonut svg {
+    width: 170px !important;
+    height: 170px !important;
+  }
+}
