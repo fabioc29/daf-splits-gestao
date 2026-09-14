@@ -4075,3 +4075,63 @@ input[type="number"]::-webkit-outer-spin-button {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Dashboard estimated margin and order origin summary */
+.dashboardCards .splitCard > div:last-child b {
+  text-align: left;
+}
+.orderOriginSummary .statusDonut {
+  margin-left: auto;
+  margin-right: auto;
+}
+.orderOriginLegend {
+  display: grid;
+  gap: 9px;
+  margin-top: 14px;
+}
+.orderOriginLegend p {
+  position: relative;
+  margin: 0;
+  padding: 9px 10px 9px 28px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #111a28;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.orderOriginLegend p::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+.orderOriginLegend p.direct::before {
+  background: #22a66f;
+}
+.orderOriginLegend p.tiktok::before {
+  background: #05070a;
+  border: 1px solid #4d5969;
+}
+.orderOriginLegend p.shopee::before {
+  background: #e5484d;
+}
+.orderOriginLegend p.cancelled::before {
+  background: #7c8798;
+}
+.orderOriginLegend p > span {
+  min-width: 0;
+}
+.orderOriginLegend p > b {
+  color: var(--text);
+  white-space: nowrap;
+  font-size: 11px;
+}
