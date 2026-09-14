@@ -4310,3 +4310,65 @@ input[type="number"]::-webkit-outer-spin-button {
   color: var(--muted);
   font-weight: 700;
 }
+
+
+/* Interatividade e legendas dos gráficos */
+.interactiveDonut {
+  cursor: crosshair;
+  touch-action: manipulation;
+}
+.interactiveDonut > span,
+.interactiveDonut .categoryDonutTotal {
+  transition:
+    transform .12s ease,
+    opacity .12s ease;
+}
+.chartExplanation {
+  margin: 8px 0 14px !important;
+  padding: 0 !important;
+  color: var(--muted) !important;
+  font-size: 9px !important;
+  line-height: 1.4;
+  text-align: center;
+}
+.chartExplanation::before {
+  display: none !important;
+}
+.orderOriginText strong {
+  color: var(--text) !important;
+  font-weight: 900 !important;
+}
+.orderOriginText small {
+  color: var(--muted) !important;
+  font-weight: 700 !important;
+}
+.categoryPercentLegend .categoryPercentText strong {
+  position: relative;
+  padding-left: 15px;
+}
+.categoryPercentLegend .categoryPercentText strong::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+.categoryPercentLegend .nicho .categoryPercentText strong::before {
+  background: #e0b43c;
+}
+.categoryPercentLegend .arabe .categoryPercentText strong::before {
+  background: #8b5cf6;
+}
+.categoryPercentLegend .designer .categoryPercentText strong::before {
+  background: #2f80ed;
+}
+.bars button > span small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+}
