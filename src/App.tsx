@@ -1202,8 +1202,8 @@ function Dash({ d }: { d: D }) {
               style={{ background: categoryGradient(categories, catTotal) }}
             >
               <span className="categoryDonutTotal">
-                <b>{catTotal.toLocaleString("pt-BR")}</b>
-                <small>ml vendidos</small>
+                <small>Total vendido</small>
+                <b>{catTotal.toLocaleString("pt-BR")}mls</b>
               </span>
             </div>
             <div className="categoryLegend categoryPercentLegend">
