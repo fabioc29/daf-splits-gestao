@@ -4219,3 +4219,35 @@ input[type="number"]::-webkit-outer-spin-button {
 .categoryPercentLegend i {
   display: none;
 }
+
+
+/* Total de ml no centro do gráfico de categorias */
+.categoryDonutTotal {
+  position: absolute;
+  inset: 25px;
+  z-index: 2;
+  border-radius: 50%;
+  background: var(--panel);
+  display: grid !important;
+  place-content: center;
+  justify-items: center;
+  gap: 1px;
+  text-align: center;
+  pointer-events: none;
+}
+.categoryDonutTotal b {
+  color: var(--text) !important;
+  font-size: 15px;
+  line-height: 1;
+  margin: 0;
+}
+.categoryDonutTotal small {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.categoryDonut:after {
+  display: none;
+}
