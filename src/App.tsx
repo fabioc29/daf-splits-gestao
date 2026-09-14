@@ -1022,6 +1022,9 @@ function Dash({ d }: { d: D }) {
       packaging(sale, d.supplies).total;
     return sum + sale.total - perfumeCost - expenses;
   }, 0);
+  const estimatedMargin =
+    monthTotals.gross > 0 ? (estimatedProfit / monthTotals.gross) * 100 : 0;
+
   const daily = Array.from({ length: days }, (_, i) =>
     activeSales
       .filter((s) => new Date(s.date + "T12:00").getDate() === i + 1)
@@ -1045,14 +1048,34 @@ function Dash({ d }: { d: D }) {
   }));
   const catTotal = categories.reduce((n, x) => n + x.value, 0),
     catMax = Math.max(1, ...categories.map((x) => x.value));
-  const paid = activeSales.filter(isSaleSettled).length,
-    open = activeSales.filter((sale) => !isSaleSettled(sale)).length,
-    cancelled = monthSales.filter(
-      (s) => s.status === "cancelled" && !isHistoricalSale(s),
-    ).length,
-    count = paid + open + cancelled;
-  const a = count ? (paid / count) * 360 : 0,
-    b = count ? ((paid + open) / count) * 360 : 0;
+  const summarySales = monthSales.filter((sale) => !isHistoricalSale(sale));
+  const directOrders = summarySales.filter(
+    (sale) => sale.status !== "cancelled" && !isMarketplaceSale(sale),
+  ).length;
+  const tiktokOrders = summarySales.filter(
+    (sale) =>
+      sale.status !== "cancelled" && sale.marketplace === "TikTok Shop",
+  ).length;
+  const shopeeOrders = summarySales.filter(
+    (sale) =>
+      sale.status !== "cancelled" && sale.marketplace === "Shopee",
+  ).length;
+  const cancelledOrders = summarySales.filter(
+    (sale) => sale.status === "cancelled",
+  ).length;
+  const summaryCount =
+    directOrders + tiktokOrders + shopeeOrders + cancelledOrders;
+  const summaryPct = (value: number) =>
+    summaryCount ? Math.round((value / summaryCount) * 100) : 0;
+  const directEnd = summaryCount ? (directOrders / summaryCount) * 360 : 0;
+  const tiktokEnd =
+    summaryCount
+      ? ((directOrders + tiktokOrders) / summaryCount) * 360
+      : 0;
+  const shopeeEnd =
+    summaryCount
+      ? ((directOrders + tiktokOrders + shopeeOrders) / summaryCount) * 360
+      : 0;
   return (
     <>
       <div className="cards dashboardCards">
@@ -1070,9 +1093,18 @@ function Dash({ d }: { d: D }) {
             <b>{brl(Math.max(0, monthTotals.gross - monthTotals.paid))}</b>
           </div>
         </div>
-        <div>
-          <span>Lucro estimado</span>
-          <b>{brl(estimatedProfit)}</b>
+        <div className="splitCard">
+          <div>
+            <span>Lucro estimado</span>
+            <b>{brl(estimatedProfit)}</b>
+          </div>
+          <div>
+            <span>Margem estimada</span>
+            <b>{estimatedMargin.toLocaleString("pt-BR", {
+              maximumFractionDigits: 1,
+              minimumFractionDigits: 1,
+            })}%</b>
+          </div>
         </div>
         <div className="splitCard">
           <div>
@@ -1113,34 +1145,52 @@ function Dash({ d }: { d: D }) {
           <PaymentBreakdown d={d} />
         </div>
         <div className="sidecharts">
-          <div className="panel">
+          <div className="panel orderOriginSummary">
             <h2>Resumo dos pedidos</h2>
             <div
               className="donut statusDonut"
               style={{
-                background: count
-                  ? `conic-gradient(#22a66f 0 ${a}deg,#e0b43c ${a}deg ${b}deg,#e5484d ${b}deg 360deg)`
+                background: summaryCount
+                  ? `conic-gradient(
+                      #22a66f 0 ${directEnd}deg,
+                      #05070a ${directEnd}deg ${tiktokEnd}deg,
+                      #e5484d ${tiktokEnd}deg ${shopeeEnd}deg,
+                      #7c8798 ${shopeeEnd}deg 360deg
+                    )`
                   : undefined,
               }}
             >
               <span>
-                <b>
-                  {Math.round(
-                    (monthTotals.paid / (monthTotals.gross || 1)) * 100,
-                  )}%
-                </b>
-                <small>recebido</small>
+                <b>{summaryCount}</b>
+                <small>pedidos</small>
               </span>
             </div>
-            <p className="green">
-              Pagos <b>{paid}</b>
-            </p>
-            <p className="yellow">
-              Pendentes e parciais <b>{open}</b>
-            </p>
-            <p className="red">
-              Cancelados <b>{cancelled}</b>
-            </p>
+            <div className="orderOriginLegend">
+              <p className="direct">
+                <span>Venda direta</span>
+                <b>
+                  {directOrders} · {summaryPct(directOrders)}%
+                </b>
+              </p>
+              <p className="tiktok">
+                <span>TikTok Shop</span>
+                <b>
+                  {tiktokOrders} · {summaryPct(tiktokOrders)}%
+                </b>
+              </p>
+              <p className="shopee">
+                <span>Shopee</span>
+                <b>
+                  {shopeeOrders} · {summaryPct(shopeeOrders)}%
+                </b>
+              </p>
+              <p className="cancelled">
+                <span>Cancelados</span>
+                <b>
+                  {cancelledOrders} · {summaryPct(cancelledOrders)}%
+                </b>
+              </p>
+            </div>
           </div>
           <div className="panel categories">
             <h2>Vendas por categoria</h2>
