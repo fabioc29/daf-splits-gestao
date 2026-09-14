@@ -4177,3 +4177,45 @@ input[type="number"]::-webkit-outer-spin-button {
   text-align: right;
   font-size: 11px;
 }
+
+
+/* Dashboard category percentages */
+.categoryPercentLegend {
+  display: grid;
+  gap: 9px;
+}
+.categoryPercentLegend > div {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #111a28;
+  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.categoryPercentLegend .categoryPercentText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.categoryPercentLegend .categoryPercentText strong {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.categoryPercentLegend .categoryPercentText small {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 900;
+}
+.categoryPercentLegend .categorySoldMl {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+  text-align: right;
+}
+.categoryPercentLegend i {
+  display: none;
+}
