@@ -4261,3 +4261,52 @@ input[type="number"]::-webkit-outer-spin-button {
 .categoryDonut:after {
   display: none;
 }
+
+
+/* Correção final de proporção e contraste do gráfico de categorias */
+.categories .categoryDonutTotal {
+  position: absolute;
+  inset: 25px;
+  transform: none;
+  width: auto;
+  height: auto;
+  z-index: 3;
+  border-radius: 50%;
+  background: var(--panel);
+  display: grid !important;
+  place-content: center !important;
+  justify-items: center !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-content: center !important;
+  gap: 4px;
+  padding: 0;
+  text-align: center;
+  line-height: 1;
+}
+.categories .categoryDonutTotal small {
+  display: block !important;
+  color: var(--muted);
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  margin: 0;
+}
+.categories .categoryDonutTotal b {
+  display: block !important;
+  color: var(--text) !important;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  margin: 0;
+  white-space: nowrap;
+}
+.categoryPercentLegend .categoryPercentText strong {
+  color: var(--text);
+  font-weight: 900;
+}
+.categoryPercentLegend .categoryPercentText small {
+  color: var(--muted);
+  font-weight: 700;
+}
