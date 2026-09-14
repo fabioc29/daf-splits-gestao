@@ -4513,3 +4513,49 @@ input[type="number"]::-webkit-outer-spin-button {
     height: 170px;
   }
 }
+
+
+/* Balão da fatia selecionada e respiro dos cards de gráficos */
+.interactiveDonutInfo {
+  width: fit-content;
+  min-width: 116px;
+  max-width: 100%;
+  margin: 9px auto 0;
+  padding: 8px 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #101927;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  text-align: center;
+  box-shadow: 0 5px 16px rgb(0 0 0 / 12%);
+}
+.interactiveDonutInfo small {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.interactiveDonutInfo b {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+.orderOriginSummary > h2,
+.categories > h2 {
+  margin-bottom: 9px;
+}
+.orderOriginSummary .chartExplanationTop,
+.categories .chartExplanationTop {
+  margin: 0 0 18px !important;
+  line-height: 1.55;
+}
+.orderOriginSummary .sideInteractiveDonut,
+.categories .sideInteractiveDonut {
+  margin-top: 2px;
+  margin-bottom: 18px;
+}
