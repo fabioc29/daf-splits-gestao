@@ -986,9 +986,152 @@ function Cards({ v }: { v: [string, string][] }) {
   );
 }
 
+type InteractiveDonutSegment = {
+  label: string;
+  value: number;
+  color: string;
+};
+
+function donutPoint(radius: number, angle: number) {
+  const radians = ((angle - 90) * Math.PI) / 180;
+  return {
+    x: 60 + radius * Math.cos(radians),
+    y: 60 + radius * Math.sin(radians),
+  };
+}
+
+function donutArcPath(startAngle: number, endAngle: number) {
+  const outerRadius = 52;
+  const innerRadius = 30;
+  const safeEnd =
+    endAngle - startAngle >= 359.999 ? startAngle + 359.999 : endAngle;
+  const outerStart = donutPoint(outerRadius, startAngle);
+  const outerEnd = donutPoint(outerRadius, safeEnd);
+  const innerEnd = donutPoint(innerRadius, safeEnd);
+  const innerStart = donutPoint(innerRadius, startAngle);
+  const largeArc = safeEnd - startAngle > 180 ? 1 : 0;
+
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerEnd.x} ${innerEnd.y}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${innerStart.x} ${innerStart.y}`,
+    "Z",
+  ].join(" ");
+}
+
+function InteractiveDonutChart({
+  segments,
+  centerTop,
+  centerBottom,
+  className = "",
+}: {
+  segments: InteractiveDonutSegment[];
+  centerTop: string;
+  centerBottom: string;
+  className?: string;
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const active = hovered ?? selected;
+  const total = segments.reduce(
+    (sum, segment) => sum + Math.max(0, segment.value),
+    0,
+  );
+
+  let cursor = 0;
+  const slices = segments.map((segment, index) => {
+    const share = total ? Math.max(0, segment.value) / total : 0;
+    const startAngle = cursor * 360;
+    cursor += share;
+    const endAngle = cursor * 360;
+    const midAngle = startAngle + (endAngle - startAngle) / 2;
+    const radians = ((midAngle - 90) * Math.PI) / 180;
+    const explode = active === index ? 4 : 0;
+    const labelPoint = donutPoint(41, midAngle);
+    return {
+      ...segment,
+      index,
+      share,
+      startAngle,
+      endAngle,
+      dx: explode * Math.cos(radians),
+      dy: explode * Math.sin(radians),
+      labelPoint,
+    };
+  });
+
+  return (
+    <div className={`interactiveSvgDonut ${className}`}>
+      <svg
+        viewBox="0 0 120 120"
+        role="img"
+        aria-label="Gráfico interativo. Passe o mouse ou toque em uma cor para ver a porcentagem."
+        onMouseLeave={() => setHovered(null)}
+      >
+        {total ? (
+          slices.map((slice) =>
+            slice.value > 0 ? (
+              <g key={slice.label}>
+                <path
+                  d={donutArcPath(slice.startAngle, slice.endAngle)}
+                  fill={slice.color}
+                  className={
+                    "interactiveDonutSlice" +
+                    (active === slice.index ? " active" : "") +
+                    (active !== null && active !== slice.index
+                      ? " inactive"
+                      : "")
+                  }
+                  transform={`translate(${slice.dx} ${slice.dy})`}
+                  onMouseEnter={() => setHovered(slice.index)}
+                  onClick={() =>
+                    setSelected((current) =>
+                      current === slice.index ? null : slice.index,
+                    )
+                  }
+                />
+                {active === slice.index ? (
+                  <text
+                    x={slice.labelPoint.x + slice.dx}
+                    y={slice.labelPoint.y + slice.dy}
+                    className="donutSlicePercentage"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    pointerEvents="none"
+                  >
+                    {Math.round(slice.share * 100)}%
+                  </text>
+                ) : null}
+              </g>
+            ) : null,
+          )
+        ) : (
+          <circle cx="60" cy="60" r="41" className="interactiveDonutEmpty" />
+        )}
+        <circle cx="60" cy="60" r="29" className="interactiveDonutHole" />
+        <text
+          x="60"
+          y="56"
+          textAnchor="middle"
+          className="interactiveDonutCenterTop"
+        >
+          {centerTop}
+        </text>
+        <text
+          x="60"
+          y="69"
+          textAnchor="middle"
+          className="interactiveDonutCenterBottom"
+        >
+          {centerBottom}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
 function Dash({ d }: { d: D }) {
-  const [summaryFocus, setSummaryFocus] = useState<number | null>(null);
-  const [categoryFocus, setCategoryFocus] = useState<number | null>(null);
   const now = new Date(),
     monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
     monthSales = d.sales.filter((sale) => sale.date.startsWith(monthKey)),
@@ -1082,15 +1225,11 @@ function Dash({ d }: { d: D }) {
       ? ((directOrders + tiktokOrders + shopeeOrders) / summaryCount) * 360
       : 0;
   const summaryItems = [
-    { label: "Venda direta", value: directOrders },
-    { label: "TikTok Shop", value: tiktokOrders },
-    { label: "Shopee", value: shopeeOrders },
-    { label: "Cancelados", value: cancelledOrders },
+    { label: "Venda direta", value: directOrders, color: "#22a66f" },
+    { label: "TikTok Shop", value: tiktokOrders, color: "#5DC9D6" },
+    { label: "Shopee", value: shopeeOrders, color: "#EE4D2D" },
+    { label: "Cancelados", value: cancelledOrders, color: "#05070a" },
   ];
-  const focusedSummary =
-    summaryFocus === null ? null : summaryItems[summaryFocus] || null;
-  const focusedCategory =
-    categoryFocus === null ? null : categories[categoryFocus] || null;
   return (
     <>
       <div className="cards dashboardCards">
@@ -1174,84 +1313,35 @@ function Dash({ d }: { d: D }) {
             <p className="chartExplanation chartExplanationTop">
               Distribuição dos pedidos do mês por origem.
             </p>
-            <div
-              className="donut statusDonut"
-              style={{
-                background: summaryCount
-                  ? `conic-gradient(
-                      #22a66f 0 ${directEnd}deg,
-                      #5DC9D6 ${directEnd}deg ${tiktokEnd}deg,
-                      #EE4D2D ${tiktokEnd}deg ${shopeeEnd}deg,
-                      #05070a ${shopeeEnd}deg 360deg
-                    )`
-                  : undefined,
-              }}
-            >
-              <span>
-                {focusedSummary ? (
-                  <>
-                    <small>{focusedSummary.label}</small>
-                    <b>{summaryPct(focusedSummary.value)}%</b>
-                  </>
-                ) : (
-                  <>
-                    <b>{summaryCount}</b>
-                    <small>pedidos</small>
-                  </>
-                )}
-              </span>
-            </div>
-            <div className="orderOriginLegend interactiveLegend">
-              <p
-                className={"direct" + (summaryFocus === 0 ? " active" : "")}
-                onMouseEnter={() => setSummaryFocus(0)}
-                onMouseLeave={() => setSummaryFocus(null)}
-                onClick={() =>
-                  setSummaryFocus((current) => (current === 0 ? null : 0))
-                }
-              >
+            <InteractiveDonutChart
+              segments={summaryItems}
+              centerTop="Total"
+              centerBottom={`${summaryCount} pedidos`}
+              className="sideInteractiveDonut"
+            />
+            <div className="orderOriginLegend">
+              <p className="direct">
                 <span className="orderOriginText">
                   <strong>Venda direta</strong>
                   <small>{summaryPct(directOrders)}%</small>
                 </span>
                 <b>{directOrders} pedido{directOrders === 1 ? "" : "s"}</b>
               </p>
-              <p
-                className={"tiktok" + (summaryFocus === 1 ? " active" : "")}
-                onMouseEnter={() => setSummaryFocus(1)}
-                onMouseLeave={() => setSummaryFocus(null)}
-                onClick={() =>
-                  setSummaryFocus((current) => (current === 1 ? null : 1))
-                }
-              >
+              <p className="tiktok">
                 <span className="orderOriginText">
                   <strong>TikTok Shop</strong>
                   <small>{summaryPct(tiktokOrders)}%</small>
                 </span>
                 <b>{tiktokOrders} pedido{tiktokOrders === 1 ? "" : "s"}</b>
               </p>
-              <p
-                className={"shopee" + (summaryFocus === 2 ? " active" : "")}
-                onMouseEnter={() => setSummaryFocus(2)}
-                onMouseLeave={() => setSummaryFocus(null)}
-                onClick={() =>
-                  setSummaryFocus((current) => (current === 2 ? null : 2))
-                }
-              >
+              <p className="shopee">
                 <span className="orderOriginText">
                   <strong>Shopee</strong>
                   <small>{summaryPct(shopeeOrders)}%</small>
                 </span>
                 <b>{shopeeOrders} pedido{shopeeOrders === 1 ? "" : "s"}</b>
               </p>
-              <p
-                className={"cancelled" + (summaryFocus === 3 ? " active" : "")}
-                onMouseEnter={() => setSummaryFocus(3)}
-                onMouseLeave={() => setSummaryFocus(null)}
-                onClick={() =>
-                  setSummaryFocus((current) => (current === 3 ? null : 3))
-                }
-              >
+              <p className="cancelled">
                 <span className="orderOriginText">
                   <strong>Cancelados</strong>
                   <small>{summaryPct(cancelledOrders)}%</small>
@@ -1266,32 +1356,22 @@ function Dash({ d }: { d: D }) {
               Distribuição dos mls vendidos no mês entre perfumes de Nicho,
               Árabes e Designers.
             </p>
-            <div
-              className="categoryDonut"
-              style={{ background: categoryGradient(categories, catTotal) }}
-            >
-              <span className="categoryDonutTotal">
-                {focusedCategory ? (
-                  <>
-                    <small>{focusedCategory.category}</small>
-                    <b>
-                      {catTotal
-                        ? Math.round(
-                            (focusedCategory.value / catTotal) * 100,
-                          )
-                        : 0}
-                      %
-                    </b>
-                  </>
-                ) : (
-                  <>
-                    <small>Total vendido</small>
-                    <b>{catTotal.toLocaleString("pt-BR")}mls</b>
-                  </>
-                )}
-              </span>
-            </div>
-            <div className="categoryLegend categoryPercentLegend interactiveLegend">
+            <InteractiveDonutChart
+              segments={categories.map((item) => ({
+                label: item.category,
+                value: item.value,
+                color:
+                  item.category === "Nicho"
+                    ? "#e0b43c"
+                    : item.category === "Árabe"
+                      ? "#8b5cf6"
+                      : "#2f80ed",
+              }))}
+              centerTop="Total vendido"
+              centerBottom={`${catTotal.toLocaleString("pt-BR")}mls`}
+              className="sideInteractiveDonut"
+            />
+            <div className="categoryLegend categoryPercentLegend">
               {categories.map((x) => {
                 const percentage = catTotal
                   ? Math.round((x.value / catTotal) * 100)
@@ -1299,34 +1379,10 @@ function Dash({ d }: { d: D }) {
                 return (
                   <div
                     key={x.category}
-                    className={
-                      x.category
-                        .toLowerCase()
-                        .normalize("NFD")
-                        .replace(/[\u0300-\u036f]/g, "") +
-                      (categoryFocus ===
-                      categories.findIndex(
-                        (item) => item.category === x.category,
-                      )
-                        ? " active"
-                        : "")
-                    }
-                    onMouseEnter={() =>
-                      setCategoryFocus(
-                        categories.findIndex(
-                          (item) => item.category === x.category,
-                        ),
-                      )
-                    }
-                    onMouseLeave={() => setCategoryFocus(null)}
-                    onClick={() => {
-                      const index = categories.findIndex(
-                        (item) => item.category === x.category,
-                      );
-                      setCategoryFocus((current) =>
-                        current === index ? null : index,
-                      );
-                    }}
+                    className={x.category
+                      .toLowerCase()
+                      .normalize("NFD")
+                      .replace(/[\u0300-\u036f]/g, "")}
                   >
                     <span className="categoryPercentText">
                       <strong>{x.category}</strong>
@@ -5251,7 +5307,6 @@ function SupplierHistory({
 }
 
 function PaymentBreakdown({ d }: { d: D }) {
-  const [paymentFocus, setPaymentFocus] = useState<number | null>(null);
   const payments = [
     { name: "Pix", color: "#22a66f", matches: (sale: V) => !isMarketplaceSale(sale) && ((isInstallmentSale(sale) && isInstallmentSettled(sale)) || (!isInstallmentSale(sale) && sale.payment === "Pix")) },
     { name: "Cartão de Crédito", color: "#2f80ed", matches: (sale: V) => !isMarketplaceSale(sale) && !isInstallmentSale(sale) && sale.payment === "Cartão de Crédito" },
@@ -5285,43 +5340,20 @@ function PaymentBreakdown({ d }: { d: D }) {
       <div>
         <h2>Vendas por forma de pagamento</h2>
         <p>Distribuição do faturamento recebido por forma e origem do pagamento.</p>
-        <div
-          className="paymentDonut"
-          style={{ background: gradient }}
-        >
-          <span>
-            {paymentFocus !== null && payments[paymentFocus] ? (
-              <>
-                <small>{payments[paymentFocus].name}</small>
-                <b>
-                  {total
-                    ? Math.round(
-                        (payments[paymentFocus].value / total) * 100,
-                      )
-                    : 0}
-                  %
-                </b>
-              </>
-            ) : (
-              <>
-                <small>Total vendido</small>
-                <b>{brl(total)}</b>
-              </>
-            )}
-          </span>
-        </div>
+        <InteractiveDonutChart
+          segments={payments.map((item) => ({
+            label: item.name,
+            value: item.value,
+            color: item.color,
+          }))}
+          centerTop="Total vendido"
+          centerBottom={brl(total)}
+          className="paymentInteractiveDonut"
+        />
       </div>
       <div className="paymentLegend">
-        {payments.map((x, index) => (
-          <div
-            key={x.name}
-            className={paymentFocus === index ? "active" : ""}
-            onMouseEnter={() => setPaymentFocus(index)}
-            onMouseLeave={() => setPaymentFocus(null)}
-            onClick={() =>
-              setPaymentFocus((current) => (current === index ? null : index))
-            }
-          >
+        {payments.map((x) => (
+          <div key={x.name}>
             <i style={{ background: x.color }} />
             <span>
               {x.name}
