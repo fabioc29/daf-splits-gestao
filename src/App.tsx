@@ -1046,8 +1046,7 @@ function Dash({ d }: { d: D }) {
       0,
     ),
   }));
-  const catTotal = categories.reduce((n, x) => n + x.value, 0),
-    catMax = Math.max(1, ...categories.map((x) => x.value));
+  const catTotal = categories.reduce((n, x) => n + x.value, 0);
   const summarySales = monthSales.filter((sale) => !isHistoricalSale(sale));
   const directOrders = summarySales.filter(
     (sale) => sale.status !== "cancelled" && !isMarketplaceSale(sale),
@@ -1202,24 +1201,29 @@ function Dash({ d }: { d: D }) {
               className="categoryDonut"
               style={{ background: categoryGradient(categories, catTotal) }}
             />
-            <div className="categoryLegend">
-              {categories.map((x) => (
-                <div
-                  key={x.category}
-                  className={x.category
-                    .toLowerCase()
-                    .normalize("NFD")
-                    .replace(/[\u0300-\u036f]/g, "")}
-                >
-                  <span>
-                    {x.category}
-                    <b>{x.value.toLocaleString("pt-BR")} ml</b>
-                  </span>
-                  <i>
-                    <b style={{ width: (x.value / catMax) * 100 + "%" }} />
-                  </i>
-                </div>
-              ))}
+            <div className="categoryLegend categoryPercentLegend">
+              {categories.map((x) => {
+                const percentage = catTotal
+                  ? Math.round((x.value / catTotal) * 100)
+                  : 0;
+                return (
+                  <div
+                    key={x.category}
+                    className={x.category
+                      .toLowerCase()
+                      .normalize("NFD")
+                      .replace(/[\u0300-\u036f]/g, "")}
+                  >
+                    <span className="categoryPercentText">
+                      <strong>{x.category}</strong>
+                      <small>{percentage}%</small>
+                    </span>
+                    <b className="categorySoldMl">
+                      {x.value.toLocaleString("pt-BR")} ml vendidos
+                    </b>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
