@@ -4135,3 +4135,45 @@ input[type="number"]::-webkit-outer-spin-button {
   white-space: nowrap;
   font-size: 11px;
 }
+
+
+/* Dashboard summary refinements */
+.dashboardCards .estimatedMarginLabel {
+  font-size: 10px;
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
+.orderOriginLegend p {
+  align-items: center;
+}
+.orderOriginLegend p.tiktok::before {
+  background: #5DC9D6;
+  border: 0;
+}
+.orderOriginLegend p.shopee::before {
+  background: #EE4D2D;
+}
+.orderOriginLegend p.cancelled::before {
+  background: #05070a;
+  border: 1px solid #4d5969;
+}
+.orderOriginText {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.orderOriginText strong {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.orderOriginText small {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 900;
+}
+.orderOriginLegend p > b {
+  margin-left: auto;
+  text-align: right;
+  font-size: 11px;
+}
