@@ -4310,3 +4310,302 @@ input[type="number"]::-webkit-outer-spin-button {
   color: var(--muted);
   font-weight: 700;
 }
+
+
+/* Interatividade e legendas dos gráficos */
+.interactiveDonut {
+  cursor: crosshair;
+  touch-action: manipulation;
+}
+.interactiveDonut > span,
+.interactiveDonut .categoryDonutTotal {
+  transition:
+    transform .12s ease,
+    opacity .12s ease;
+}
+.chartExplanation {
+  margin: 8px 0 14px !important;
+  padding: 0 !important;
+  color: var(--muted) !important;
+  font-size: 9px !important;
+  line-height: 1.4;
+  text-align: center;
+}
+.chartExplanation::before {
+  display: none !important;
+}
+.orderOriginText strong {
+  color: var(--text) !important;
+  font-weight: 900 !important;
+}
+.orderOriginText small {
+  color: var(--muted) !important;
+  font-weight: 700 !important;
+}
+.categoryPercentLegend .categoryPercentText strong {
+  position: relative;
+  padding-left: 15px;
+}
+.categoryPercentLegend .categoryPercentText strong::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+.categoryPercentLegend .nicho .categoryPercentText strong::before {
+  background: #e0b43c;
+}
+.categoryPercentLegend .arabe .categoryPercentText strong::before {
+  background: #8b5cf6;
+}
+.categoryPercentLegend .designer .categoryPercentText strong::before {
+  background: #2f80ed;
+}
+.bars button > span small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+}
+
+
+/* Interação refinada: gráficos controlados pelas legendas */
+.chartExplanationTop {
+  margin: 2px 0 12px !important;
+  text-align: left !important;
+}
+.interactiveLegend > *,
+.paymentLegend > div {
+  cursor: pointer;
+  transition:
+    border-color .14s ease,
+    background-color .14s ease,
+    transform .14s ease,
+    box-shadow .14s ease;
+}
+.interactiveLegend > *:hover,
+.interactiveLegend > *.active,
+.paymentLegend > div:hover,
+.paymentLegend > div.active {
+  border-color: #d8ae43 !important;
+  background: #162234 !important;
+  box-shadow: 0 0 0 1px rgb(216 174 67 / 10%);
+}
+.interactiveLegend > *:active,
+.paymentLegend > div:active {
+  transform: translateY(1px);
+}
+.orderOriginLegend p.active,
+.categoryPercentLegend > div.active {
+  border-color: #d8ae43;
+}
+.paymentLegend > div {
+  border-radius: 10px;
+}
+.interactiveDonut {
+  cursor: default;
+}
+
+
+/* Interação diretamente nas fatias dos gráficos */
+.interactiveSvgDonut {
+  margin-left: auto;
+  margin-right: auto;
+  position: relative;
+  touch-action: manipulation;
+  user-select: none;
+}
+.interactiveSvgDonut svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.sideInteractiveDonut {
+  width: 132px;
+  height: 132px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+.paymentInteractiveDonut {
+  width: 230px;
+  height: 230px;
+  margin-top: 28px;
+  margin-bottom: 5px;
+}
+.dashboardMain .paymentInteractiveDonut {
+  width: 190px;
+  height: 190px;
+}
+.interactiveDonutSlice {
+  cursor: pointer;
+  transform-origin: 60px 60px;
+  transition:
+    opacity .16s ease,
+    transform .16s ease,
+    filter .16s ease;
+  stroke: transparent;
+  stroke-width: 1.5;
+}
+.interactiveDonutSlice.active {
+  filter: brightness(1.14) drop-shadow(0 2px 3px rgb(0 0 0 / 28%));
+}
+.interactiveDonutSlice.inactive {
+  opacity: .3;
+}
+.interactiveDonutEmpty {
+  fill: none;
+  stroke: #303b4c;
+  stroke-width: 22;
+}
+.interactiveDonutHole {
+  fill: var(--panel);
+  pointer-events: none;
+}
+.donutSlicePercentage {
+  fill: #fff;
+  font-size: 8px;
+  font-weight: 900;
+  paint-order: stroke;
+  stroke: rgb(0 0 0 / 45%);
+  stroke-width: 2px;
+  stroke-linejoin: round;
+}
+.interactiveDonutCenterTop {
+  fill: var(--muted);
+  font-size: 6px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.interactiveDonutCenterBottom {
+  fill: var(--text);
+  font-size: 8.5px;
+  font-weight: 900;
+  pointer-events: none;
+}
+.orderOriginLegend p,
+.categoryPercentLegend > div,
+.paymentLegend > div {
+  cursor: default !important;
+}
+.orderOriginLegend p:hover,
+.categoryPercentLegend > div:hover,
+.paymentLegend > div:hover {
+  border-color: var(--line) !important;
+  background: #111a28 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+@media (max-width: 720px) {
+  .paymentInteractiveDonut {
+    width: 190px;
+    height: 190px;
+  }
+}
+@media (max-width: 480px) {
+  .paymentInteractiveDonut {
+    width: 170px;
+    height: 170px;
+  }
+}
+
+
+/* Balão da fatia selecionada e respiro dos cards de gráficos */
+.interactiveDonutInfo {
+  width: fit-content;
+  min-width: 116px;
+  max-width: 100%;
+  margin: 9px auto 0;
+  padding: 8px 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #101927;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  text-align: center;
+  box-shadow: 0 5px 16px rgb(0 0 0 / 12%);
+}
+.interactiveDonutInfo small {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.interactiveDonutInfo b {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+.orderOriginSummary > h2,
+.categories > h2 {
+  margin-bottom: 9px;
+}
+.orderOriginSummary .chartExplanationTop,
+.categories .chartExplanationTop {
+  margin: 0 0 18px !important;
+  line-height: 1.55;
+}
+.orderOriginSummary .sideInteractiveDonut,
+.categories .sideInteractiveDonut {
+  margin-top: 2px;
+  margin-bottom: 18px;
+}
+
+
+/* Corrige fluxo do balão externo e iguala textos explicativos */
+.interactiveSvgDonut {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  overflow: visible;
+}
+.sideInteractiveDonut,
+.paymentInteractiveDonut,
+.dashboardMain .paymentInteractiveDonut {
+  height: auto !important;
+}
+.sideInteractiveDonut svg {
+  width: 132px !important;
+  height: 132px !important;
+  flex: none;
+}
+.paymentInteractiveDonut svg {
+  width: 230px !important;
+  height: 230px !important;
+  flex: none;
+}
+.dashboardMain .paymentInteractiveDonut svg {
+  width: 190px !important;
+  height: 190px !important;
+}
+.interactiveDonutInfo {
+  position: static;
+  z-index: 5;
+  margin-top: 10px;
+}
+.orderOriginSummary .chartExplanationTop,
+.categories .chartExplanationTop {
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+@media (max-width: 720px) {
+  .paymentInteractiveDonut svg {
+    width: 190px !important;
+    height: 190px !important;
+  }
+}
+@media (max-width: 480px) {
+  .paymentInteractiveDonut svg {
+    width: 170px !important;
+    height: 170px !important;
+  }
+}

@@ -986,6 +986,160 @@ function Cards({ v }: { v: [string, string][] }) {
   );
 }
 
+type InteractiveDonutSegment = {
+  label: string;
+  value: number;
+  color: string;
+};
+
+function donutPoint(radius: number, angle: number) {
+  const radians = ((angle - 90) * Math.PI) / 180;
+  return {
+    x: 60 + radius * Math.cos(radians),
+    y: 60 + radius * Math.sin(radians),
+  };
+}
+
+function donutArcPath(startAngle: number, endAngle: number) {
+  const outerRadius = 52;
+  const innerRadius = 30;
+  const safeEnd =
+    endAngle - startAngle >= 359.999 ? startAngle + 359.999 : endAngle;
+  const outerStart = donutPoint(outerRadius, startAngle);
+  const outerEnd = donutPoint(outerRadius, safeEnd);
+  const innerEnd = donutPoint(innerRadius, safeEnd);
+  const innerStart = donutPoint(innerRadius, startAngle);
+  const largeArc = safeEnd - startAngle > 180 ? 1 : 0;
+
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerEnd.x} ${innerEnd.y}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${innerStart.x} ${innerStart.y}`,
+    "Z",
+  ].join(" ");
+}
+
+function InteractiveDonutChart({
+  segments,
+  centerTop,
+  centerBottom,
+  className = "",
+  infoPrefix = "Selecionado",
+}: {
+  segments: InteractiveDonutSegment[];
+  centerTop: string;
+  centerBottom: string;
+  className?: string;
+  infoPrefix?: string;
+}) {
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const active = hovered ?? selected;
+  const activeSegment = active === null ? null : segments[active] || null;
+  const total = segments.reduce(
+    (sum, segment) => sum + Math.max(0, segment.value),
+    0,
+  );
+
+  let cursor = 0;
+  const slices = segments.map((segment, index) => {
+    const share = total ? Math.max(0, segment.value) / total : 0;
+    const startAngle = cursor * 360;
+    cursor += share;
+    const endAngle = cursor * 360;
+    const midAngle = startAngle + (endAngle - startAngle) / 2;
+    const radians = ((midAngle - 90) * Math.PI) / 180;
+    const explode = active === index ? 4 : 0;
+    const labelPoint = donutPoint(41, midAngle);
+    return {
+      ...segment,
+      index,
+      share,
+      startAngle,
+      endAngle,
+      dx: explode * Math.cos(radians),
+      dy: explode * Math.sin(radians),
+      labelPoint,
+    };
+  });
+
+  return (
+    <div className={`interactiveSvgDonut ${className}`}>
+      <svg
+        viewBox="0 0 120 120"
+        role="img"
+        aria-label="Gráfico interativo. Passe o mouse ou toque em uma cor para ver a porcentagem."
+        onMouseLeave={() => setHovered(null)}
+      >
+        {total ? (
+          slices.map((slice) =>
+            slice.value > 0 ? (
+              <g key={slice.label}>
+                <path
+                  d={donutArcPath(slice.startAngle, slice.endAngle)}
+                  fill={slice.color}
+                  className={
+                    "interactiveDonutSlice" +
+                    (active === slice.index ? " active" : "") +
+                    (active !== null && active !== slice.index
+                      ? " inactive"
+                      : "")
+                  }
+                  transform={`translate(${slice.dx} ${slice.dy})`}
+                  onMouseEnter={() => setHovered(slice.index)}
+                  onClick={() =>
+                    setSelected((current) =>
+                      current === slice.index ? null : slice.index,
+                    )
+                  }
+                />
+                {active === slice.index ? (
+                  <text
+                    x={slice.labelPoint.x + slice.dx}
+                    y={slice.labelPoint.y + slice.dy}
+                    className="donutSlicePercentage"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    pointerEvents="none"
+                  >
+                    {Math.round(slice.share * 100)}%
+                  </text>
+                ) : null}
+              </g>
+            ) : null,
+          )
+        ) : (
+          <circle cx="60" cy="60" r="41" className="interactiveDonutEmpty" />
+        )}
+        <circle cx="60" cy="60" r="29" className="interactiveDonutHole" />
+        <text
+          x="60"
+          y="56"
+          textAnchor="middle"
+          className="interactiveDonutCenterTop"
+        >
+          {centerTop}
+        </text>
+        <text
+          x="60"
+          y="69"
+          textAnchor="middle"
+          className="interactiveDonutCenterBottom"
+        >
+          {centerBottom}
+        </text>
+      </svg>
+      {activeSegment ? (
+        <div className="interactiveDonutInfo" role="status">
+          <small>{infoPrefix}</small>
+          <b>{activeSegment.label}</b>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Dash({ d }: { d: D }) {
   const now = new Date(),
     monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
@@ -1032,6 +1186,10 @@ function Dash({ d }: { d: D }) {
   );
   const avg = daily.slice(0, day).reduce((n, v) => n + v, 0) / Math.max(1, day),
     max = Math.max(avg, ...daily, 1);
+  const displayedDailyTotal = daily.reduce(
+    (sum, value, index) => sum + (index >= day ? avg : value),
+    0,
+  );
   const categories = ["Nicho", "Árabe", "Designer"].map((category) => ({
     category,
     value: activeSales.reduce(
@@ -1075,6 +1233,12 @@ function Dash({ d }: { d: D }) {
     summaryCount
       ? ((directOrders + tiktokOrders + shopeeOrders) / summaryCount) * 360
       : 0;
+  const summaryItems = [
+    { label: "Venda direta", value: directOrders, color: "#22a66f" },
+    { label: "TikTok Shop", value: tiktokOrders, color: "#5DC9D6" },
+    { label: "Shopee", value: shopeeOrders, color: "#EE4D2D" },
+    { label: "Cancelados", value: cancelledOrders, color: "#05070a" },
+  ];
   return (
     <>
       <div className="cards dashboardCards">
@@ -1128,9 +1292,18 @@ function Dash({ d }: { d: D }) {
             <div className="bars">
               {daily.map((value, i) => {
                 const n = i >= day ? avg : value;
+                const percentage = displayedDailyTotal
+                  ? Math.round((n / displayedDailyTotal) * 100)
+                  : 0;
                 return (
-                  <button key={i} aria-label={`Dia ${i + 1}: ${brl(n)}`}>
-                    <span>{brl(n)}</span>
+                  <button
+                    key={i}
+                    aria-label={`Dia ${i + 1}: ${brl(n)} · ${percentage}% do gráfico`}
+                  >
+                    <span>
+                      {brl(n)}
+                      <small>{percentage}%</small>
+                    </span>
                     <i
                       className={i >= day ? "future" : ""}
                       style={{ height: Math.max(4, (n / max) * 100) + "%" }}
@@ -1146,24 +1319,16 @@ function Dash({ d }: { d: D }) {
         <div className="sidecharts">
           <div className="panel orderOriginSummary">
             <h2>Resumo dos pedidos</h2>
-            <div
-              className="donut statusDonut"
-              style={{
-                background: summaryCount
-                  ? `conic-gradient(
-                      #22a66f 0 ${directEnd}deg,
-                      #5DC9D6 ${directEnd}deg ${tiktokEnd}deg,
-                      #EE4D2D ${tiktokEnd}deg ${shopeeEnd}deg,
-                      #05070a ${shopeeEnd}deg 360deg
-                    )`
-                  : undefined,
-              }}
-            >
-              <span>
-                <b>{summaryCount}</b>
-                <small>pedidos</small>
-              </span>
-            </div>
+            <p className="chartExplanation chartExplanationTop">
+              Distribuição dos pedidos do mês por origem.
+            </p>
+            <InteractiveDonutChart
+              segments={summaryItems}
+              centerTop="Total"
+              centerBottom={`${summaryCount} pedidos`}
+              className="sideInteractiveDonut"
+              infoPrefix="Origem"
+            />
             <div className="orderOriginLegend">
               <p className="direct">
                 <span className="orderOriginText">
@@ -1197,15 +1362,25 @@ function Dash({ d }: { d: D }) {
           </div>
           <div className="panel categories">
             <h2>Vendas por categoria</h2>
-            <div
-              className="categoryDonut"
-              style={{ background: categoryGradient(categories, catTotal) }}
-            >
-              <span className="categoryDonutTotal">
-                <small>Total vendido</small>
-                <b>{catTotal.toLocaleString("pt-BR")}mls</b>
-              </span>
-            </div>
+            <p className="chartExplanation chartExplanationTop">
+              Distribuição dos mls vendidos no mês.
+            </p>
+            <InteractiveDonutChart
+              segments={categories.map((item) => ({
+                label: item.category,
+                value: item.value,
+                color:
+                  item.category === "Nicho"
+                    ? "#e0b43c"
+                    : item.category === "Árabe"
+                      ? "#8b5cf6"
+                      : "#2f80ed",
+              }))}
+              centerTop="Total vendido"
+              centerBottom={`${catTotal.toLocaleString("pt-BR")}mls`}
+              className="sideInteractiveDonut"
+              infoPrefix="Categoria"
+            />
             <div className="categoryLegend categoryPercentLegend">
               {categories.map((x) => {
                 const percentage = catTotal
@@ -5175,12 +5350,17 @@ function PaymentBreakdown({ d }: { d: D }) {
       <div>
         <h2>Vendas por forma de pagamento</h2>
         <p>Distribuição do faturamento recebido por forma e origem do pagamento.</p>
-        <div className="paymentDonut" style={{ background: gradient }}>
-          <span>
-            <small>Total vendido</small>
-            <b>{brl(total)}</b>
-          </span>
-        </div>
+        <InteractiveDonutChart
+          segments={payments.map((item) => ({
+            label: item.name,
+            value: item.value,
+            color: item.color,
+          }))}
+          centerTop="Total vendido"
+          centerBottom={brl(total)}
+          className="paymentInteractiveDonut"
+          infoPrefix="Forma de pagamento"
+        />
       </div>
       <div className="paymentLegend">
         {payments.map((x) => (
