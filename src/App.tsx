@@ -1099,7 +1099,7 @@ function Dash({ d }: { d: D }) {
             <b>{brl(estimatedProfit)}</b>
           </div>
           <div>
-            <span>Margem estimada</span>
+            <span className="estimatedMarginLabel">Margem estimada</span>
             <b>{estimatedMargin.toLocaleString("pt-BR", {
               maximumFractionDigits: 1,
               minimumFractionDigits: 1,
@@ -1153,9 +1153,9 @@ function Dash({ d }: { d: D }) {
                 background: summaryCount
                   ? `conic-gradient(
                       #22a66f 0 ${directEnd}deg,
-                      #05070a ${directEnd}deg ${tiktokEnd}deg,
-                      #e5484d ${tiktokEnd}deg ${shopeeEnd}deg,
-                      #7c8798 ${shopeeEnd}deg 360deg
+                      #5DC9D6 ${directEnd}deg ${tiktokEnd}deg,
+                      #EE4D2D ${tiktokEnd}deg ${shopeeEnd}deg,
+                      #05070a ${shopeeEnd}deg 360deg
                     )`
                   : undefined,
               }}
@@ -1167,28 +1167,32 @@ function Dash({ d }: { d: D }) {
             </div>
             <div className="orderOriginLegend">
               <p className="direct">
-                <span>Venda direta</span>
-                <b>
-                  {directOrders} · {summaryPct(directOrders)}%
-                </b>
+                <span className="orderOriginText">
+                  <strong>Venda direta</strong>
+                  <small>{summaryPct(directOrders)}%</small>
+                </span>
+                <b>{directOrders} pedido{directOrders === 1 ? "" : "s"}</b>
               </p>
               <p className="tiktok">
-                <span>TikTok Shop</span>
-                <b>
-                  {tiktokOrders} · {summaryPct(tiktokOrders)}%
-                </b>
+                <span className="orderOriginText">
+                  <strong>TikTok Shop</strong>
+                  <small>{summaryPct(tiktokOrders)}%</small>
+                </span>
+                <b>{tiktokOrders} pedido{tiktokOrders === 1 ? "" : "s"}</b>
               </p>
               <p className="shopee">
-                <span>Shopee</span>
-                <b>
-                  {shopeeOrders} · {summaryPct(shopeeOrders)}%
-                </b>
+                <span className="orderOriginText">
+                  <strong>Shopee</strong>
+                  <small>{summaryPct(shopeeOrders)}%</small>
+                </span>
+                <b>{shopeeOrders} pedido{shopeeOrders === 1 ? "" : "s"}</b>
               </p>
               <p className="cancelled">
-                <span>Cancelados</span>
-                <b>
-                  {cancelledOrders} · {summaryPct(cancelledOrders)}%
-                </b>
+                <span className="orderOriginText">
+                  <strong>Cancelados</strong>
+                  <small>{summaryPct(cancelledOrders)}%</small>
+                </span>
+                <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
               </p>
             </div>
           </div>
