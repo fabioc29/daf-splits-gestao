@@ -4206,7 +4206,30 @@ function BrandManager({
   );
   const [editing, setEditing] = useState("");
   const [draft, setDraft] = useState("");
+  const [query, setQuery] = useState("");
+  const [addingOpen, setAddingOpen] = useState(false);
   const [newBrand, setNewBrand] = useState("");
+  const [productsBrand, setProductsBrand] = useState("");
+
+  const filteredBrands = brands.filter((brand) =>
+    brand.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+  const selectedBrandProducts = productsBrand
+    ? d.products
+        .filter(
+          (product) =>
+            product.brand.localeCompare(productsBrand, "pt-BR", {
+              sensitivity: "base",
+            }) === 0,
+        )
+        .sort((a, b) =>
+          a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
+        )
+    : [];
+  const selectedBrandStock = selectedBrandProducts.reduce(
+    (sum, product) => sum + Math.max(0, Number(product.stock) || 0),
+    0,
+  );
 
   function addNewBrand() {
     const clean = newBrand.trim();
@@ -4224,6 +4247,7 @@ function BrandManager({
       brands: [...state.brands, clean],
     }));
     setNewBrand("");
+    setAddingOpen(false);
     notify("Nova marca adicionada.");
   }
 
@@ -4306,30 +4330,27 @@ function BrandManager({
           {brands.length} marca(s) cadastrada(s), em ordem alfabética.
         </p>
 
-        <div className="brandManagerAdd">
-          <input
-            value={newBrand}
-            onChange={(event) => setNewBrand(event.target.value)}
-            placeholder="Digite o nome da nova marca"
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addNewBrand();
-              }
-            }}
-          />
+        <div className="brandManagerToolbar">
+          <label className="brandManagerSearch">
+            <Search />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Pesquisar marca cadastrada"
+              aria-label="Pesquisar marca cadastrada"
+            />
+          </label>
           <button
             type="button"
-            className="primary"
-            onClick={addNewBrand}
-            disabled={!newBrand.trim()}
+            className="primary brandManagerNewButton"
+            onClick={() => setAddingOpen(true)}
           >
-            <Plus /> Adicionar marca
+            <Plus /> Nova marca
           </button>
         </div>
 
         <div className="brandManagerList">
-          {brands.map((brand) => (
+          {filteredBrands.map((brand) => (
             <div className="brandManagerRow" key={brand}>
               {editing === brand ? (
                 <input
@@ -4376,6 +4397,14 @@ function BrandManager({
                     </button>
                     <button
                       type="button"
+                      className="iconButton brandProductsButton"
+                      onClick={() => setProductsBrand(brand)}
+                    >
+                      <Box />
+                      Perfumes
+                    </button>
+                    <button
+                      type="button"
                       className="iconButton danger"
                       onClick={() => removeBrand(brand)}
                     >
@@ -4387,8 +4416,8 @@ function BrandManager({
               </div>
             </div>
           ))}
-          {!brands.length ? (
-            <p className="empty">Nenhuma marca cadastrada.</p>
+          {!filteredBrands.length ? (
+            <p className="empty">Nenhuma marca encontrada.</p>
           ) : null}
         </div>
 
@@ -4398,6 +4427,123 @@ function BrandManager({
           </button>
         </footer>
       </div>
+
+      {addingOpen ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog brandCreateDialog">
+            <header>
+              <div>
+                <small>NOVA MARCA</small>
+                <h2>Adicionar marca</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingOpen(false);
+                  setNewBrand("");
+                }}
+                aria-label="Fechar cadastro de marca"
+              >
+                <X />
+              </button>
+            </header>
+            <label>
+              <span>Nome da marca</span>
+              <input
+                value={newBrand}
+                onChange={(event) => setNewBrand(event.target.value)}
+                placeholder="Digite o nome da nova marca"
+                autoFocus
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addNewBrand();
+                  }
+                }}
+              />
+            </label>
+            <footer>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingOpen(false);
+                  setNewBrand("");
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={addNewBrand}
+                disabled={!newBrand.trim()}
+              >
+                Adicionar marca
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {productsBrand ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog brandProductsDialog">
+            <header>
+              <div>
+                <small>PERFUMES DA MARCA</small>
+                <h2>{productsBrand}</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setProductsBrand("")}
+                aria-label="Fechar perfumes da marca"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="brandProductsSummary">
+              <div>
+                <span>Perfumes registrados</span>
+                <b>{selectedBrandProducts.length}</b>
+              </div>
+              <div>
+                <span>ML em estoque</span>
+                <b>{selectedBrandStock.toLocaleString("pt-BR")} ml</b>
+              </div>
+            </div>
+
+            <div className="brandProductsList">
+              {selectedBrandProducts.map((product) => (
+                <div key={product.id}>
+                  <span>
+                    <b>{product.name}</b>
+                    <small>
+                      {product.category} · {product.gender || "Unissex"}
+                    </small>
+                  </span>
+                  <strong>
+                    {Math.max(0, product.stock).toLocaleString("pt-BR", {
+                      maximumFractionDigits: 2,
+                    })} ml
+                  </strong>
+                </div>
+              ))}
+              {!selectedBrandProducts.length ? (
+                <p className="empty">
+                  Nenhum perfume registrado para esta marca.
+                </p>
+              ) : null}
+            </div>
+
+            <footer>
+              <button type="button" onClick={() => setProductsBrand("")}>
+                Fechar
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
