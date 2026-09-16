@@ -1304,9 +1304,19 @@ function Dash({ d }: { d: D }) {
                     className={selectedDay === i ? "selected" : ""}
                     aria-pressed={selectedDay === i}
                     aria-label={`Dia ${i + 1}: ${brl(n)} · ${percentage}% do gráfico`}
-                    onClick={() =>
-                      setSelectedDay((current) => (current === i ? null : i))
-                    }
+                    onPointerEnter={(event) => {
+                      if (event.pointerType === "mouse") setSelectedDay(i);
+                    }}
+                    onPointerLeave={(event) => {
+                      if (event.pointerType === "mouse") setSelectedDay(null);
+                    }}
+                    onClick={() => {
+                      const desktopHover = window.matchMedia(
+                        "(hover: hover) and (pointer: fine)",
+                      ).matches;
+                      if (desktopHover) return;
+                      setSelectedDay((current) => (current === i ? null : i));
+                    }}
                   >
                     <span>
                       {brl(n)}
