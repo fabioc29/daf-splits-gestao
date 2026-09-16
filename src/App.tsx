@@ -1141,6 +1141,7 @@ function InteractiveDonutChart({
 }
 
 function Dash({ d }: { d: D }) {
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const now = new Date(),
     monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
     monthSales = d.sales.filter((sale) => sale.date.startsWith(monthKey)),
@@ -1289,7 +1290,9 @@ function Dash({ d }: { d: D }) {
               Média diária <b>{brl(avg)}</b> · Projeção mensal{" "}
               <b>{brl(avg * days)}</b>
             </div>
-            <div className="bars">
+            <div
+              className={"bars" + (selectedDay !== null ? " hasSelection" : "")}
+            >
               {daily.map((value, i) => {
                 const n = i >= day ? avg : value;
                 const percentage = displayedDailyTotal
@@ -1298,7 +1301,12 @@ function Dash({ d }: { d: D }) {
                 return (
                   <button
                     key={i}
+                    className={selectedDay === i ? "selected" : ""}
+                    aria-pressed={selectedDay === i}
                     aria-label={`Dia ${i + 1}: ${brl(n)} · ${percentage}% do gráfico`}
+                    onClick={() =>
+                      setSelectedDay((current) => (current === i ? null : i))
+                    }
                   >
                     <span>
                       {brl(n)}
@@ -1781,12 +1789,14 @@ function Prepare({
   const [shippingSale, setShippingSale] = useState<V | null>(null);
   const [simplifiedOpen, setSimplifiedOpen] = useState(false);
   const [correiosModeOpen, setCorreiosModeOpen] = useState(false);
-  const list = d.sales.filter(
-    (s) =>
-      s.status !== "cancelled" &&
-      !isHistoricalSale(s) &&
-      (tab === "done" ? s.prepared : !s.prepared),
-  );
+  const list = d.sales.filter((s) => {
+    if (s.status === "cancelled" || isHistoricalSale(s)) return false;
+    if (tab === "done") return s.prepared;
+    if (s.prepared) return false;
+    const status = getPreparationStatus(s);
+    if (tab === "accumulating") return status === "accumulating";
+    return status !== "accumulating";
+  });
   function toggle(s: V) {
     const done = !s.prepared;
     set((x: D) => ({
@@ -1922,6 +1932,12 @@ function Prepare({
           onClick={() => setTab("pending")}
         >
           A preparar
+        </button>
+        <button
+          className={tab === "accumulating" ? "active" : ""}
+          onClick={() => setTab("accumulating")}
+        >
+          Vai acumular
         </button>
         <button
           className={tab === "done" ? "active" : ""}
@@ -4190,6 +4206,26 @@ function BrandManager({
   );
   const [editing, setEditing] = useState("");
   const [draft, setDraft] = useState("");
+  const [newBrand, setNewBrand] = useState("");
+
+  function addNewBrand() {
+    const clean = newBrand.trim();
+    if (!clean) return;
+    const duplicate = brands.some(
+      (brand) =>
+        brand.localeCompare(clean, "pt-BR", { sensitivity: "base" }) === 0,
+    );
+    if (duplicate) {
+      window.alert("Esta marca já está cadastrada.");
+      return;
+    }
+    set((state: D) => ({
+      ...state,
+      brands: [...state.brands, clean],
+    }));
+    setNewBrand("");
+    notify("Nova marca adicionada.");
+  }
 
   function startEdit(brand: string) {
     setEditing(brand);
@@ -4269,6 +4305,28 @@ function BrandManager({
         <p className="brandManagerHint">
           {brands.length} marca(s) cadastrada(s), em ordem alfabética.
         </p>
+
+        <div className="brandManagerAdd">
+          <input
+            value={newBrand}
+            onChange={(event) => setNewBrand(event.target.value)}
+            placeholder="Digite o nome da nova marca"
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addNewBrand();
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="primary"
+            onClick={addNewBrand}
+            disabled={!newBrand.trim()}
+          >
+            <Plus /> Adicionar marca
+          </button>
+        </div>
 
         <div className="brandManagerList">
           {brands.map((brand) => (
@@ -4565,6 +4623,13 @@ function Stock({
                   >
                     <Trash2 />
                     Excluir
+                  </button>
+                  <button
+                    className="iconButton productCardHistoryButton"
+                    onClick={() => setProductHistoryId(p.id)}
+                  >
+                    <ReceiptText />
+                    Histórico
                   </button>
                 </div>
               </div>
@@ -6095,6 +6160,19 @@ function Form({
     label: existingClient?.addresses[0]?.label || "Principal",
   });
   const [clientLookupMessage, setClientLookupMessage] = useState("");
+  function addBrandFromForm(brand: string) {
+    const clean = brand.trim();
+    if (!clean) return;
+    set((state: D) => ({
+      ...state,
+      brands: state.brands.some(
+        (item) =>
+          item.localeCompare(clean, "pt-BR", { sensitivity: "base" }) === 0,
+      )
+        ? state.brands
+        : [...state.brands, clean],
+    }));
+  }
   const [supplyOverrides, setSupplyOverrides] = useState<
     Record<string, number>
   >(existingSale?.supplyOverrides || {});
@@ -6965,6 +7043,7 @@ function Form({
           <ProductFields
             product={existingProduct}
             brands={d.brands}
+            onAddBrand={addBrandFromForm}
           />
         ) : null}
         {type === "supply" ? (
@@ -7042,7 +7121,10 @@ function Form({
             />
             {kind === "Perfume" ? (
               <>
-                <BrandFields brands={d.brands} />
+                <BrandFields
+                  brands={d.brands}
+                  onAddBrand={addBrandFromForm}
+                />
                 <Field n="productName" l="Nome do perfume" />
                 <Choices
                   name="category"
@@ -7420,43 +7502,118 @@ const mkC = (f: any, n: number, id = Date.now()): C => ({
 function BrandFields({
   brands,
   value,
+  onAddBrand,
 }: {
   brands: string[];
   value?: string;
+  onAddBrand?: (brand: string) => void;
 }) {
   const sortedBrands = Array.from(
     new Set(brands.map((brand) => brand.trim()).filter(Boolean)),
   ).sort((a, b) =>
     a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
   );
+  const [currentBrand, setCurrentBrand] = useState(value || "");
+  const [creatingBrand, setCreatingBrand] = useState(false);
+  const [newBrand, setNewBrand] = useState("");
+
+  function saveNewBrand() {
+    const clean = newBrand.trim();
+    if (!clean) return;
+    const duplicated = sortedBrands.some(
+      (brand) =>
+        brand.localeCompare(clean, "pt-BR", { sensitivity: "base" }) === 0,
+    );
+    if (duplicated) {
+      window.alert("Esta marca já está cadastrada.");
+      setCurrentBrand(
+        sortedBrands.find(
+          (brand) =>
+            brand.localeCompare(clean, "pt-BR", { sensitivity: "base" }) === 0,
+        ) || clean,
+      );
+      setCreatingBrand(false);
+      setNewBrand("");
+      return;
+    }
+    onAddBrand?.(clean);
+    setCurrentBrand(clean);
+    setCreatingBrand(false);
+    setNewBrand("");
+  }
+
   return (
-    <label>
-      <span>Marca</span>
-      <input
-        name="brand"
-        list="brand-options"
-        defaultValue={value || ""}
-        placeholder="Selecione ou digite uma marca"
-        required
-      />
-      <datalist id="brand-options">
-        {sortedBrands.map((brand) => (
-          <option key={brand} value={brand} />
-        ))}
-      </datalist>
-    </label>
+    <div className="brandFieldBlock">
+      <label>
+        <span>Marca</span>
+        <input
+          name="brand"
+          list="brand-options"
+          value={currentBrand}
+          onChange={(event) => setCurrentBrand(event.target.value)}
+          placeholder="Selecione ou digite uma marca"
+          required
+        />
+        <datalist id="brand-options">
+          {sortedBrands.map((brand) => (
+            <option key={brand} value={brand} />
+          ))}
+        </datalist>
+      </label>
+      {onAddBrand ? (
+        <>
+          {!creatingBrand ? (
+            <button
+              type="button"
+              className="inlineAddBrandButton"
+              onClick={() => setCreatingBrand(true)}
+            >
+              <Plus /> Adicionar nova marca
+            </button>
+          ) : (
+            <div className="inlineAddBrandEditor">
+              <input
+                value={newBrand}
+                onChange={(event) => setNewBrand(event.target.value)}
+                placeholder="Nome da nova marca"
+                autoFocus
+              />
+              <button type="button" className="iconButton" onClick={saveNewBrand}>
+                <Check /> Adicionar
+              </button>
+              <button
+                type="button"
+                className="iconButton"
+                onClick={() => {
+                  setCreatingBrand(false);
+                  setNewBrand("");
+                }}
+              >
+                <X /> Cancelar
+              </button>
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
   );
 }
 function ProductFields({
   product,
   brands,
+  onAddBrand,
 }: {
   product?: P;
   brands: string[];
+  onAddBrand?: (brand: string) => void;
 }) {
   return (
     <>
-      <BrandFields brands={brands} value={product?.brand} />
+      <BrandFields
+        brands={brands}
+        value={product?.brand}
+        onAddBrand={onAddBrand}
+      />
       <Field n="name" l="Perfume" v={product?.name} />
       <Choices
         name="category"
