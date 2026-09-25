@@ -191,6 +191,42 @@ const dateBR = (value?: string) => {
   const [year, month, day] = value.slice(0, 10).split("-");
   return year && month && day ? `${day}/${month}/${year}` : value;
 };
+const formatCpf = (value: unknown) => {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 11);
+  if (!digits) return "";
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6)
+    return `${digits.slice(0, 3)}.${digits.slice(3)}`;
+  if (digits.length <= 9)
+    return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6)}`;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+};
+const formatClientPhone = (value: unknown) => {
+  const raw = String(value || "");
+  let digits = raw.replace(/\D/g, "");
+  const explicitCountryCode = /^\s*\(?\+55/.test(raw);
+  if (
+    (explicitCountryCode || (digits.startsWith("55") && digits.length > 11)) &&
+    digits.length >= 2
+  ) {
+    digits = digits.slice(2);
+  }
+  if (digits.startsWith("0") && digits.length > 10) {
+    digits = digits.slice(1);
+  }
+  digits = digits.slice(0, 11);
+  if (!digits) return "";
+
+  const ddd = digits.slice(0, 2);
+  const subscriber = digits.slice(2);
+  let local = subscriber;
+  if (subscriber.length > 5) {
+    const splitAt = subscriber.length === 9 ? 5 : 4;
+    local = `${subscriber.slice(0, splitAt)}-${subscriber.slice(splitAt)}`;
+  }
+  const complete = digits.length >= 10;
+  return `(+55 0${ddd}${subscriber ? ` ${local}` : ""}${complete ? ")" : ""}`;
+};
 const orderNo = (id: number) => String(id).padStart(5, "0");
 const BRAZIL_STATES = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT",
@@ -817,6 +853,11 @@ function normalizeData(stored: any): D {
       supplier: supplierByKey.get(supplierKey(cleaned)) || cleaned,
     };
   });
+  const normalizedClients = (merged.clients || []).map((client: C) => ({
+    ...client,
+    phone: formatClientPhone(client.phone),
+    cpf: formatCpf(client.cpf),
+  }));
   const rawSales = (merged.sales || []) as V[];
   const ids = rawSales.map((sale) => sale.id).sort((a, b) => a - b);
   const needsSequentialIds =
@@ -829,7 +870,7 @@ function normalizeData(stored: any): D {
   }
   const normalizedSales = rawSales.map((s: V) => {
     const marketplaceSale = isMarketplaceSale(s);
-    const linkedCustomer = merged.clients.find(
+    const linkedCustomer = normalizedClients.find(
       (client: C) => client.id === s.clientId,
     );
     return {
@@ -904,6 +945,7 @@ function normalizeData(stored: any): D {
     },
     purchases,
     supplies: normalizedSupplies,
+    clients: normalizedClients,
     suppliers,
     supplierTypes,
     supplierDates,
@@ -2259,10 +2301,16 @@ function Shipping({
     field: "name" | "phone" | "cpf" | "cep" | "number" | "district" | "city" | "state",
     value: string,
   ) {
+    const nextValue =
+      field === "phone"
+        ? formatClientPhone(value)
+        : field === "cpf"
+          ? formatCpf(value)
+          : value;
     set((state: D) => ({
       ...state,
       clients: state.clients.map((client) =>
-        client.id === clientId ? { ...client, [field]: value } : client,
+        client.id === clientId ? { ...client, [field]: nextValue } : client,
       ),
     }));
   }
@@ -6305,8 +6353,8 @@ function Form({
   );
   const [clientDraft, setClientDraft] = useState({
     name: existingClient?.name || "",
-    phone: existingClient?.phone || "",
-    cpf: existingClient?.cpf || "",
+    phone: formatClientPhone(existingClient?.phone || ""),
+    cpf: formatCpf(existingClient?.cpf || ""),
     cep: existingClient?.cep || "",
     address: existingClient?.addresses[0]?.value || "",
     number: existingClient?.number || "",
@@ -6530,8 +6578,8 @@ function Form({
             {
               id: clientId,
               name: String(f.newName),
-              phone: String(f.newPhone || ""),
-              cpf: String(f.newCpf || ""),
+              phone: formatClientPhone(f.newPhone),
+              cpf: formatCpf(f.newCpf),
               cep: String(f.newCep || ""),
               number: String(f.newNumber || ""),
               date: String(f.date),
@@ -6729,8 +6777,8 @@ function Form({
           {
             id: clientId,
             name: String(f.newName),
-            phone: String(f.newPhone),
-            cpf: String(f.newCpf || ""),
+            phone: formatClientPhone(f.newPhone),
+            cpf: formatCpf(f.newCpf),
             cep: String(f.newCep || ""),
             number: String(f.newNumber || ""),
             district: String(f.newDistrict || ""),
@@ -6886,8 +6934,21 @@ function Form({
               <>
                 <div className="row three">
                   <Field n="newName" l="Nome" />
-                  <Field n="newPhone" l="WhatsApp (opcional)" required={false} />
-                  <Field n="newCpf" l="CPF (opcional)" required={false} />
+                  <Field
+                    n="newPhone"
+                    l="WhatsApp (opcional)"
+                    required={false}
+                    formatter={formatClientPhone}
+                    inputMode="tel"
+                  />
+                  <Field
+                    n="newCpf"
+                    l="CPF (opcional)"
+                    required={false}
+                    formatter={formatCpf}
+                    inputMode="numeric"
+                    maxLength={14}
+                  />
                 </div>
                 <div className="row">
                   <Field n="newAddress" l="Endereço (opcional)" required={false} />
@@ -6967,8 +7028,8 @@ function Form({
                   <>
                     <div className="row three">
                       <label><span>Nome</span><input name="newName" value={clientDraft.name} onChange={(e) => setClientDraft((c) => ({ ...c, name: e.target.value }))} required /></label>
-                      <label><span>WhatsApp (opcional)</span><input name="newPhone" value={clientDraft.phone} onChange={(e) => setClientDraft((c) => ({ ...c, phone: e.target.value }))} /></label>
-                      <label><span>CPF (opcional)</span><input name="newCpf" value={clientDraft.cpf} onChange={(e) => setClientDraft((c) => ({ ...c, cpf: e.target.value }))} onBlur={(e) => findClientByCpf(e.target.value)} /></label>
+                      <label><span>WhatsApp (opcional)</span><input name="newPhone" inputMode="tel" value={clientDraft.phone} onChange={(e) => setClientDraft((c) => ({ ...c, phone: formatClientPhone(e.target.value) }))} /></label>
+                      <label><span>CPF (opcional)</span><input name="newCpf" inputMode="numeric" maxLength={14} value={clientDraft.cpf} onChange={(e) => setClientDraft((c) => ({ ...c, cpf: formatCpf(e.target.value) }))} onBlur={(e) => findClientByCpf(e.target.value)} /></label>
                     </div>
                     <div className="row">
                       <label><span>Endereço (opcional)</span><input name="newAddress" value={clientDraft.address} onChange={(e) => setClientDraft((c) => ({ ...c, address: e.target.value }))} /></label>
@@ -7402,8 +7463,12 @@ function Form({
                 <input
                   name="phone"
                   value={clientDraft.phone}
+                  inputMode="tel"
                   onChange={(event) =>
-                    setClientDraft((current) => ({ ...current, phone: event.target.value }))
+                    setClientDraft((current) => ({
+                      ...current,
+                      phone: formatClientPhone(event.target.value),
+                    }))
                   }
                   required
                 />
@@ -7413,8 +7478,13 @@ function Form({
                 <input
                   name="cpf"
                   value={clientDraft.cpf}
+                  inputMode="numeric"
+                  maxLength={14}
                   onChange={(event) => {
-                    setClientDraft((current) => ({ ...current, cpf: event.target.value }));
+                    setClientDraft((current) => ({
+                      ...current,
+                      cpf: formatCpf(event.target.value),
+                    }));
                     setClientLookupMessage("");
                   }}
                   onBlur={(event) => findClientByCpf(event.target.value)}
@@ -7642,8 +7712,8 @@ const mkP = (f: any, id = Date.now()): P => ({
 const mkC = (f: any, n: number, id = Date.now()): C => ({
   id,
   name: String(f.name),
-  phone: String(f.phone),
-  cpf: String(f.cpf),
+  phone: formatClientPhone(f.phone),
+  cpf: formatCpf(f.cpf),
   cep: String(f.cep),
   number: String(f.number || ""),
   district: String(f.district || ""),
@@ -7868,6 +7938,9 @@ function Field({
   required = true,
   onChange,
   decimalOnly = false,
+  formatter,
+  inputMode,
+  maxLength,
 }: {
   n: string;
   l: string;
@@ -7877,6 +7950,9 @@ function Field({
   required?: boolean;
   onChange?: (e: any) => void;
   decimalOnly?: boolean;
+  formatter?: (value: string) => string;
+  inputMode?: "none" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search";
+  maxLength?: number;
 }) {
   return (
     <label>
@@ -7884,13 +7960,19 @@ function Field({
       <input
         name={n}
         type={decimalOnly ? "text" : t}
-        inputMode={decimalOnly ? "decimal" : undefined}
+        inputMode={decimalOnly ? "decimal" : inputMode}
         pattern={decimalOnly ? "[0-9]+([,.][0-9]+)?" : undefined}
-        defaultValue={v}
+        defaultValue={formatter ? formatter(String(v ?? "")) : v}
         placeholder={p}
         required={required}
+        maxLength={maxLength}
         step={t === "number" ? "0.01" : undefined}
-        onChange={onChange}
+        onChange={(event) => {
+          if (formatter) {
+            event.currentTarget.value = formatter(event.currentTarget.value);
+          }
+          onChange?.(event);
+        }}
       />
     </label>
   );
