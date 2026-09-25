@@ -204,28 +204,30 @@ const formatCpf = (value: unknown) => {
 const formatClientPhone = (value: unknown) => {
   const raw = String(value || "");
   let digits = raw.replace(/\D/g, "");
-  const explicitCountryCode = /^\s*\(?\+55/.test(raw);
+
+  const explicitCountryCode = /^\s*\+?55(?:\D|$)/.test(raw.trim());
   if (
     (explicitCountryCode || (digits.startsWith("55") && digits.length > 11)) &&
     digits.length >= 2
   ) {
     digits = digits.slice(2);
   }
-  if (digits.startsWith("0") && digits.length > 10) {
-    digits = digits.slice(1);
-  }
-  digits = digits.slice(0, 11);
+
+  // Remove o zero de operadora/tronco. Isso também corrige registros que
+  // tenham sido salvos com zeros extras pela máscara anterior.
+  digits = digits.replace(/^0+/, "").slice(0, 11);
   if (!digits) return "";
 
   const ddd = digits.slice(0, 2);
   const subscriber = digits.slice(2);
   let local = subscriber;
+
   if (subscriber.length > 5) {
-    const splitAt = subscriber.length === 9 ? 5 : 4;
+    const splitAt = subscriber.startsWith("9") ? 5 : 4;
     local = `${subscriber.slice(0, splitAt)}-${subscriber.slice(splitAt)}`;
   }
-  const complete = digits.length >= 10;
-  return `(+55 0${ddd}${subscriber ? ` ${local}` : ""}${complete ? ")" : ""}`;
+
+  return `+55 0${ddd}${subscriber ? ` ${local}` : ""}`;
 };
 const orderNo = (id: number) => String(id).padStart(5, "0");
 const BRAZIL_STATES = [
