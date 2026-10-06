@@ -1,9 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  CheckCircle2,
-  PackageOpen,
-  XCircle,
-} from "lucide-react";
+import { PackageOpen } from "lucide-react";
 import { supabase } from "./supabase";
 import "./catalog.css";
 
@@ -56,27 +52,28 @@ function CatalogViewer({
   adminPreview?: boolean;
 }) {
   const [category, setCategory] = useState("Todos");
-  const [gender, setGender] = useState("Todos");
+  const [headerScrolled, setHeaderScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setHeaderScrolled(window.scrollY > 18);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   const filtered = useMemo(
     () =>
       items.filter(
-        (item) =>
-          (category === "Todos" || item.category === category) &&
-          (gender === "Todos" || item.gender === gender),
+        (item) => category === "Todos" || item.category === category,
       ),
-    [items, category, gender],
+    [items, category],
   );
 
   return (
     <div className={adminPreview ? "catalogExperience embedded" : "catalogExperience"}>
-      <header className="catalogHeader">
-        <div className="catalogBrand">
-          <img src="/icon-512.png" alt="DAF Splits" />
-          <div>
-            <span>DAF SPLITS</span>
-            <small>O luxo que cabe no seu bolso</small>
-          </div>
+      <header className={"catalogHeader" + (headerScrolled ? " scrolled" : "")}>
+        <div className="catalogHeaderInner">
+          <img src="/icon-512.png" alt="DAF Splits" className="catalogHeaderLogo" />
         </div>
       </header>
 
@@ -95,22 +92,6 @@ function CatalogViewer({
           <h1>Perfumes disponíveis</h1>
 
           <div className="catalogSimpleFilters">
-            <div className="catalogFilterGroup">
-              <span>Público</span>
-              <div>
-                {["Todos", "Masculino", "Feminino"].map((option) => (
-                  <button
-                    type="button"
-                    key={option}
-                    className={gender === option ? "active" : ""}
-                    onClick={() => setGender(option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="catalogFilterGroup">
               <span>Categoria</span>
               <div>
@@ -133,6 +114,11 @@ function CatalogViewer({
           <section className="catalogGrid">
             {filtered.map((item) => (
               <article className="catalogCard" key={item.id}>
+                <div className={item.apc ? "catalogApcBanner yes" : "catalogApcBanner no"}>
+                  <span />
+                  <strong>{item.apc ? "APC Disponível" : "APC Indisponível"}</strong>
+                </div>
+
                 <div className="catalogBottleVisual" aria-hidden="true">
                   <div className="catalogBottleCap" />
                   <div className="catalogBottleBody">
@@ -156,10 +142,6 @@ function CatalogViewer({
                   <div>
                     <small>Disponível para decants</small>
                     <b>{item.stock.toLocaleString("pt-BR")} ml</b>
-                  </div>
-                  <div className={item.apc ? "catalogApc yes" : "catalogApc no"}>
-                    {item.apc ? <CheckCircle2 /> : <XCircle />}
-                    <span>{item.apc ? "APC disponível" : "Sem APC"}</span>
                   </div>
                 </div>
               </article>
