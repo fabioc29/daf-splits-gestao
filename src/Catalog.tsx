@@ -178,6 +178,7 @@ function catalogStyle(settings: CatalogSettings): CSSProperties {
     "--catalog-bg": settings.background,
     "--catalog-header": settings.header,
     "--catalog-panel": settings.card,
+    "--catalog-card": settings.card,
     "--catalog-text": settings.text,
     "--catalog-muted": settings.muted,
     "--catalog-line": settings.line,
