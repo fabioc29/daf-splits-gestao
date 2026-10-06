@@ -5898,7 +5898,7 @@ function PaymentBreakdown({
 }
 function Finance({
   d,
-  totals,
+  totals: _totals,
   set,
   notify,
 }: {
@@ -5907,51 +5907,184 @@ function Finance({
   set: any;
   notify: (message: string) => void;
 }) {
-  const balanceCosts = d.sales
+  const [month, setMonth] = useState(today().slice(0, 7));
+  const cutoff = periodCutoffDay(month);
+  const metrics = periodMetrics(d, month, cutoff);
+  const previousMonth = shiftMonthKey(month, -1);
+  const previous = periodMetrics(
+    d,
+    previousMonth,
+    Math.min(cutoff, monthDays(previousMonth)),
+  );
+  const comparisonLabel =
+    "vs. " +
+    periodMonthLabel(previousMonth).replace(/^./, (letter) =>
+      letter.toUpperCase(),
+    );
+  const purchases = d.purchases.filter(
+    (purchase) =>
+      purchase.date.startsWith(month) &&
+      Number(purchase.date.slice(8, 10)) <= cutoff,
+  );
+  const purchaseExpenses = purchases.reduce(
+    (sum, purchase) => sum + Math.max(0, Number(purchase.total || 0)),
+    0,
+  );
+  const salesCosts = metrics.perfumeCost + metrics.operatingExpenses;
+  const cashGeneration = metrics.paid - salesCosts - purchaseExpenses;
+  const receivable = Math.max(0, metrics.gross - metrics.paid);
+  const inventoryCost = d.products.reduce(
+    (sum, product) => sum + Math.max(0, product.stock) * product.cost,
+    0,
+  );
+  const marketplacePendingValue = d.sales
     .filter(
       (sale) =>
         sale.status !== "cancelled" &&
-        !isNoCost(sale) &&
-        !isHistoricalSale(sale),
+        isMarketplaceSale(sale) &&
+        marketplacePending(sale),
     )
-    .reduce(
-      (sum, sale) =>
-        sum +
-        sale.items.reduce(
-          (itemSum, item) =>
-            itemSum +
-            item.ml *
-              (item.unitCost ??
-                d.products.find((product) => product.id === item.productId)?.cost ??
-                0),
-          0,
-        ) +
-        Number(sale.expenses || 0) +
-        Number(sale.marketplaceFee || 0) +
-        Number(sale.shippingCost || 0) +
-        packaging(sale, d.supplies).total,
-      0,
-    );
-  const purchaseExpenses = d.purchases.reduce(
-    (sum, purchase) => sum + Number(purchase.total || 0),
-    0,
-  );
-  const balance = totals.gross - balanceCosts - purchaseExpenses;
+    .reduce((sum, sale) => sum + amountDue(sale), 0);
+
   return (
-    <>
-      <Cards
-        v={[
-          [brl(totals.gross), "Faturamento"],
-          [brl(totals.paid), "Total vendido"],
-          [brl(totals.gross - totals.paid), "A receber"],
-          [brl(balance), "Saldo"],
-        ]}
+    <div className="financeWorkspace">
+      <div className="workspaceToolbar financeMonthToolbar">
+        <div>
+          <span className="eyebrow">Centro financeiro</span>
+          <h2>
+            {periodMonthLabel(month).replace(/^./, (letter) =>
+              letter.toUpperCase(),
+            )}
+          </h2>
+          <p>
+            Período: 01/{month.slice(5, 7)} a{" "}
+            {String(cutoff).padStart(2, "0")}/{month.slice(5, 7)}
+          </p>
+        </div>
+        <div className="monthPicker workspaceMonthPicker">
+          <button
+            type="button"
+            onClick={() => setMonth((current) => shiftMonthKey(current, -1))}
+            aria-label="Mês anterior"
+          >
+            <ChevronLeft />
+          </button>
+          <b>{periodMonthLabel(month)}</b>
+          <button
+            type="button"
+            onClick={() => setMonth((current) => shiftMonthKey(current, 1))}
+            aria-label="Próximo mês"
+          >
+            <ChevronRight />
+          </button>
+        </div>
+      </div>
+
+      <div className="financeMetricGrid">
+        <div className="metricCard metricBlue">
+          <span>Faturamento</span>
+          <b>{brl(metrics.gross)}</b>
+          <small>{metrics.orders} pedido(s)</small>
+          <ComparisonBadge
+            value={metricDelta(metrics.gross, previous.gross)}
+            label={comparisonLabel}
+          />
+        </div>
+        <div className="metricCard metricGreen">
+          <span>Total recebido</span>
+          <b>{brl(metrics.paid)}</b>
+          <small>
+            {metrics.gross
+              ? Math.round((metrics.paid / metrics.gross) * 100)
+              : 0}% realizado
+          </small>
+        </div>
+        <div className="metricCard metricOrange">
+          <span>A receber</span>
+          <b>{brl(receivable)}</b>
+          <small>Vendas e repasses ainda abertos</small>
+        </div>
+        <div className="metricCard metricCyan">
+          <span>Lucro estimado</span>
+          <b>{brl(metrics.profit)}</b>
+          <small>
+            Margem {metrics.margin.toFixed(1).replace(".", ",")}%
+          </small>
+          <ComparisonBadge
+            value={metricDelta(metrics.profit, previous.profit)}
+            label={comparisonLabel}
+          />
+        </div>
+        <div className="metricCard metricViolet">
+          <span>Compras no período</span>
+          <b>{brl(purchaseExpenses)}</b>
+          <small>{purchases.length} lançamento(s)</small>
+        </div>
+        <div className={"metricCard " + (cashGeneration >= 0 ? "metricGreen" : "metricRed")}>
+          <span>Geração de caixa</span>
+          <b>{brl(cashGeneration)}</b>
+          <small>Recebido − custos − compras</small>
+        </div>
+      </div>
+
+      <div className="financePrimaryGrid">
+        <PaymentBreakdown d={d} sales={metrics.sales} compact />
+        <div className="panel financeStatement">
+          <div className="panelHeading">
+            <div>
+              <span className="eyebrow">DRE gerencial</span>
+              <h2>Resultado do período</h2>
+              <p>Leitura simplificada do resultado operacional.</p>
+            </div>
+            <BarChart3 />
+          </div>
+          <div className="statementRows">
+            <div>
+              <span>Receita bruta</span>
+              <b>{brl(metrics.gross)}</b>
+            </div>
+            <div>
+              <span>(−) Custo dos perfumes</span>
+              <b>{brl(metrics.perfumeCost)}</b>
+            </div>
+            <div>
+              <span>(−) Taxas, fretes e insumos</span>
+              <b>{brl(metrics.operatingExpenses)}</b>
+            </div>
+            <div className="statementTotal">
+              <span>Lucro estimado</span>
+              <b>{brl(metrics.profit)}</b>
+            </div>
+          </div>
+          <div className="financeHealthGrid">
+            <div>
+              <span>Margem</span>
+              <b>{metrics.margin.toFixed(1).replace(".", ",")}%</b>
+            </div>
+            <div>
+              <span>Estoque a custo</span>
+              <b>{brl(inventoryCost)}</b>
+            </div>
+            <div>
+              <span>Marketplace pendente</span>
+              <b>{brl(marketplacePendingValue)}</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="financeSecondaryGrid">
+        <InventoryProjection d={d} />
+        <MarketplaceForecast d={d} set={set} notify={notify} />
+      </div>
+
+      <ProfitControl
+        d={d}
+        sales={metrics.sales}
+        set={set}
+        notify={notify}
       />
-      <PaymentBreakdown d={d} />
-      <ProfitControl d={d} set={set} notify={notify} />
-      <InventoryProjection d={d} />
-      <MarketplaceForecast d={d} set={set} notify={notify} />
-    </>
+    </div>
   );
 }
 
