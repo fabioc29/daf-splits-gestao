@@ -1,15 +1,10 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
-  Droplets,
-  Globe2,
-  Instagram,
   MessageCircle,
-  Package,
   PackageOpen,
   Palette,
   RotateCcw,
   Save,
-  ShieldCheck,
   X,
 } from "lucide-react";
 import { supabase } from "./supabase";
@@ -412,10 +407,6 @@ function CatalogViewer({
     [items, category],
   );
 
-  const whatsappGeneral =
-    "https://wa.me/5531975359963?text=" +
-    encodeURIComponent("Olá, DAF Splits! Gostaria de saber mais sobre os decants.");
-
   return (
     <div
       className={adminPreview ? "catalogExperience embedded" : "catalogExperience"}
@@ -423,91 +414,52 @@ function CatalogViewer({
     >
       <header className={"catalogHeader" + (headerScrolled ? " scrolled" : "")}>
         <div className="catalogHeaderInner">
-          <div className="catalogHeaderSpacer" aria-hidden="true" />
-
-          <div className="catalogHeaderBrand" aria-label="DAF Splits">
-            <img src="/icon-512.png" alt="" className="catalogHeaderLogo" />
-            <div className="catalogHeaderWordmark">
-              <strong>DAF SPLITS</strong>
-              <span>PERFUMARIA EM DECANTS</span>
-            </div>
-          </div>
-
-          <nav className="catalogHeaderActions">
-            <a
-              href="https://instagram.com/dafsplits"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Instagram da DAF Splits"
-            >
-              <Instagram />
-            </a>
-            <a
-              href={whatsappGeneral}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="catalogHeaderWhatsapp"
-              aria-label="WhatsApp da DAF Splits"
-            >
-              <MessageCircle />
-              <span>WhatsApp</span>
-            </a>
-          </nav>
+          <img
+            src="/icon-512.png"
+            alt="DAF Splits"
+            className="catalogHeaderLogo"
+          />
         </div>
       </header>
 
-      <main>
-        <section className="catalogHero">
-          <p className="catalogEyebrow">
-            Decants de perfumes nicho, designer e árabes
-          </p>
-          <h1>
-            Perfumes de luxo em uma medida que faz sentido.
-            <span>Explore o estoque atual da DAF Splits.</span>
-          </h1>
+      <main className="catalogMain">
+        {adminPreview ? (
+          <div className="catalogPreviewNotice">
+            <PackageOpen />
+            <div>
+              <strong>Prévia administrativa</strong>
+              <span>Esta visualização usa diretamente o estoque atual do sistema.</span>
+            </div>
+          </div>
+        ) : null}
+
+        <section className="catalogReferenceIntro">
+          <h1>Perfumes disponíveis</h1>
+
+          <div className="catalogReferenceFilters" aria-label="Filtrar por categoria">
+            {["Todos", "Nicho", "Árabe", "Designer"].map((option) => (
+              <button
+                type="button"
+                key={option}
+                className={category === option ? "active" : ""}
+                onClick={() => setCategory(option)}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
         </section>
 
-        <section className="catalogCatalogSection">
-          {adminPreview ? (
-            <div className="catalogPreviewNotice">
-              <PackageOpen />
-              <div>
-                <strong>Prévia administrativa</strong>
-                <span>Esta visualização usa diretamente o estoque atual do sistema.</span>
-              </div>
-            </div>
-          ) : null}
+        {filtered.length ? (
+          <section className="catalogGrid">
+            {filtered.map((item) => (
+              <article className="catalogCard" key={item.id}>
+                <div className="catalogMediaBlock">
+                  <div className={item.apc ? "catalogApcBanner yes" : "catalogApcBanner no"}>
+                    <span />
+                    <strong>{item.apc ? "APC Disponível" : "APC Indisponível"}</strong>
+                  </div>
 
-          <div className="catalogSectionHead">
-            <div>
-              <p className="catalogEyebrow">Catálogo completo</p>
-              <h2>Todos os perfumes</h2>
-            </div>
-            <span>
-              {filtered.length} {filtered.length === 1 ? "perfume" : "perfumes"}
-            </span>
-          </div>
-
-          <div className="catalogFilterPanel">
-            <span>Categoria</span>
-            <div>
-              {["Todos", "Nicho", "Árabe", "Designer"].map((option) => (
-                <button
-                  type="button"
-                  key={option}
-                  className={category === option ? "active" : ""}
-                  onClick={() => setCategory(option)}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {filtered.length ? (
-            <section className="catalogGrid">
-              {filtered.map((item) => (
-                <article className="catalogCard" key={item.id}>
                   <div className="catalogBottleVisual">
                     {item.imageUrl ? (
                       <img
@@ -534,120 +486,59 @@ function CatalogViewer({
                         <span>{item.brand.slice(0, 1).toUpperCase()}</span>
                       </div>
                     </div>
+                  </div>
+                </div>
 
-                    <div className={item.apc ? "catalogApcBadge yes" : "catalogApcBadge no"}>
-                      <span />
-                      <strong>{item.apc ? "APC Disponível" : "APC Indisponível"}</strong>
+                <div className="catalogCardContent">
+                  <div className="catalogCardIdentity">
+                    <h3>{item.name}</h3>
+                    <span className="catalogCardBrand">{item.brand}</span>
+                  </div>
+
+                  <div className="catalogScarcity">
+                    <div className="catalogScarcityText">
+                      <span>Restam {item.stock.toLocaleString("pt-BR")} ml</span>
+                    </div>
+                    <div className="catalogScarcityTrack" aria-hidden="true">
+                      <i
+                        style={{
+                          width: `${Math.max(
+                            item.stock > 0 ? 6 : 0,
+                            Math.min(
+                              100,
+                              item.bottle && item.bottle > 0
+                                ? (item.stock / item.bottle) * 100
+                                : Math.min(100, item.stock),
+                            ),
+                          )}%`,
+                        }}
+                      />
                     </div>
                   </div>
 
-                  <div className="catalogCardBody">
-                    <div className="catalogCardIdentity">
-                      <span className="catalogCardBrand">{item.brand}</span>
-                      <h3>{item.name}</h3>
-                      <span className="catalogCardCategory">{item.category}</span>
-                    </div>
-
-                    <div className="catalogScarcity">
-                      <div className="catalogScarcityText">
-                        <span>Restam {item.stock.toLocaleString("pt-BR")} ml</span>
-                      </div>
-                      <div className="catalogScarcityTrack" aria-hidden="true">
-                        <i
-                          style={{
-                            width: `${Math.max(
-                              item.stock > 0 ? 6 : 0,
-                              Math.min(
-                                100,
-                                item.bottle && item.bottle > 0
-                                  ? (item.stock / item.bottle) * 100
-                                  : Math.min(100, item.stock),
-                              ),
-                            )}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <a
-                      className="catalogWhatsappButton"
-                      href={`https://wa.me/5531975359963?text=${encodeURIComponent(
-                        `Olá! Gostaria de solicitar MLs do perfume ${item.name} da marca ${item.brand}. Ainda está disponível?!`,
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <MessageCircle />
-                      <span>Solicitar via WhatsApp</span>
-                    </a>
-                  </div>
-                </article>
-              ))}
-            </section>
-          ) : (
-            <div className="catalogEmpty">
-              <PackageOpen />
-              <h3>Nenhum perfume encontrado</h3>
-              <p>Altere a categoria para visualizar outros perfumes.</p>
-            </div>
-          )}
-        </section>
+                  <a
+                    className="catalogWhatsappButton"
+                    href={`https://wa.me/5531975359963?text=${encodeURIComponent(
+                      `Olá! Gostaria de solicitar MLs do perfume ${item.name} da marca ${item.brand}. Ainda está disponível?!`,
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <MessageCircle />
+                    <span>Solicitar via WhatsApp</span>
+                  </a>
+                </div>
+              </article>
+            ))}
+          </section>
+        ) : (
+          <div className="catalogEmpty">
+            <PackageOpen />
+            <h3>Nenhum perfume encontrado</h3>
+            <p>Altere a categoria para visualizar outros perfumes.</p>
+          </div>
+        )}
       </main>
-
-      <footer className="catalogFooter">
-        <div className="catalogTrustBar">
-          {[
-            {
-              icon: ShieldCheck,
-              title: "Perfumes originais",
-              text: "Seleção de fragrâncias autênticas.",
-            },
-            {
-              icon: Droplets,
-              title: "Fracionamento cuidadoso",
-              text: "Precisão em cada decant.",
-            },
-            {
-              icon: Package,
-              title: "Envio para todo o Brasil",
-              text: "Pedidos preparados com cuidado.",
-            },
-            {
-              icon: MessageCircle,
-              title: "Atendimento pelo WhatsApp",
-              text: "Fale diretamente com a DAF.",
-            },
-          ].map(({ icon: Icon, title, text }) => (
-            <div key={title}>
-              <i><Icon /></i>
-              <span>
-                <strong>{title}</strong>
-                <small>{text}</small>
-              </span>
-            </div>
-          ))}
-        </div>
-
-        <div className="catalogFooterMain">
-          <div className="catalogFooterBrand">
-            <img src="/icon-512.png" alt="DAF Splits" />
-            <p>
-              Decants de perfumes nicho, designer e árabes.
-            </p>
-          </div>
-
-          <div className="catalogFooterLinks">
-            <strong>Contato</strong>
-            <a href="https://instagram.com/dafsplits" target="_blank" rel="noopener noreferrer">
-              <Instagram /> @dafsplits
-            </a>
-            <a href={whatsappGeneral} target="_blank" rel="noopener noreferrer">
-              <MessageCircle /> WhatsApp
-            </a>
-            <span><Globe2 /> Catálogo DAF Splits</span>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
