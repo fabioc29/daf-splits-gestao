@@ -5,6 +5,7 @@ import {
   Palette,
   RotateCcw,
   Save,
+  Search,
   X,
 } from "lucide-react";
 import { supabase } from "./supabase";
@@ -239,10 +240,10 @@ const FRAGRANTICA_IDS: Array<{
   { aliases: ["xj 1861 renaissance", "1861 renaissance", "renaissance"], id: 12126 },
   { aliases: ["torino 21", "torino21"], id: 70424 },
   { aliases: ["myslf edp", "myslf eau de parfum", "myslf"], id: 84094 },
-  { aliases: ["world cup vip"], id: 138880 },
-  { aliases: ["world cup edition"], id: 138879 },
-  // O estoque da DAF já teve "World Cup VIP" abreviado apenas como "World Cup".
-  { aliases: ["world cup"], id: 138880 },
+  {
+    aliases: ["world cup vip", "world cup edition", "world cup"],
+    id: 138879,
+  },
   // Exemplo ensinado pelo usuário; já fica pronto caso volte ao estoque.
   { aliases: ["vibrato"], id: 75930 },
 ];
@@ -273,14 +274,16 @@ function applyKnownFragranticaImage<T extends CatalogItem>(
   item: T,
   bottle?: number,
 ): T {
-  if (item.imageUrl) return item;
   const id = knownFragranticaId(item.name, bottle);
-  if (!id) return item;
-  return {
-    ...item,
-    fragranticaId: id,
-    imageUrl: fragranticaSocialCardUrl(id),
-  };
+  if (id) {
+    return {
+      ...item,
+      fragranticaId: id,
+      imageUrl: fragranticaSocialCardUrl(id),
+    };
+  }
+  if (item.imageUrl) return item;
+  return item;
 }
 
 function validFragranticaImageUrl(value: unknown): value is string {
@@ -390,6 +393,8 @@ function CatalogViewer({
   adminPreview?: boolean;
 }) {
   const [category, setCategory] = useState("Todos");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const [headerScrolled, setHeaderScrolled] = useState(false);
 
   useEffect(() => {
@@ -399,13 +404,19 @@ function CatalogViewer({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const filtered = useMemo(
-    () =>
-      items.filter(
-        (item) => category === "Todos" || item.category === category,
-      ),
-    [items, category],
-  );
+  const filtered = useMemo(() => {
+    const normalizedQuery = normalizePerfumeName(query);
+    return items.filter((item) => {
+      const matchesCategory =
+        category === "Todos" || item.category === category;
+      const matchesQuery =
+        !normalizedQuery ||
+        normalizePerfumeName(`${item.brand} ${item.name}`).includes(
+          normalizedQuery,
+        );
+      return matchesCategory && matchesQuery;
+    });
+  }, [items, category, query]);
 
   return (
     <div
@@ -436,7 +447,36 @@ function CatalogViewer({
         <section className="catalogReferenceIntro">
           <h1>Perfumes disponíveis</h1>
 
-          <div className="catalogReferenceFilters" aria-label="Filtrar por categoria">
+          <div
+            className={"catalogReferenceFilters" + (searchOpen ? " searchOpen" : "")}
+            aria-label="Filtrar catálogo"
+          >
+            <div className="catalogSearchControl">
+              <button
+                type="button"
+                className={"catalogSearchToggle" + (searchOpen ? " active" : "")}
+                onClick={() => {
+                  setSearchOpen((open) => {
+                    if (open) setQuery("");
+                    return !open;
+                  });
+                }}
+                aria-label={searchOpen ? "Fechar pesquisa" : "Pesquisar perfume"}
+                title="Pesquisar perfume"
+              >
+                <Search />
+              </button>
+              {searchOpen ? (
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Pesquisar perfume ou marca..."
+                  aria-label="Pesquisar perfume ou marca"
+                />
+              ) : null}
+            </div>
+
             {["Todos", "Nicho", "Árabe", "Designer"].map((option) => (
               <button
                 type="button"
@@ -459,6 +499,11 @@ function CatalogViewer({
                     <span />
                     <strong>{item.apc ? "APC Disponível" : "APC Indisponível"}</strong>
                   </div>
+                  {!item.apc ? (
+                    <div className="catalogApcUnavailableNote">
+                      Sem APC no momento, mas ainda temos decantes disponíveis.
+                    </div>
+                  ) : null}
 
                   <div className="catalogBottleVisual">
                     {item.imageUrl ? (
@@ -491,8 +536,8 @@ function CatalogViewer({
 
                 <div className="catalogCardContent">
                   <div className="catalogCardIdentity">
-                    <h3>{item.name}</h3>
                     <span className="catalogCardBrand">{item.brand}</span>
+                    <h3>{item.name}</h3>
                   </div>
 
                   <div className="catalogScarcity">
@@ -535,9 +580,27 @@ function CatalogViewer({
           <div className="catalogEmpty">
             <PackageOpen />
             <h3>Nenhum perfume encontrado</h3>
-            <p>Altere a categoria para visualizar outros perfumes.</p>
+            <p>Altere a categoria ou a pesquisa para visualizar outros perfumes.</p>
           </div>
         )}
+
+        <section className="catalogGroupCta">
+          <div>
+            <span>COMUNIDADE DAF</span>
+            <h2>Ainda não faz parte do nosso grupo exclusivo?</h2>
+            <p>
+              Entre para acompanhar novidades, reposições e oportunidades da DAF Splits.
+            </p>
+          </div>
+          <a
+            href="https://chat.whatsapp.com/CJmt4Dzmln3EuOJoCi0Tkq"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <MessageCircle />
+            Entrar no grupo exclusivo
+          </a>
+        </section>
       </main>
     </div>
   );
