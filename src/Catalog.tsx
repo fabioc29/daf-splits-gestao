@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { PackageOpen, Palette, RotateCcw, Save, X } from "lucide-react";
+import {
+  Droplets,
+  Globe2,
+  Instagram,
+  MessageCircle,
+  Package,
+  PackageOpen,
+  Palette,
+  RotateCcw,
+  Save,
+  ShieldCheck,
+  X,
+} from "lucide-react";
 import { supabase } from "./supabase";
 import "./catalog.css";
 
@@ -33,7 +45,7 @@ export type CatalogSettings = {
   scarcity: string;
 };
 
-export const DEFAULT_CATALOG_SETTINGS: CatalogSettings = {
+const LEGACY_CATALOG_SETTINGS: CatalogSettings = {
   background: "#080a0e",
   header: "#000000",
   card: "#111111",
@@ -48,6 +60,23 @@ export const DEFAULT_CATALOG_SETTINGS: CatalogSettings = {
   apcUnavailable: "#ff3545",
   apcUnavailableText: "#ffffff",
   scarcity: "#d7aa36",
+};
+
+export const DEFAULT_CATALOG_SETTINGS: CatalogSettings = {
+  background: "#010101",
+  header: "#010101",
+  card: "#0d0d0d",
+  text: "#f2efe9",
+  muted: "#aaa49a",
+  line: "#3b2c18",
+  accent: "#c1893b",
+  whatsapp: "#c1893b",
+  whatsappText: "#010101",
+  apcAvailable: "#25d366",
+  apcAvailableText: "#010101",
+  apcUnavailable: "#ef4444",
+  apcUnavailableText: "#fff7f7",
+  scarcity: "#c1893b",
 };
 
 type ProductLike = {
@@ -83,10 +112,14 @@ export function normalizeCatalogSettings(value: unknown): CatalogSettings {
       : {};
   return CATALOG_SETTINGS_KEYS.reduce(
     (settings, key) => {
-      settings[key] = normalizeHex(
+      const incoming = normalizeHex(
         source[key],
         DEFAULT_CATALOG_SETTINGS[key],
       );
+      settings[key] =
+        incoming === LEGACY_CATALOG_SETTINGS[key]
+          ? DEFAULT_CATALOG_SETTINGS[key]
+          : incoming;
       return settings;
     },
     { ...DEFAULT_CATALOG_SETTINGS },
@@ -379,6 +412,10 @@ function CatalogViewer({
     [items, category],
   );
 
+  const whatsappGeneral =
+    "https://wa.me/5531975359963?text=" +
+    encodeURIComponent("Olá, DAF Splits! Gostaria de saber mais sobre os decants.");
+
   return (
     <div
       className={adminPreview ? "catalogExperience embedded" : "catalogExperience"}
@@ -386,130 +423,215 @@ function CatalogViewer({
     >
       <header className={"catalogHeader" + (headerScrolled ? " scrolled" : "")}>
         <div className="catalogHeaderInner">
+          <div className="catalogHeaderSpacer" aria-hidden="true" />
+
           <div className="catalogHeaderBrand" aria-label="DAF Splits">
             <img src="/icon-512.png" alt="" className="catalogHeaderLogo" />
             <div className="catalogHeaderWordmark">
               <strong>DAF SPLITS</strong>
-              <span>CATÁLOGO</span>
+              <span>PERFUMARIA EM DECANTS</span>
             </div>
           </div>
 
-          <nav className="catalogHeaderFilters" aria-label="Filtrar catálogo por categoria">
-            {["Todos", "Nicho", "Árabe", "Designer"].map((option) => (
-              <button
-                type="button"
-                key={option}
-                className={category === option ? "active" : ""}
-                onClick={() => setCategory(option)}
-              >
-                {option}
-              </button>
-            ))}
+          <nav className="catalogHeaderActions">
+            <a
+              href="https://instagram.com/dafsplits"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Instagram da DAF Splits"
+            >
+              <Instagram />
+            </a>
+            <a
+              href={whatsappGeneral}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="catalogHeaderWhatsapp"
+              aria-label="WhatsApp da DAF Splits"
+            >
+              <MessageCircle />
+              <span>WhatsApp</span>
+            </a>
           </nav>
         </div>
       </header>
 
-      <main className="catalogMain">
-        {adminPreview ? (
-          <div className="catalogPreviewNotice">
-            <PackageOpen />
-            <div>
-              <strong>Prévia administrativa</strong>
-              <span>Esta visualização usa diretamente o estoque atual do sistema.</span>
-            </div>
-          </div>
-        ) : null}
-
-        <section className="catalogIntro">
-          <span>SELEÇÃO DAF</span>
-          <h1>Perfumes disponíveis</h1>
+      <main>
+        <section className="catalogHero">
+          <p className="catalogEyebrow">
+            Decants de perfumes nicho, designer e árabes
+          </p>
+          <h1>
+            Perfumes de luxo em uma medida que faz sentido.
+            <span>Explore o estoque atual da DAF Splits.</span>
+          </h1>
         </section>
 
-        {filtered.length ? (
-          <section className="catalogGrid">
-            {filtered.map((item) => (
-              <article className="catalogCard" key={item.id}>
-                <div className="catalogBottleVisual">
-                  <div className={item.apc ? "catalogApcBadge yes" : "catalogApcBadge no"}>
-                    <span />
-                    <strong>{item.apc ? "APC Disponível" : "APC Indisponível"}</strong>
-                  </div>
-                  {item.imageUrl ? (
-                    <img
-                      src={item.imageUrl}
-                      alt={`${item.brand} ${item.name}`}
-                      className="catalogPerfumeImage"
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                      onError={(event) => {
-                        event.currentTarget.style.display = "none";
-                        const fallback = event.currentTarget
-                          .nextElementSibling as HTMLElement | null;
-                        if (fallback) fallback.style.display = "flex";
-                      }}
-                    />
-                  ) : null}
-                  <div
-                    className="catalogBottleFallback"
-                    style={{ display: item.imageUrl ? "none" : "flex" }}
-                    aria-hidden="true"
-                  >
-                    <div className="catalogBottleCap" />
-                    <div className="catalogBottleBody">
-                      <span>{item.brand.slice(0, 1).toUpperCase()}</span>
+        <section className="catalogCatalogSection">
+          {adminPreview ? (
+            <div className="catalogPreviewNotice">
+              <PackageOpen />
+              <div>
+                <strong>Prévia administrativa</strong>
+                <span>Esta visualização usa diretamente o estoque atual do sistema.</span>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="catalogSectionHead">
+            <div>
+              <p className="catalogEyebrow">Catálogo completo</p>
+              <h2>Todos os perfumes</h2>
+            </div>
+            <span>
+              {filtered.length} {filtered.length === 1 ? "perfume" : "perfumes"}
+            </span>
+          </div>
+
+          <div className="catalogFilterPanel">
+            <span>Categoria</span>
+            <div>
+              {["Todos", "Nicho", "Árabe", "Designer"].map((option) => (
+                <button
+                  type="button"
+                  key={option}
+                  className={category === option ? "active" : ""}
+                  onClick={() => setCategory(option)}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {filtered.length ? (
+            <section className="catalogGrid">
+              {filtered.map((item) => (
+                <article className="catalogCard" key={item.id}>
+                  <div className="catalogBottleVisual">
+                    {item.imageUrl ? (
+                      <img
+                        src={item.imageUrl}
+                        alt={`${item.brand} ${item.name}`}
+                        className="catalogPerfumeImage"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(event) => {
+                          event.currentTarget.style.display = "none";
+                          const fallback = event.currentTarget
+                            .nextElementSibling as HTMLElement | null;
+                          if (fallback) fallback.style.display = "flex";
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className="catalogBottleFallback"
+                      style={{ display: item.imageUrl ? "none" : "flex" }}
+                      aria-hidden="true"
+                    >
+                      <div className="catalogBottleCap" />
+                      <div className="catalogBottleBody">
+                        <span>{item.brand.slice(0, 1).toUpperCase()}</span>
+                      </div>
+                    </div>
+
+                    <div className={item.apc ? "catalogApcBadge yes" : "catalogApcBadge no"}>
+                      <span />
+                      <strong>{item.apc ? "APC Disponível" : "APC Indisponível"}</strong>
                     </div>
                   </div>
-                </div>
 
-                <div className="catalogCardIdentity">
-                  <span className="catalogCardCategory">{item.category}</span>
-                  <h3>{item.name}</h3>
-                  <span className="catalogCardBrand">{item.brand}</span>
-                </div>
+                  <div className="catalogCardBody">
+                    <div className="catalogCardIdentity">
+                      <span className="catalogCardBrand">{item.brand}</span>
+                      <h3>{item.name}</h3>
+                      <span className="catalogCardCategory">{item.category}</span>
+                    </div>
 
-                <div className="catalogScarcity">
-                  <div className="catalogScarcityText">
-                    <span>Restam {item.stock.toLocaleString("pt-BR")} ml</span>
+                    <div className="catalogScarcity">
+                      <div className="catalogScarcityText">
+                        <span>Restam {item.stock.toLocaleString("pt-BR")} ml</span>
+                      </div>
+                      <div className="catalogScarcityTrack" aria-hidden="true">
+                        <i
+                          style={{
+                            width: `${Math.max(
+                              item.stock > 0 ? 6 : 0,
+                              Math.min(
+                                100,
+                                item.bottle && item.bottle > 0
+                                  ? (item.stock / item.bottle) * 100
+                                  : Math.min(100, item.stock),
+                              ),
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <a
+                      className="catalogWhatsappButton"
+                      href={`https://wa.me/5531975359963?text=${encodeURIComponent(
+                        `Olá! Gostaria de solicitar MLs do perfume ${item.name} da marca ${item.brand}. Ainda está disponível?!`,
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <MessageCircle />
+                      <span>Solicitar via WhatsApp</span>
+                    </a>
                   </div>
-                  <div className="catalogScarcityTrack" aria-hidden="true">
-                    <i
-                      style={{
-                        width: `${Math.max(
-                          item.stock > 0 ? 6 : 0,
-                          Math.min(
-                            100,
-                            item.bottle && item.bottle > 0
-                              ? (item.stock / item.bottle) * 100
-                              : Math.min(100, item.stock),
-                          ),
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <a
-                  className="catalogWhatsappButton"
-                  href={`https://wa.me/5531975359963?text=${encodeURIComponent(
-                    `Olá! Gostaria de solicitar MLs do perfume ${item.name} da marca ${item.brand}. Ainda está disponível?!`,
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <span>Solicitar via WhatsApp</span>
-                  <b aria-hidden="true">↗</b>
-                </a>
-              </article>
-            ))}
-          </section>
-        ) : (
-          <div className="catalogEmpty">
-            <PackageOpen />
-            <h3>Nenhum perfume encontrado</h3>
-            <p>Altere os filtros para visualizar outros perfumes.</p>
-          </div>
-        )}
+                </article>
+              ))}
+            </section>
+          ) : (
+            <div className="catalogEmpty">
+              <PackageOpen />
+              <h3>Nenhum perfume encontrado</h3>
+              <p>Altere a categoria para visualizar outros perfumes.</p>
+            </div>
+          )}
+        </section>
       </main>
+
+      <footer className="catalogFooter">
+        <div className="catalogTrustBar">
+          {[
+            [ShieldCheck, "Perfumes originais", "Seleção de fragrâncias autênticas."],
+            [Droplets, "Fracionamento cuidadoso", "Precisão em cada decant."],
+            [Package, "Envio para todo o Brasil", "Pedidos preparados com cuidado."],
+            [MessageCircle, "Atendimento pelo WhatsApp", "Fale diretamente com a DAF."],
+          ].map(([Icon, title, text]) => (
+            <div key={String(title)}>
+              <i><Icon /></i>
+              <span>
+                <strong>{String(title)}</strong>
+                <small>{String(text)}</small>
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <div className="catalogFooterMain">
+          <div className="catalogFooterBrand">
+            <img src="/icon-512.png" alt="DAF Splits" />
+            <p>
+              Decants de perfumes nicho, designer e árabes.
+            </p>
+          </div>
+
+          <div className="catalogFooterLinks">
+            <strong>Contato</strong>
+            <a href="https://instagram.com/dafsplits" target="_blank" rel="noopener noreferrer">
+              <Instagram /> @dafsplits
+            </a>
+            <a href={whatsappGeneral} target="_blank" rel="noopener noreferrer">
+              <MessageCircle /> WhatsApp
+            </a>
+            <span><Globe2 /> Catálogo DAF Splits</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
