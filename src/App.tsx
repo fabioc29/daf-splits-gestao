@@ -1216,55 +1216,202 @@ function InteractiveDonutChart({
   );
 }
 
+type PeriodMetrics = {
+  sales: V[];
+  gross: number;
+  paid: number;
+  profit: number;
+  margin: number;
+  orders: number;
+  ticket: number;
+  bottles: number;
+  apcs: number;
+  ml: number;
+  uniqueClients: number;
+  perfumeCost: number;
+  operatingExpenses: number;
+  marketplaceGross: number;
+};
+
+function shiftMonthKey(monthKey: string, delta: number) {
+  const date = new Date(monthKey + "-01T12:00:00");
+  date.setMonth(date.getMonth() + delta);
+  return (
+    String(date.getFullYear()) +
+    "-" +
+    String(date.getMonth() + 1).padStart(2, "0")
+  );
+}
+function monthDays(monthKey: string) {
+  const parts = monthKey.split("-").map(Number);
+  return new Date(parts[0], parts[1], 0).getDate();
+}
+function periodMonthLabel(monthKey: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(monthKey + "-01T12:00:00"));
+}
+function periodCutoffDay(monthKey: string) {
+  const currentMonth = today().slice(0, 7);
+  return monthKey === currentMonth
+    ? Math.min(new Date().getDate(), monthDays(monthKey))
+    : monthDays(monthKey);
+}
+function saleCostBreakdown(sale: V, d: D) {
+  const perfumeCost = sale.items.reduce(
+    (sum, item) =>
+      sum +
+      item.ml *
+        (item.unitCost ??
+          d.products.find((product) => product.id === item.productId)?.cost ??
+          0),
+    0,
+  );
+  const operatingExpenses =
+    Number(sale.expenses || 0) +
+    Number(sale.marketplaceFee || 0) +
+    Number(sale.shippingCost || 0) +
+    packaging(sale, d.supplies).total;
+  return { perfumeCost, operatingExpenses };
+}
+function periodMetrics(
+  d: D,
+  monthKey: string,
+  cutoffDay = periodCutoffDay(monthKey),
+): PeriodMetrics {
+  const sales = d.sales.filter((sale) => {
+    if (
+      sale.status === "cancelled" ||
+      isNoCost(sale) ||
+      isHistoricalSale(sale) ||
+      !sale.date.startsWith(monthKey)
+    )
+      return false;
+    return Number(sale.date.slice(8, 10)) <= cutoffDay;
+  });
+  let perfumeCost = 0;
+  let operatingExpenses = 0;
+  let profit = 0;
+  sales.forEach((sale) => {
+    const costs = saleCostBreakdown(sale, d);
+    perfumeCost += costs.perfumeCost;
+    operatingExpenses += costs.operatingExpenses;
+    profit += sale.total - costs.perfumeCost - costs.operatingExpenses;
+  });
+  const gross = sales.reduce((sum, sale) => sum + Math.max(0, sale.total), 0);
+  const paid = sales.reduce(
+    (sum, sale) =>
+      sum + Math.min(Math.max(0, sale.total), Math.max(0, sale.paid)),
+    0,
+  );
+  const bottles = sales.reduce(
+    (sum, sale) => sum + sale.items.filter((item) => !item.isApc).length,
+    0,
+  );
+  const apcs = sales.reduce(
+    (sum, sale) => sum + sale.items.filter((item) => Boolean(item.isApc)).length,
+    0,
+  );
+  const ml = sales.reduce(
+    (sum, sale) =>
+      sum + sale.items.reduce((itemSum, item) => itemSum + Math.max(0, item.ml), 0),
+    0,
+  );
+  const customers = new Set(
+    sales.map((sale) =>
+      sale.clientId
+        ? "client:" + sale.clientId
+        : "name:" + String(sale.customerName || "").trim().toLowerCase(),
+    ),
+  );
+  const marketplaceGross = sales
+    .filter(isMarketplaceSale)
+    .reduce((sum, sale) => sum + Math.max(0, sale.total), 0);
+  return {
+    sales,
+    gross,
+    paid,
+    profit,
+    margin: gross ? (profit / gross) * 100 : 0,
+    orders: sales.length,
+    ticket: gross / (sales.length || 1),
+    bottles,
+    apcs,
+    ml,
+    uniqueClients: customers.size,
+    perfumeCost,
+    operatingExpenses,
+    marketplaceGross,
+  };
+}
+function metricDelta(current: number, previous: number) {
+  if (!previous) return current ? null : 0;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+function ComparisonBadge({
+  value,
+  label,
+}: {
+  value: number | null;
+  label: string;
+}) {
+  if (value === null)
+    return (
+      <small className="metricDelta neutral">
+        <Sparkles /> Sem base anterior
+      </small>
+    );
+  const positive = value >= 0;
+  return (
+    <small className={"metricDelta " + (positive ? "positive" : "negative")}>
+      {positive ? <TrendingUp /> : <TrendingDown />}
+      {Math.abs(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+      <span>{label}</span>
+    </small>
+  );
+}
+
 function Dash({ d }: { d: D }) {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const now = new Date(),
-    monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
-    monthSales = d.sales.filter((sale) => sale.date.startsWith(monthKey)),
-    activeSales = monthSales.filter(
-      (sale) =>
-        sale.status !== "cancelled" &&
-        !isNoCost(sale) &&
-        !isHistoricalSale(sale),
-    ),
-    days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
-    day = now.getDate();
-  const monthTotals = activeSales.reduce(
-    (acc, sale) => ({
-      gross: acc.gross + sale.total,
-      paid: acc.paid + Math.min(sale.total, Math.max(0, sale.paid)),
-    }),
-    { gross: 0, paid: 0 },
+  const [monthKey, setMonthKey] = useState(today().slice(0, 7));
+  const currentMonth = today().slice(0, 7);
+  const day = periodCutoffDay(monthKey);
+  const days = monthDays(monthKey);
+  const metrics = periodMetrics(d, monthKey, day);
+  const activeSales = metrics.sales;
+  const monthSales = d.sales.filter(
+    (sale) =>
+      sale.date.startsWith(monthKey) &&
+      Number(sale.date.slice(8, 10)) <= day,
   );
-  const estimatedProfit = activeSales.reduce((sum, sale) => {
-    const perfumeCost = sale.items.reduce(
-      (cost, item) =>
-        cost +
-        item.ml *
-          (item.unitCost ??
-            d.products.find((product) => product.id === item.productId)?.cost ??
-            0),
-      0,
+  const monthTotals = { gross: metrics.gross, paid: metrics.paid };
+  const estimatedProfit = metrics.profit;
+  const estimatedMargin = metrics.margin;
+  const previousMonthKey = shiftMonthKey(monthKey, -1);
+  const previousMetrics = periodMetrics(
+    d,
+    previousMonthKey,
+    Math.min(day, monthDays(previousMonthKey)),
+  );
+  const comparisonLabel =
+    "vs. " +
+    periodMonthLabel(previousMonthKey).replace(/^./, (letter) =>
+      letter.toUpperCase(),
     );
-    const expenses =
-      Number(sale.expenses || 0) +
-      Number(sale.marketplaceFee || 0) +
-      Number(sale.shippingCost || 0) +
-      packaging(sale, d.supplies).total;
-    return sum + sale.total - perfumeCost - expenses;
-  }, 0);
-  const estimatedMargin =
-    monthTotals.gross > 0 ? (estimatedProfit / monthTotals.gross) * 100 : 0;
 
   const daily = Array.from({ length: days }, (_, i) =>
     activeSales
-      .filter((s) => new Date(s.date + "T12:00").getDate() === i + 1)
-      .reduce((n, s) => n + Math.max(0, s.paid), 0),
+      .filter((sale) => Number(sale.date.slice(8, 10)) === i + 1)
+      .reduce((sum, sale) => sum + Math.max(0, sale.total), 0),
   );
-  const avg = daily.slice(0, day).reduce((n, v) => n + v, 0) / Math.max(1, day),
+  const avg =
+      daily.slice(0, day).reduce((sum, value) => sum + value, 0) /
+      Math.max(1, day),
     max = Math.max(avg, ...daily, 1);
   const displayedDailyTotal = daily.reduce(
-    (sum, value, index) => sum + (index >= day ? avg : value),
+    (sum, value, index) =>
+      sum + (monthKey === currentMonth && index >= day ? avg : value),
     0,
   );
   const categories = ["Nicho", "Árabe", "Designer"].map((category) => ({
@@ -1318,43 +1465,95 @@ function Dash({ d }: { d: D }) {
   ];
   return (
     <>
-      <div className="cards dashboardCards">
+      <div className="workspaceToolbar dashboardMonthToolbar">
         <div>
-          <span>Faturamento mensal</span>
+          <span className="eyebrow">Visão executiva</span>
+          <h2>
+            {periodMonthLabel(monthKey).replace(/^./, (letter) =>
+              letter.toUpperCase(),
+            )}
+          </h2>
+          <p>
+            Período: 01/{monthKey.slice(5, 7)} a{" "}
+            {String(day).padStart(2, "0")}/{monthKey.slice(5, 7)}
+          </p>
+        </div>
+        <div className="monthPicker workspaceMonthPicker">
+          <button
+            type="button"
+            onClick={() => {
+              setMonthKey((current) => shiftMonthKey(current, -1));
+              setSelectedDay(null);
+            }}
+            aria-label="Mês anterior"
+          >
+            <ChevronLeft />
+          </button>
+          <b>{periodMonthLabel(monthKey)}</b>
+          <button
+            type="button"
+            onClick={() => {
+              setMonthKey((current) => shiftMonthKey(current, 1));
+              setSelectedDay(null);
+            }}
+            aria-label="Próximo mês"
+          >
+            <ChevronRight />
+          </button>
+        </div>
+      </div>
+
+      <div className="executiveMetricGrid">
+        <div className="metricCard metricBlue">
+          <span>Faturamento</span>
           <b>{brl(monthTotals.gross)}</b>
+          <small>{activeSales.length} pedido(s) no período</small>
+          <ComparisonBadge
+            value={metricDelta(monthTotals.gross, previousMetrics.gross)}
+            label={comparisonLabel}
+          />
         </div>
-        <div className="splitCard">
-          <div>
-            <span>Total recebido</span>
-            <b>{brl(monthTotals.paid)}</b>
-          </div>
-          <div>
-            <span>A receber</span>
-            <b>{brl(Math.max(0, monthTotals.gross - monthTotals.paid))}</b>
-          </div>
+        <div className="metricCard metricViolet">
+          <span>Pedidos</span>
+          <b>{activeSales.length}</b>
+          <small>{metrics.uniqueClients} cliente(s) únicos</small>
+          <ComparisonBadge
+            value={metricDelta(activeSales.length, previousMetrics.orders)}
+            label={comparisonLabel}
+          />
         </div>
-        <div className="splitCard">
-          <div>
-            <span>Lucro estimado</span>
-            <b>{brl(estimatedProfit)}</b>
-          </div>
-          <div>
-            <span className="estimatedMarginLabel">Margem estimada</span>
-            <b>{estimatedMargin.toLocaleString("pt-BR", {
+        <div className="metricCard metricGreen">
+          <span>Lucro estimado</span>
+          <b>{brl(estimatedProfit)}</b>
+          <small>
+            Margem de{" "}
+            {estimatedMargin.toLocaleString("pt-BR", {
               maximumFractionDigits: 1,
-              minimumFractionDigits: 1,
-            })}%</b>
-          </div>
+            })}%
+          </small>
+          <ComparisonBadge
+            value={metricDelta(estimatedProfit, previousMetrics.profit)}
+            label={comparisonLabel}
+          />
         </div>
-        <div className="splitCard">
-          <div>
-            <span>Ticket médio</span>
-            <b>{brl(monthTotals.gross / (activeSales.length || 1))}</b>
-          </div>
-          <div>
-            <span>Pedidos no mês</span>
-            <b>{activeSales.length}</b>
-          </div>
+        <div className="metricCard metricCyan">
+          <span>Ticket médio</span>
+          <b>{brl(metrics.ticket)}</b>
+          <small>Valor médio por pedido</small>
+          <ComparisonBadge
+            value={metricDelta(metrics.ticket, previousMetrics.ticket)}
+            label={comparisonLabel}
+          />
+        </div>
+        <div className="metricCard metricOrange">
+          <span>Frascos vendidos</span>
+          <b>{metrics.bottles}</b>
+          <small>{metrics.apcs} APC(s) vendidos à parte</small>
+        </div>
+        <div className="metricCard metricPink">
+          <span>Volume vendido</span>
+          <b>{metrics.ml.toLocaleString("pt-BR")} ml</b>
+          <small>{brl(monthTotals.paid)} já recebidos</small>
         </div>
       </div>
       <div className="grid">
@@ -1399,7 +1598,9 @@ function Dash({ d }: { d: D }) {
                       <small>{percentage}%</small>
                     </span>
                     <i
-                      className={i >= day ? "future" : ""}
+                      className={
+                        monthKey === currentMonth && i >= day ? "future" : ""
+                      }
                       style={{ height: Math.max(4, (n / max) * 100) + "%" }}
                     />
                     <small>{i + 1}</small>
@@ -1408,7 +1609,7 @@ function Dash({ d }: { d: D }) {
               })}
             </div>
           </div>
-          <PaymentBreakdown d={d} />
+          <PaymentBreakdown d={d} sales={activeSales} compact />
         </div>
         <div className="sidecharts">
           <div className="panel orderOriginSummary">
