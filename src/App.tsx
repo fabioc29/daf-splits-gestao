@@ -39,6 +39,11 @@ import {
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
+import {
+  CatalogAdminPreview,
+  PublicCatalog,
+  catalogItemsFromProducts,
+} from "./Catalog";
 
 type P = {
   id: number;
@@ -361,6 +366,7 @@ const nav = [
   ["prepare", "Pedidos para preparar", ClipboardCheck],
   ["shipping", "Envios", Truck],
   ["stock", "Estoque", Box],
+  ["catalog", "Catálogo", PackageOpen],
   ["purchases", "Compras", ShoppingCart],
   ["clients", "Clientes", Users],
   ["suppliers", "Fornecedores", Building2],
@@ -368,7 +374,22 @@ const nav = [
   ["finance", "Financeiro", Wallet],
 ] as const;
 
+function isPublicCatalogRoute() {
+  if (typeof window === "undefined") return false;
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  const catalogHost = String(import.meta.env.VITE_CATALOG_HOST || "")
+    .trim()
+    .toLowerCase();
+  const currentHost = window.location.hostname.toLowerCase();
+  return (
+    path === "/catalogo" ||
+    path.startsWith("/catalogo/") ||
+    Boolean(catalogHost && currentHost === catalogHost)
+  );
+}
+
 export default function App() {
+  const publicCatalogRoute = isPublicCatalogRoute();
   const [session, setSession] = useState<Session | null>(null),
     [authLoading, setAuthLoading] = useState(true);
   useEffect(() => {
@@ -382,6 +403,7 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
   if (!isSupabaseConfigured) return <SetupRequired />;
+  if (publicCatalogRoute) return <PublicCatalog />;
   if (authLoading)
     return (
       <div className="authPage">
@@ -467,6 +489,24 @@ function System({ session }: { session: Session }) {
           const { error } = await supabase
             .from("app_state")
             .upsert({ user_id: session.user.id, data });
+
+          if (!error) {
+            // Snapshot público: somente dados seguros do estoque.
+            // Falhas aqui não interrompem o salvamento administrativo.
+            await supabase
+              .from("public_catalogs")
+              .upsert(
+                {
+                  user_id: session.user.id,
+                  slug: "daf-splits",
+                  name: "DAF Splits",
+                  published: true,
+                  items: catalogItemsFromProducts(data.products),
+                },
+                { onConflict: "user_id" },
+              );
+          }
+
           if (version === saveVersion.current) {
             setSync(error ? "error" : "saved");
           }
@@ -685,6 +725,16 @@ const action =
                 <ReceiptText /> Relatório
               </button>
             ) : null}
+            {page === "catalog" ? (
+              <button
+                className="secondary catalogPublicButton"
+                onClick={() =>
+                  window.open("/catalogo", "_blank", "noopener,noreferrer")
+                }
+              >
+                <PackageOpen /> Abrir catálogo público
+              </button>
+            ) : null}
             {action ? (
               <button
                 className="primary"
@@ -728,6 +778,8 @@ const action =
               edit={(id) => setModal({ type: "product", id })}
               notify={notify}
             />
+          ) : page === "catalog" ? (
+            <CatalogAdminPreview products={data.products} />
           ) : page === "purchases" ? (
             <Purchases
               d={data}
