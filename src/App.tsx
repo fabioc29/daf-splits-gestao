@@ -402,8 +402,8 @@ export default function App() {
     } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
     return () => subscription.unsubscribe();
   }, []);
-  if (!isSupabaseConfigured) return <SetupRequired />;
   if (publicCatalogRoute) return <PublicCatalog />;
+  if (!isSupabaseConfigured) return <SetupRequired />;
   if (authLoading)
     return (
       <div className="authPage">
