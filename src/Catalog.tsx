@@ -387,10 +387,25 @@ function CatalogViewer({
       <header className={"catalogHeader" + (headerScrolled ? " scrolled" : "")}>
         <div className="catalogHeaderInner">
           <div className="catalogHeaderBrand" aria-label="DAF Splits">
-            <span className="catalogHeaderRule" />
-            <img src="/icon-512.png" alt="DAF Splits" className="catalogHeaderLogo" />
-            <span className="catalogHeaderRule" />
+            <img src="/icon-512.png" alt="" className="catalogHeaderLogo" />
+            <div className="catalogHeaderWordmark">
+              <strong>DAF SPLITS</strong>
+              <span>CATÁLOGO</span>
+            </div>
           </div>
+
+          <nav className="catalogHeaderFilters" aria-label="Filtrar catálogo por categoria">
+            {["Todos", "Nicho", "Árabe", "Designer"].map((option) => (
+              <button
+                type="button"
+                key={option}
+                className={category === option ? "active" : ""}
+                onClick={() => setCategory(option)}
+              >
+                {option}
+              </button>
+            ))}
+          </nav>
         </div>
       </header>
 
@@ -406,37 +421,19 @@ function CatalogViewer({
         ) : null}
 
         <section className="catalogIntro">
+          <span>SELEÇÃO DAF</span>
           <h1>Perfumes disponíveis</h1>
-
-          <div className="catalogSimpleFilters">
-            <div className="catalogFilterGroup">
-              <span>Categoria</span>
-              <div>
-                {["Todos", "Nicho", "Árabe", "Designer"].map((option) => (
-                  <button
-                    type="button"
-                    key={option}
-                    className={category === option ? "active" : ""}
-                    onClick={() => setCategory(option)}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
         </section>
 
         {filtered.length ? (
           <section className="catalogGrid">
             {filtered.map((item) => (
               <article className="catalogCard" key={item.id}>
-                <div className={item.apc ? "catalogApcBanner yes" : "catalogApcBanner no"}>
-                  <span />
-                  <strong>{item.apc ? "APC Disponível" : "APC Indisponível"}</strong>
-                </div>
-
                 <div className="catalogBottleVisual">
+                  <div className={item.apc ? "catalogApcBadge yes" : "catalogApcBadge no"}>
+                    <span />
+                    <strong>{item.apc ? "APC Disponível" : "APC Indisponível"}</strong>
+                  </div>
                   {item.imageUrl ? (
                     <img
                       src={item.imageUrl}
@@ -465,8 +462,9 @@ function CatalogViewer({
                 </div>
 
                 <div className="catalogCardIdentity">
+                  <span className="catalogCardCategory">{item.category}</span>
                   <h3>{item.name}</h3>
-                  <span>{item.brand}</span>
+                  <span className="catalogCardBrand">{item.brand}</span>
                 </div>
 
                 <div className="catalogScarcity">
@@ -498,7 +496,8 @@ function CatalogViewer({
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  Solicitar via WhatsApp
+                  <span>Solicitar via WhatsApp</span>
+                  <b aria-hidden="true">↗</b>
                 </a>
               </article>
             ))}
