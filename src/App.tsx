@@ -1922,19 +1922,29 @@ function LeadRanking({ d, start, end }: { d: D; start: string; end: string }) {
         </button>
       </div>
 
-      <label className="groupRankingMetric">
-        <span>Classificar por</span>
-        <select
-          value={metric}
-          onChange={(event) =>
-            setMetric(event.target.value as "revenue" | "orders" | "ticket")
-          }
+      <div className="groupRankingMetricButtons" role="group" aria-label="Classificar ranking de grupos">
+        <button
+          type="button"
+          className={metric === "revenue" ? "active" : ""}
+          onClick={() => setMetric("revenue")}
         >
-          <option value="revenue">Faturamento</option>
-          <option value="orders">Pedidos</option>
-          <option value="ticket">Ticket médio</option>
-        </select>
-      </label>
+          Faturamento
+        </button>
+        <button
+          type="button"
+          className={metric === "orders" ? "active" : ""}
+          onClick={() => setMetric("orders")}
+        >
+          Pedidos
+        </button>
+        <button
+          type="button"
+          className={metric === "ticket" ? "active" : ""}
+          onClick={() => setMetric("ticket")}
+        >
+          Ticket médio
+        </button>
+      </div>
 
       <div className="leadRankingList">
         {ranking.map((item, index) => (
@@ -5928,9 +5938,15 @@ function Clients({
 }) {
   const [query, setQuery] = useState("");
   const [rankingOpen, setRankingOpen] = useState(false);
-  const clients = d.clients.filter((client) =>
-    client.name.toLowerCase().includes(query.trim().toLowerCase()),
-  );
+  const [groupFilterOpen, setGroupFilterOpen] = useState(false);
+  const [groupFilter, setGroupFilter] = useState<"" | "Grupo 1" | "Grupo 2" | "Grupo 3">("");
+  const clients = d.clients.filter((client) => {
+    const matchesName = client.name
+      .toLowerCase()
+      .includes(query.trim().toLowerCase());
+    const matchesGroup = !groupFilter || client.leadSource === groupFilter;
+    return matchesName && matchesGroup;
+  });
 
   const clientRanking = d.clients
     .map((client) => {
@@ -5986,14 +6002,56 @@ function Clients({
         </button>
       </div>
 
-      <div className="clientSearch">
-        <Search />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Pesquisar cliente pelo nome"
-          aria-label="Pesquisar cliente pelo nome"
-        />
+      <div className="clientsToolbar">
+        <label className="clientSearch">
+          <Search />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Pesquisar cliente pelo nome"
+            aria-label="Pesquisar cliente pelo nome"
+          />
+        </label>
+
+        <div className="clientGroupFilter">
+          <button
+            type="button"
+            className={groupFilter ? "active" : ""}
+            onClick={() => setGroupFilterOpen((open) => !open)}
+          >
+            <SlidersHorizontal />
+            {groupFilter ? groupFilter : "Filtrar por grupo"}
+          </button>
+
+          {groupFilterOpen ? (
+            <div className="clientGroupFilterPopover">
+              <strong>Filtrar por grupo</strong>
+              {(["Grupo 1", "Grupo 2", "Grupo 3"] as const).map((group) => (
+                <button
+                  type="button"
+                  key={group}
+                  className={groupFilter === group ? "selected" : ""}
+                  onClick={() => {
+                    setGroupFilter(group);
+                    setGroupFilterOpen(false);
+                  }}
+                >
+                  {group}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="clear"
+                onClick={() => {
+                  setGroupFilter("");
+                  setGroupFilterOpen(false);
+                }}
+              >
+                Mostrar todos
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
       <div className="clients">
         {clients.map((c) => (
@@ -6088,6 +6146,31 @@ function Suppliers({
   notify: (message: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [rankingOpen, setRankingOpen] = useState(false);
+
+  const supplierRanking = d.suppliers
+    .map((name) => {
+      const purchases = d.purchases.filter(
+        (purchase) => purchase.supplier === name,
+      );
+      const spent = purchases.reduce(
+        (sum, purchase) => sum + Math.max(0, Number(purchase.total || 0)),
+        0,
+      );
+      return {
+        name,
+        spent,
+        purchases: purchases.length,
+      };
+    })
+    .filter((item) => item.spent > 0 || item.purchases > 0)
+    .sort(
+      (a, b) =>
+        b.spent - a.spent ||
+        b.purchases - a.purchases ||
+        a.name.localeCompare(b.name, "pt-BR"),
+    );
+
   const suppliers = d.suppliers
     .map((name, index) => ({ name, index }))
     .filter(({ name }) =>
@@ -6119,7 +6202,17 @@ function Suppliers({
   }
   return (
     <>
-      <Cards v={[[String(d.suppliers.length), "Fornecedores cadastrados"]]} />
+      <div className="suppliersTopRow">
+        <Cards v={[[String(d.suppliers.length), "Fornecedores cadastrados"]]} />
+        <button
+          type="button"
+          className="supplierRankingButton"
+          onClick={() => setRankingOpen(true)}
+        >
+          <BarChart3 />
+          Ranking dos fornecedores
+        </button>
+      </div>
       <div className="clientSearch">
         <Search />
         <input
@@ -6165,6 +6258,45 @@ function Suppliers({
       </div>
       {!suppliers.length ? (
         <p className="empty">Nenhum fornecedor encontrado.</p>
+      ) : null}
+
+      {rankingOpen ? (
+        <div className="overlay">
+          <div className="systemDialog supplierRankingDialog">
+            <header>
+              <div>
+                <small>ANÁLISE DE COMPRAS</small>
+                <h2>Ranking dos fornecedores</h2>
+                <p>Ordenado pelo valor total gasto em cada fornecedor.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRankingOpen(false)}
+                aria-label="Fechar ranking dos fornecedores"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="supplierRankingList">
+              {supplierRanking.map((item, index) => (
+                <div key={item.name}>
+                  <span className="supplierRankingPosition">{index + 1}º</span>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <small>
+                      {item.purchases} compra{item.purchases === 1 ? "" : "s"} registrada{item.purchases === 1 ? "" : "s"}
+                    </small>
+                  </div>
+                  <b>{brl(item.spent)}</b>
+                </div>
+              ))}
+              {!supplierRanking.length ? (
+                <p className="empty">Ainda não há compras para montar o ranking.</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
       ) : null}
     </>
   );
