@@ -919,7 +919,15 @@ function normalizeData(stored: any): D {
     return {
       ...s,
       id: needsSequentialIds ? sequentialIds.get(s.id) || s.id : s.id,
-      clientId: marketplaceSale ? 0 : s.clientId,
+      clientId:
+        s.clientId ||
+        (marketplaceSale
+          ? normalizedClients.find(
+              (client: C) =>
+                client.name.trim().toLowerCase() ===
+                String(s.customerName || "").trim().toLowerCase(),
+            )?.id || 0
+          : 0),
       customerName:
         s.customerName || (marketplaceSale ? linkedCustomer?.name : undefined),
       payment: marketplaceSale ? "À prazo" : s.payment,
