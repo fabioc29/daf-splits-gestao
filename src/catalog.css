@@ -2567,3 +2567,254 @@
     font-size: 15px;
   }
 }
+
+
+/* =========================================================
+   DAF — ajustes finais solicitados 06/10
+   ========================================================= */
+
+/* Header centralizado e progressivamente mais opaco na rolagem */
+.catalogHeader {
+  background: color-mix(in srgb, var(--catalog-header) 68%, transparent) !important;
+  backdrop-filter: blur(12px);
+}
+.catalogHeader.scrolled {
+  background: var(--catalog-header) !important;
+  border-bottom-color: color-mix(in srgb, var(--catalog-line) 92%, transparent) !important;
+}
+.catalogHeaderInner {
+  display: grid !important;
+  place-items: center !important;
+}
+.catalogHeaderLogo {
+  margin: 0 auto !important;
+}
+
+/* No painel administrativo o header deixa de ser sticky para não sobrepor o menu */
+.catalogExperience.embedded {
+  position: relative;
+  overflow: hidden;
+}
+.catalogExperience.embedded .catalogHeader {
+  position: relative !important;
+  top: auto !important;
+  z-index: 1 !important;
+}
+
+/* Box seletor com lupa integrada e pesquisa retrátil */
+.catalogReferenceFilters {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+}
+.catalogSearchControl {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 38px;
+}
+.catalogSearchToggle {
+  width: 38px;
+  min-width: 38px !important;
+  height: 38px;
+  min-height: 38px !important;
+  padding: 0 !important;
+  border-radius: 9px !important;
+  display: grid;
+  place-items: center;
+}
+.catalogSearchToggle svg {
+  width: 17px;
+  height: 17px;
+}
+.catalogSearchToggle.active {
+  background: color-mix(in srgb, var(--catalog-gold) 13%, transparent) !important;
+  color: var(--catalog-gold) !important;
+}
+.catalogSearchControl input {
+  width: 230px;
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid color-mix(in srgb, var(--catalog-line) 88%, transparent);
+  border-radius: 9px;
+  outline: 0;
+  background: color-mix(in srgb, var(--catalog-card) 94%, transparent);
+  color: var(--catalog-text);
+  font: inherit;
+  font-size: 10px;
+}
+.catalogSearchControl input::placeholder {
+  color: var(--catalog-muted);
+}
+
+/* APC indisponível ganha explicação curta sem reduzir a imagem */
+.catalogApcUnavailableNote {
+  padding: 8px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--catalog-apc-unavailable) 22%, transparent);
+  background: color-mix(in srgb, var(--catalog-apc-unavailable) 8%, #0b0b0b);
+  color: color-mix(in srgb, var(--catalog-apc-unavailable-text) 78%, var(--catalog-muted));
+  font-size: 8.5px;
+  line-height: 1.35;
+  text-align: center;
+}
+
+/* Cards um pouco mais compactos, mantendo a imagem no mesmo tamanho visual */
+.catalogCard {
+  padding: 16px !important;
+}
+.catalogMediaBlock {
+  border-radius: 16px;
+}
+.catalogCardContent {
+  padding-top: 18px !important;
+}
+.catalogCardIdentity {
+  min-height: 62px !important;
+  padding: 0 !important;
+}
+.catalogCardBrand {
+  margin: 0 0 3px !important;
+  color: var(--catalog-muted);
+  font-size: 12px !important;
+  line-height: 1.12;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.catalogCardIdentity h3 {
+  margin: 0 !important;
+  font-size: 21px;
+  line-height: 1.12;
+}
+.catalogScarcity {
+  margin-top: 14px !important;
+}
+.catalogScarcityTrack {
+  margin-top: 10px !important;
+}
+.catalogWhatsappButton {
+  min-height: 54px !important;
+  margin-top: 20px !important;
+}
+
+/* CTA do grupo ao final do catálogo */
+.catalogGroupCta {
+  margin-top: 52px;
+  padding: 34px 28px;
+  border: 1px solid color-mix(in srgb, var(--catalog-gold) 38%, transparent);
+  border-radius: 22px;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--catalog-gold) 8%, transparent),
+      transparent 58%
+    ),
+    var(--catalog-card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.catalogGroupCta > div {
+  max-width: 720px;
+}
+.catalogGroupCta > div > span {
+  color: var(--catalog-gold);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .16em;
+}
+.catalogGroupCta h2 {
+  margin: 7px 0 0;
+  color: var(--catalog-text);
+  font-size: clamp(24px, 3vw, 36px);
+  line-height: 1.08;
+}
+.catalogGroupCta p {
+  margin: 9px 0 0;
+  color: var(--catalog-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.catalogGroupCta > a {
+  min-width: 220px;
+  min-height: 50px;
+  padding: 0 18px;
+  border-radius: 12px;
+  background: var(--catalog-gold);
+  color: var(--catalog-whatsapp-text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.catalogGroupCta > a svg {
+  width: 17px;
+  height: 17px;
+}
+
+/* Esconde hosts conhecidos da Vercel Toolbar caso sejam injetados no DOM */
+vercel-live-feedback,
+vercel-feedback,
+vercel-toolbar,
+#vercel-toolbar,
+[data-vercel-toolbar] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+@media (max-width: 760px) {
+  .catalogReferenceFilters {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+  .catalogReferenceFilters > button:not(.catalogSearchToggle) {
+    flex: 1 1 0;
+    min-width: 72px;
+  }
+  .catalogSearchControl {
+    width: 100%;
+  }
+  .catalogReferenceFilters:not(.searchOpen) .catalogSearchControl {
+    width: auto;
+  }
+  .catalogSearchControl input {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+  .catalogGroupCta {
+    display: grid;
+    padding: 26px 20px;
+  }
+  .catalogGroupCta > a {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .catalogCard {
+    padding: 16px !important;
+  }
+  .catalogCardBrand {
+    font-size: 13px !important;
+  }
+  .catalogCardIdentity h3 {
+    font-size: 22px;
+  }
+  .catalogApcUnavailableNote {
+    font-size: 9px;
+  }
+}
