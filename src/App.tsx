@@ -5820,7 +5820,16 @@ function SupplierHistory({
   );
 }
 
-function PaymentBreakdown({ d }: { d: D }) {
+function PaymentBreakdown({
+  d,
+  sales,
+  compact = false,
+}: {
+  d: D;
+  sales?: V[];
+  compact?: boolean;
+}) {
+  const sourceSales = sales || d.sales;
   const payments = [
     { name: "Pix", color: "#22a66f", matches: (sale: V) => !isMarketplaceSale(sale) && ((isInstallmentSale(sale) && isInstallmentSettled(sale)) || (!isInstallmentSale(sale) && sale.payment === "Pix")) },
     { name: "Cartão de Crédito", color: "#2f80ed", matches: (sale: V) => !isMarketplaceSale(sale) && !isInstallmentSale(sale) && sale.payment === "Cartão de Crédito" },
@@ -5828,7 +5837,7 @@ function PaymentBreakdown({ d }: { d: D }) {
     { name: "Marketplace", color: "#8b5cf6", matches: (sale: V) => isMarketplaceSale(sale) },
   ].map((x) => ({
     ...x,
-    value: d.sales
+    value: sourceSales
       .filter(
         (s) =>
           s.status !== "cancelled" &&
@@ -5850,10 +5859,14 @@ function PaymentBreakdown({ d }: { d: D }) {
         .join(",")})`
     : "#303b4c";
   return (
-    <div className="panel financeChart">
+    <div
+      className={
+        "panel financeChart modernPaymentChart" + (compact ? " compact" : "")
+      }
+    >
       <div>
         <h2>Vendas por forma de pagamento</h2>
-        <p>Distribuição do faturamento recebido por forma e origem do pagamento.</p>
+        <p>Distribuição do faturamento do período selecionado.</p>
         <InteractiveDonutChart
           segments={payments.map((item) => ({
             label: item.name,
