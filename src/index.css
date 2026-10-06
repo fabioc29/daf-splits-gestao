@@ -6826,3 +6826,385 @@ aside nav {
     min-height: 210px;
   }
 }
+
+
+/* =========================================================
+   DAF — alinhamento de gráficos + filtros e rankings
+   ========================================================= */
+
+/* Linha inferior da Visão Geral: quatro cards com a mesma proporção */
+.dashboardLowerGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+}
+.dashboardLowerGrid > .panel {
+  min-width: 0;
+  height: 100%;
+  min-height: 500px;
+  padding: 16px;
+  border-radius: 16px;
+}
+
+/* Os três gráficos de donut passam a seguir a mesma estrutura visual */
+.dashboardLowerGrid .orderOriginSummary,
+.dashboardLowerGrid .categories,
+.dashboardLowerGrid .modernPaymentChart.compact {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+.dashboardLowerGrid .modernPaymentChart.compact > div:first-child {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+.dashboardLowerGrid .orderOriginSummary > h2,
+.dashboardLowerGrid .categories > h2,
+.dashboardLowerGrid .modernPaymentChart.compact > div:first-child > h2 {
+  min-height: 26px;
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  font-size: 15px;
+  line-height: 1.25;
+}
+.dashboardLowerGrid .orderOriginSummary > p,
+.dashboardLowerGrid .categories > p,
+.dashboardLowerGrid .modernPaymentChart.compact > div:first-child > p {
+  min-height: 38px;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 10px !important;
+  line-height: 1.4;
+}
+.dashboardLowerGrid .orderOriginSummary .interactiveDonut,
+.dashboardLowerGrid .categories .interactiveDonut,
+.dashboardLowerGrid .modernPaymentChart.compact .interactiveDonut {
+  flex: 0 0 166px;
+  min-height: 166px;
+  height: 166px;
+  width: 100%;
+  margin: 4px 0 7px;
+  display: grid;
+  place-items: center;
+}
+.dashboardLowerGrid .orderOriginSummary .interactiveDonut svg,
+.dashboardLowerGrid .categories .interactiveDonut svg,
+.dashboardLowerGrid .modernPaymentChart.compact .interactiveDonut svg,
+.dashboardLowerGrid .sideInteractiveDonut svg,
+.dashboardLowerGrid .paymentInteractiveDonut svg {
+  width: 128px !important;
+  height: 128px !important;
+}
+.dashboardLowerGrid .orderOriginLegend,
+.dashboardLowerGrid .categoryPercentLegend,
+.dashboardLowerGrid .paymentLegend {
+  margin-top: 0;
+  display: grid;
+  gap: 7px;
+  align-content: start;
+}
+.dashboardLowerGrid .orderOriginLegend p,
+.dashboardLowerGrid .categoryPercentLegend > div,
+.dashboardLowerGrid .paymentLegend > div {
+  min-height: 48px;
+  margin: 0;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  box-sizing: border-box;
+}
+
+/* Ranking ocupa exatamente a mesma altura externa e respeita o mesmo cabeçalho */
+.dashboardLowerGrid .leadRankingPanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+}
+.dashboardLowerGrid .leadRankingHead {
+  min-height: 69px;
+  margin: 0;
+}
+.dashboardLowerGrid .leadRankingHead h2 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.25;
+}
+.dashboardLowerGrid .leadRankingHead p {
+  margin: 5px 0 0;
+  min-height: 28px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.dashboardLowerGrid .leadRankingList {
+  margin-top: 14px;
+  align-content: start;
+}
+.dashboardLowerGrid .leadRankingReset {
+  margin-top: auto;
+}
+
+/* Ranking de grupos: botões no lugar do select */
+.groupRankingMetric,
+.groupRankingMetric select {
+  display: none !important;
+}
+.groupRankingMetricButtons {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 7px;
+}
+.groupRankingMetricButtons button {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.groupRankingMetricButtons button:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+.groupRankingMetricButtons button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 5px 14px rgb(91 110 245 / 18%);
+}
+
+/* Clientes: pesquisa e filtro de grupo na mesma linha */
+.clientsToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  max-width: 760px;
+  margin-top: 16px;
+}
+.clientsToolbar .clientSearch {
+  max-width: none;
+  width: 100%;
+  margin-top: 0;
+  display: block;
+}
+.clientGroupFilter {
+  position: relative;
+}
+.clientGroupFilter > button {
+  min-height: 46px;
+  min-width: 160px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.clientGroupFilter > button svg {
+  width: 16px;
+  height: 16px;
+}
+.clientGroupFilter > button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.clientGroupFilterPopover {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 210px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 46px rgb(0 0 0 / 24%);
+  display: grid;
+  gap: 5px;
+}
+.clientGroupFilterPopover > strong {
+  padding: 4px 7px 6px;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.clientGroupFilterPopover button {
+  min-height: 36px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-weight: 800;
+}
+.clientGroupFilterPopover button:hover,
+.clientGroupFilterPopover button.selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.clientGroupFilterPopover button.clear {
+  margin-top: 3px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+  color: var(--muted);
+}
+
+/* Fornecedores: ranking seguindo o mesmo padrão visual dos clientes */
+.suppliersTopRow {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+}
+.suppliersTopRow > .cards {
+  flex: 1 1 auto;
+}
+.supplierRankingButton {
+  flex: 0 0 auto;
+  min-width: 220px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-weight: 900;
+  box-shadow: var(--soft-shadow);
+}
+.supplierRankingButton svg {
+  width: 18px;
+  color: var(--accent);
+}
+.supplierRankingDialog {
+  width: min(760px, calc(100vw - 28px));
+  max-height: calc(100vh - 36px);
+}
+.supplierRankingDialog header {
+  align-items: flex-start;
+}
+.supplierRankingDialog header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.supplierRankingList {
+  display: grid;
+  gap: 8px;
+  max-height: min(66vh, 620px);
+  overflow: auto;
+  padding-right: 3px;
+}
+.supplierRankingList > div {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+.supplierRankingPosition {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+}
+.supplierRankingList > div:first-child .supplierRankingPosition {
+  border-color: #d7a62570;
+  background: #d7a62516;
+  color: #d7a625;
+}
+.supplierRankingList strong,
+.supplierRankingList small {
+  display: block;
+}
+.supplierRankingList strong {
+  color: var(--text);
+  font-size: 12px;
+}
+.supplierRankingList small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.supplierRankingList > div > b {
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1380px) {
+  .dashboardLowerGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboardLowerGrid > .panel,
+  .dashboardLowerGrid .leadRankingPanel {
+    min-height: 500px;
+  }
+}
+@media (max-width: 780px) {
+  .dashboardLowerGrid {
+    grid-template-columns: 1fr;
+  }
+  .dashboardLowerGrid > .panel,
+  .dashboardLowerGrid .leadRankingPanel {
+    min-height: auto;
+  }
+  .clientsToolbar {
+    grid-template-columns: 1fr;
+    max-width: none;
+  }
+  .clientGroupFilter > button {
+    width: 100%;
+  }
+  .clientGroupFilterPopover {
+    left: 0;
+    right: auto;
+    width: min(100%, 260px);
+  }
+  .suppliersTopRow {
+    display: grid;
+  }
+  .supplierRankingButton {
+    width: 100%;
+    min-height: 48px;
+  }
+  .supplierRankingList > div {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+  .supplierRankingList > div > b {
+    grid-column: 2;
+  }
+}
+@media (max-width: 460px) {
+  .groupRankingMetricButtons {
+    grid-template-columns: 1fr;
+  }
+}
