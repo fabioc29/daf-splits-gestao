@@ -2105,7 +2105,12 @@ function Dash({ d }: { d: D }) {
           <div className="stats">
             Média diária <b>{brl(avg)}</b> · Projeção/total do período <b>{brl(projection)}</b>
           </div>
-          <div className={"bars" + (selectedDay !== null ? " hasSelection" : "")}>
+          <div
+            className={"bars" + (selectedDay !== null ? " hasSelection" : "")}
+            style={{
+              gridTemplateColumns: `repeat(${Math.max(1, chartKeys.length)}, minmax(0, 1fr))`,
+            }}
+          >
             {displayValues.map((value, index) => {
               const percentage = displayedTotal
                 ? Math.round((value / displayedTotal) * 100)
