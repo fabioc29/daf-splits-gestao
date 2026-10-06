@@ -46,16 +46,6 @@ export function catalogItemsFromProducts(products: ProductLike[]): CatalogItem[]
     );
 }
 
-function catalogDate(value?: string) {
-  if (!value) return "agora";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "agora";
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short",
-  }).format(date);
-}
-
 function CatalogViewer({
   items,
   updatedAt: _updatedAt,
