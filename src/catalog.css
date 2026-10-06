@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap");
+
 :root {
   --catalog-bg: #080a0e;
   --catalog-header: #000000;
@@ -1324,5 +1326,770 @@
   .catalogWhatsappButton {
     min-height: 48px;
     font-size: 12px;
+  }
+}
+
+
+/* =========================================================
+   DAF — identidade visual do catálogo enviado + dados do estoque
+   ========================================================= */
+
+.catalogExperience {
+  min-height: 100vh;
+  background: var(--catalog-bg);
+  color: var(--catalog-text);
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+.catalogExperience h1,
+.catalogExperience h2,
+.catalogExperience h3,
+.catalogExperience .catalogHeaderWordmark strong {
+  font-family: "Manrope", "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+/* Header inspirado no catálogo enviado: marca central + ações laterais */
+.catalogHeader {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  width: 100%;
+  border-bottom: 1px solid color-mix(in srgb, var(--catalog-gold) 24%, transparent);
+  background: color-mix(in srgb, var(--catalog-header) 86%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.catalogHeader.scrolled {
+  background: color-mix(in srgb, var(--catalog-header) 94%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--catalog-gold) 28%, transparent);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 24%);
+}
+
+.catalogHeaderInner {
+  max-width: 1152px;
+  min-height: 88px;
+  margin: 0 auto;
+  padding: 14px 20px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.catalogHeaderSpacer {
+  min-width: 0;
+}
+
+.catalogHeaderBrand {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.catalogHeaderLogo {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  object-fit: contain;
+  border-radius: 10px;
+}
+
+.catalogHeaderWordmark {
+  display: grid;
+  gap: 2px;
+}
+
+.catalogHeaderWordmark strong {
+  color: var(--catalog-gold);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  white-space: nowrap;
+}
+
+.catalogHeaderWordmark span {
+  color: var(--catalog-muted);
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  white-space: nowrap;
+}
+
+.catalogHeaderActions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.catalogHeaderActions a {
+  height: 40px;
+  min-width: 40px;
+  padding: 0 11px;
+  border-radius: 999px;
+  color: var(--catalog-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  text-decoration: none;
+  transition:
+    color .16s ease,
+    background .16s ease,
+    opacity .16s ease;
+}
+
+.catalogHeaderActions a:hover {
+  color: var(--catalog-text);
+  background: color-mix(in srgb, var(--catalog-card) 82%, transparent);
+}
+
+.catalogHeaderActions svg {
+  width: 17px;
+  height: 17px;
+}
+
+.catalogHeaderActions .catalogHeaderWhatsapp {
+  min-width: 116px;
+  background: var(--catalog-whatsapp);
+  color: var(--catalog-whatsapp-text);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+
+.catalogHeaderActions .catalogHeaderWhatsapp:hover {
+  color: var(--catalog-whatsapp-text);
+  background: var(--catalog-whatsapp);
+  opacity: .9;
+}
+
+/* Hero com a mesma hierarquia visual do catálogo enviado */
+.catalogHero {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 82px 20px 34px;
+}
+
+.catalogEyebrow {
+  margin: 0;
+  color: var(--catalog-muted);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.catalogHero h1 {
+  max-width: 850px;
+  margin: 15px 0 0;
+  color: var(--catalog-text);
+  font-size: clamp(40px, 6vw, 68px);
+  line-height: 1.02;
+}
+
+.catalogHero h1 > span {
+  display: block;
+  color: var(--catalog-gold);
+}
+
+/* Área do catálogo */
+.catalogCatalogSection {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 34px 20px 62px;
+}
+
+.catalogPreviewNotice {
+  margin-bottom: 22px;
+  border-color: color-mix(in srgb, var(--catalog-gold) 28%, transparent);
+  background: color-mix(in srgb, var(--catalog-gold) 5%, transparent);
+}
+
+.catalogSectionHead {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.catalogSectionHead h2 {
+  margin: 8px 0 0;
+  font-size: 32px;
+  line-height: 1.05;
+}
+
+.catalogSectionHead > span {
+  color: var(--catalog-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.catalogFilterPanel {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--catalog-gold) 24%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--catalog-card) 88%, transparent);
+}
+
+.catalogFilterPanel > span {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--catalog-muted);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.catalogFilterPanel > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.catalogFilterPanel button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--catalog-gold) 26%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--catalog-muted);
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color .16s ease,
+    color .16s ease,
+    background .16s ease;
+}
+
+.catalogFilterPanel button:hover {
+  border-color: color-mix(in srgb, var(--catalog-gold) 58%, transparent);
+  color: var(--catalog-text);
+}
+
+.catalogFilterPanel button.active {
+  border-color: var(--catalog-gold);
+  background: color-mix(in srgb, var(--catalog-gold) 10%, transparent);
+  color: var(--catalog-gold);
+}
+
+/* Cards seguem a identidade visual do projeto enviado, mas usam o estoque DAF */
+.catalogGrid {
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.catalogCard {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--catalog-gold) 24%, transparent);
+  border-radius: 8px;
+  background: var(--catalog-card);
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 35%),
+    0 14px 34px -20px color-mix(in srgb, var(--catalog-gold) 22%, transparent);
+  transition:
+    transform .25s ease,
+    border-color .25s ease,
+    box-shadow .25s ease;
+}
+
+.catalogCard:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--catalog-gold) 55%, transparent);
+  box-shadow:
+    0 4px 14px rgb(0 0 0 / 40%),
+    0 26px 56px -24px color-mix(in srgb, var(--catalog-gold) 28%, transparent);
+}
+
+.catalogBottleVisual {
+  position: relative;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  margin: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: #111111;
+  box-shadow: none;
+}
+
+.catalogCard:hover .catalogBottleVisual {
+  transform: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.catalogPerfumeImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  background: #111111;
+  transition: transform .65s ease;
+}
+
+.catalogCard:hover .catalogPerfumeImage {
+  transform: scale(1.025);
+}
+
+.catalogBottleFallback {
+  background: #111111;
+}
+
+.catalogApcBadge {
+  top: 12px;
+  left: 12px;
+  min-height: 27px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, currentColor 42%, transparent);
+  box-shadow: none;
+  backdrop-filter: blur(8px);
+  font-size: 7.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+.catalogCardBody {
+  min-height: 235px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.catalogCardIdentity {
+  min-height: 90px;
+  padding: 0;
+}
+
+.catalogCardBrand {
+  display: block;
+  margin: 0;
+  color: var(--catalog-muted);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.catalogCardIdentity h3 {
+  margin: 6px 0 0;
+  color: var(--catalog-text);
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.catalogCardCategory {
+  display: block;
+  margin-top: 8px;
+  color: var(--catalog-muted);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.catalogScarcity {
+  margin-top: auto;
+  padding: 14px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--catalog-gold) 17%, transparent);
+}
+
+.catalogScarcityText span {
+  color: var(--catalog-muted);
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.catalogScarcityTrack {
+  height: 5px;
+  margin-top: 8px;
+  background: color-mix(in srgb, var(--catalog-text) 9%, transparent);
+}
+
+.catalogWhatsappButton {
+  min-height: 42px;
+  margin-top: 15px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--catalog-gold) 45%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--catalog-gold);
+  justify-content: center;
+  gap: 8px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+}
+
+.catalogWhatsappButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.catalogWhatsappButton:hover {
+  transform: none;
+  border-color: var(--catalog-gold);
+  background: var(--catalog-whatsapp);
+  color: var(--catalog-whatsapp-text);
+  filter: none;
+}
+
+.catalogEmpty {
+  margin-top: 30px;
+  border-color: color-mix(in srgb, var(--catalog-gold) 22%, transparent);
+}
+
+/* Rodapé inspirado no catálogo enviado */
+.catalogFooter {
+  margin-top: 48px;
+  border-top: 1px solid color-mix(in srgb, var(--catalog-gold) 25%, transparent);
+  background: #050505;
+}
+
+.catalogTrustBar {
+  border-bottom: 1px solid color-mix(in srgb, var(--catalog-gold) 20%, transparent);
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--catalog-gold) 4.5%, transparent),
+      transparent
+    );
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 24px 20px;
+}
+
+.catalogTrustBar > div {
+  min-width: 0;
+  padding: 0 18px;
+  display: flex;
+  gap: 11px;
+}
+
+.catalogTrustBar > div + div {
+  border-left: 1px solid color-mix(in srgb, var(--catalog-gold) 20%, transparent);
+}
+
+.catalogTrustBar i {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border: 1px solid color-mix(in srgb, var(--catalog-gold) 40%, transparent);
+  border-radius: 50%;
+  color: var(--catalog-gold);
+  display: grid;
+  place-items: center;
+}
+
+.catalogTrustBar i svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.6;
+}
+
+.catalogTrustBar span {
+  min-width: 0;
+}
+
+.catalogTrustBar strong,
+.catalogTrustBar small {
+  display: block;
+}
+
+.catalogTrustBar strong {
+  color: var(--catalog-gold);
+  font-size: 8.5px;
+  line-height: 1.25;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+.catalogTrustBar small {
+  margin-top: 3px;
+  color: var(--catalog-muted);
+  font-size: 8.5px;
+  line-height: 1.4;
+}
+
+.catalogFooterMain {
+  max-width: 1152px;
+  margin: 0 auto;
+  padding: 44px 20px 52px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 70px;
+}
+
+.catalogFooterBrand img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+}
+
+.catalogFooterBrand p {
+  max-width: 350px;
+  margin: 16px 0 0;
+  color: var(--catalog-muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.catalogFooterLinks {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.catalogFooterLinks > strong {
+  margin-bottom: 4px;
+  color: var(--catalog-gold);
+  font-family: "Manrope", "Inter", sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.catalogFooterLinks a,
+.catalogFooterLinks span {
+  color: var(--catalog-muted);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-decoration: none;
+  font-size: 10px;
+}
+
+.catalogFooterLinks a:hover {
+  color: var(--catalog-gold);
+}
+
+.catalogFooterLinks svg {
+  width: 16px;
+  height: 16px;
+  color: var(--catalog-gold);
+}
+
+/* versões anteriores ficam ocultas na nova identidade */
+.catalogSimpleFilters,
+.catalogHeaderFilters,
+.catalogHeaderRule,
+.catalogApcBanner {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  .catalogGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .catalogTrustBar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 0;
+  }
+
+  .catalogTrustBar > div:nth-child(3) {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 700px) {
+  .catalogHeaderInner {
+    min-height: 78px;
+    grid-template-columns: 1fr auto 1fr;
+    padding: 10px 14px;
+  }
+
+  .catalogHeaderLogo {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+
+  .catalogHeaderWordmark strong {
+    font-size: 14px;
+  }
+
+  .catalogHeaderWordmark span {
+    display: none;
+  }
+
+  .catalogHeaderActions {
+    gap: 0;
+  }
+
+  .catalogHeaderActions a {
+    min-width: 38px;
+    height: 38px;
+    padding: 0;
+  }
+
+  .catalogHeaderActions .catalogHeaderWhatsapp {
+    min-width: 38px;
+    width: 38px;
+  }
+
+  .catalogHeaderActions .catalogHeaderWhatsapp span {
+    display: none;
+  }
+
+  .catalogHero {
+    padding: 52px 14px 24px;
+  }
+
+  .catalogHero h1 {
+    font-size: clamp(36px, 10vw, 52px);
+  }
+
+  .catalogCatalogSection {
+    padding: 28px 14px 48px;
+  }
+
+  .catalogSectionHead h2 {
+    font-size: 27px;
+  }
+
+  .catalogFilterPanel {
+    padding: 13px;
+  }
+
+  .catalogGrid {
+    gap: 14px;
+  }
+
+  .catalogCardBody {
+    min-height: 214px;
+    padding: 14px;
+  }
+
+  .catalogCardIdentity h3 {
+    font-size: 16px;
+  }
+
+  .catalogWhatsappButton {
+    min-height: 39px;
+    padding: 0 9px;
+    font-size: 7.5px;
+    letter-spacing: .09em;
+  }
+
+  .catalogTrustBar {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .catalogTrustBar > div {
+    padding: 0 9px;
+  }
+
+  .catalogTrustBar small {
+    display: none;
+  }
+
+  .catalogFooterMain {
+    padding: 38px 14px 44px;
+    grid-template-columns: 1fr;
+    gap: 34px;
+  }
+}
+
+@media (max-width: 520px) {
+  .catalogHeaderSpacer {
+    display: block;
+  }
+
+  .catalogHeaderBrand {
+    gap: 7px;
+  }
+
+  .catalogGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .catalogBottleVisual {
+    aspect-ratio: 1 / 1.12;
+  }
+
+  .catalogCardBody {
+    min-height: 205px;
+    padding: 11px;
+  }
+
+  .catalogCardBrand {
+    font-size: 6.5px;
+  }
+
+  .catalogCardIdentity {
+    min-height: 78px;
+  }
+
+  .catalogCardIdentity h3 {
+    font-size: 14px;
+  }
+
+  .catalogCardCategory {
+    font-size: 7.5px;
+  }
+
+  .catalogScarcityText span {
+    font-size: 7.5px;
+  }
+
+  .catalogWhatsappButton {
+    min-height: 36px;
+    font-size: 6.7px;
+  }
+
+  .catalogWhatsappButton svg {
+    width: 13px;
+    height: 13px;
+  }
+}
+
+@media (max-width: 390px) {
+  .catalogHeaderWordmark {
+    display: none;
+  }
+
+  .catalogGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .catalogBottleVisual {
+    aspect-ratio: 4 / 3;
+  }
+
+  .catalogCardBody {
+    min-height: 220px;
+    padding: 16px;
+  }
+
+  .catalogCardIdentity h3 {
+    font-size: 19px;
+  }
+
+  .catalogWhatsappButton {
+    min-height: 42px;
+    font-size: 9px;
   }
 }
