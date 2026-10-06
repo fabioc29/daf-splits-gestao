@@ -11,6 +11,7 @@ export type CatalogItem = {
   gender: string;
   stock: number;
   apc: boolean;
+  bottle?: number;
   imageUrl?: string;
   fragranticaId?: number;
 };
@@ -215,6 +216,7 @@ export function catalogItemsFromProducts(products: ProductLike[]): CatalogItem[]
           gender: String(product.gender || "Unissex").trim(),
           stock: Math.max(0, Number(product.stock) || 0),
           apc: Number(product.apc || 0) > 0,
+          bottle: Math.max(0, Number(product.bottle) || 0) || undefined,
         },
         product.bottle,
       ),
@@ -258,7 +260,11 @@ function CatalogViewer({
     <div className={adminPreview ? "catalogExperience embedded" : "catalogExperience"}>
       <header className={"catalogHeader" + (headerScrolled ? " scrolled" : "")}>
         <div className="catalogHeaderInner">
-          <img src="/icon-512.png" alt="DAF Splits" className="catalogHeaderLogo" />
+          <div className="catalogHeaderBrand" aria-label="DAF Splits">
+            <span className="catalogHeaderRule" />
+            <img src="/icon-512.png" alt="DAF Splits" className="catalogHeaderLogo" />
+            <span className="catalogHeaderRule" />
+          </div>
         </div>
       </header>
 
@@ -332,24 +338,42 @@ function CatalogViewer({
                   </div>
                 </div>
 
-                <div className="catalogCardTop">
-                  <span className={"catalogCategory " + item.category.toLowerCase()}>
-                    {item.category}
-                  </span>
-                  <span className="catalogGender">{item.gender}</span>
-                </div>
-
                 <div className="catalogCardIdentity">
-                  <span>{item.brand}</span>
                   <h3>{item.name}</h3>
+                  <span>{item.brand}</span>
                 </div>
 
-                <div className="catalogAvailability">
-                  <div>
-                    <small>Disponível para decants</small>
-                    <b>{item.stock.toLocaleString("pt-BR")} ml</b>
+                <div className="catalogScarcity">
+                  <div className="catalogScarcityText">
+                    <span>Restam {item.stock.toLocaleString("pt-BR")} ml</span>
+                  </div>
+                  <div className="catalogScarcityTrack" aria-hidden="true">
+                    <i
+                      style={{
+                        width: `${Math.max(
+                          item.stock > 0 ? 6 : 0,
+                          Math.min(
+                            100,
+                            item.bottle && item.bottle > 0
+                              ? (item.stock / item.bottle) * 100
+                              : Math.min(100, item.stock),
+                          ),
+                        )}%`,
+                      }}
+                    />
                   </div>
                 </div>
+
+                <a
+                  className="catalogWhatsappButton"
+                  href={`https://wa.me/5531975359963?text=${encodeURIComponent(
+                    `Olá! Gostaria de solicitar MLs do perfume ${item.name} da marca ${item.brand}. Ainda está disponível?!`,
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Solicitar via WhatsApp
+                </a>
               </article>
             ))}
           </section>
