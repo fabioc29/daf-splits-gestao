@@ -6227,16 +6227,18 @@ function MarketplaceForecast({
 
 function ProfitControl({
   d,
+  sales: providedSales,
   set,
   notify,
 }: {
   d: D;
+  sales?: V[];
   set: any;
   notify: (message: string) => void;
 }) {
   const [showOrders, setShowOrders] = useState(false);
   const [editingSale, setEditingSale] = useState<V | null>(null);
-  const sales = d.sales.filter(
+  const sales = (providedSales || d.sales).filter(
     (sale) => sale.status !== "cancelled" && !isHistoricalSale(sale),
   );
   const rows = sales.map((sale) => {
@@ -6268,11 +6270,15 @@ function ProfitControl({
   return (
     <>
     <div className="panel profitControl">
-      <h2>Margem e despesas por pedido</h2>
-      <p>
-        Calculado pelo preço vendido, custo por ml do perfume e despesas
-        lançadas.
-      </p>
+      <div className="panelHeading">
+        <div>
+          <span className="eyebrow">Rentabilidade</span>
+          <h2>Margem e despesas por pedido</h2>
+          <p>
+            Preço vendido, custo por ml e despesas do período selecionado.
+          </p>
+        </div>
+      </div>
       <Cards
         v={[
           [brl(perfumeCost), "Custo dos perfumes"],
