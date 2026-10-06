@@ -44,6 +44,10 @@ import {
   PublicCatalog,
   catalogItemsFromProducts,
   enrichCatalogItemsWithImages,
+  catalogSnapshotPayload,
+  DEFAULT_CATALOG_SETTINGS,
+  normalizeCatalogSettings,
+  type CatalogSettings,
 } from "./Catalog";
 
 type P = {
@@ -181,6 +185,7 @@ type D = {
   orderSequenceVersion?: number;
   supplyInventoryVersion?: number;
   marketplacePayoutDays?: { "TikTok Shop": number; Shopee: number };
+  catalogSettings: CatalogSettings;
 };
 type Modal = { type: string; id?: number } | null;
 
@@ -195,6 +200,7 @@ const blank: D = {
   supplierDates: {},
   brands: [],
   marketplacePayoutDays: { "TikTok Shop": 9, Shopee: 7 },
+  catalogSettings: { ...DEFAULT_CATALOG_SETTINGS },
 };
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -505,7 +511,10 @@ function System({ session }: { session: Session }) {
                   slug: "daf-splits",
                   name: "DAF Splits",
                   published: true,
-                  items: catalogItems,
+                  items: catalogSnapshotPayload(
+                    catalogItems,
+                    data.catalogSettings,
+                  ),
                 },
                 { onConflict: "user_id" },
               );
@@ -783,7 +792,16 @@ const action =
               notify={notify}
             />
           ) : page === "catalog" ? (
-            <CatalogAdminPreview products={data.products} />
+            <CatalogAdminPreview
+              products={data.products}
+              settings={data.catalogSettings}
+              onSettingsChange={(catalogSettings) =>
+                setData((current) => ({
+                  ...current,
+                  catalogSettings: normalizeCatalogSettings(catalogSettings),
+                }))
+              }
+            />
           ) : page === "purchases" ? (
             <Purchases
               d={data}
@@ -1050,6 +1068,7 @@ function normalizeData(stored: any): D {
       "TikTok Shop": Number(merged.marketplacePayoutDays?.["TikTok Shop"] || 9),
       Shopee: Number(merged.marketplacePayoutDays?.Shopee || 7),
     },
+    catalogSettings: normalizeCatalogSettings(merged.catalogSettings),
     purchases,
     supplies: normalizedSupplies,
     clients: normalizedClients,
