@@ -2,9 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   PackageOpen,
-  Search,
-  SlidersHorizontal,
-  Sparkles,
   XCircle,
 } from "lucide-react";
 import { supabase } from "./supabase";
@@ -61,93 +58,34 @@ function catalogDate(value?: string) {
 
 function CatalogViewer({
   items,
-  updatedAt,
+  updatedAt: _updatedAt,
   adminPreview = false,
 }: {
   items: CatalogItem[];
   updatedAt?: string;
   adminPreview?: boolean;
 }) {
-  const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Todos");
   const [gender, setGender] = useState("Todos");
-  const [brand, setBrand] = useState("Todas");
-  const [apcOnly, setApcOnly] = useState(false);
 
-  const categories = useMemo(
+  const filtered = useMemo(
     () =>
-      Array.from(new Set(items.map((item) => item.category).filter(Boolean))).sort(
-        (a, b) => a.localeCompare(b, "pt-BR"),
+      items.filter(
+        (item) =>
+          (category === "Todos" || item.category === category) &&
+          (gender === "Todos" || item.gender === gender),
       ),
-    [items],
+    [items, category, gender],
   );
-  const genders = useMemo(
-    () =>
-      Array.from(new Set(items.map((item) => item.gender).filter(Boolean))).sort(
-        (a, b) => a.localeCompare(b, "pt-BR"),
-      ),
-    [items],
-  );
-  const brands = useMemo(
-    () =>
-      Array.from(new Set(items.map((item) => item.brand).filter(Boolean))).sort(
-        (a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
-      ),
-    [items],
-  );
-
-  const filtered = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase("pt-BR");
-    return items.filter((item) => {
-      const searchText = `${item.brand} ${item.name}`.toLocaleLowerCase("pt-BR");
-      return (
-        (!normalizedQuery || searchText.includes(normalizedQuery)) &&
-        (category === "Todos" || item.category === category) &&
-        (gender === "Todos" || item.gender === gender) &&
-        (brand === "Todas" || item.brand === brand) &&
-        (!apcOnly || item.apc)
-      );
-    });
-  }, [items, query, category, gender, brand, apcOnly]);
-
-  const totalMl = items.reduce((sum, item) => sum + item.stock, 0);
-  const apcCount = items.filter((item) => item.apc).length;
 
   return (
     <div className={adminPreview ? "catalogExperience embedded" : "catalogExperience"}>
-      <header className="catalogHero">
+      <header className="catalogHeader">
         <div className="catalogBrand">
           <img src="/icon-512.png" alt="DAF Splits" />
           <div>
             <span>DAF SPLITS</span>
             <small>O luxo que cabe no seu bolso</small>
-          </div>
-        </div>
-
-        <div className="catalogHeroCopy">
-          <span className="catalogEyebrow">
-            <Sparkles />
-            Catálogo atualizado pelo estoque
-          </span>
-          <h1>Encontre seu próximo perfume.</h1>
-          <p>
-            Consulte em tempo real os perfumes disponíveis, quantidade restante
-            para decants e disponibilidade de APC.
-          </p>
-        </div>
-
-        <div className="catalogStats">
-          <div>
-            <span>Perfumes disponíveis</span>
-            <b>{items.length}</b>
-          </div>
-          <div>
-            <span>Volume disponível</span>
-            <b>{totalMl.toLocaleString("pt-BR")} ml</b>
-          </div>
-          <div>
-            <span>Com APC disponível</span>
-            <b>{apcCount}</b>
           </div>
         </div>
       </header>
@@ -158,75 +96,48 @@ function CatalogViewer({
             <PackageOpen />
             <div>
               <strong>Prévia administrativa</strong>
-              <span>
-                Esta visualização usa diretamente o estoque atual do sistema.
-              </span>
+              <span>Esta visualização usa diretamente o estoque atual do sistema.</span>
             </div>
           </div>
         ) : null}
 
-        <section className="catalogControls">
-          <label className="catalogSearch">
-            <Search />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Buscar perfume ou marca..."
-              aria-label="Buscar perfume ou marca"
-            />
-          </label>
+        <section className="catalogIntro">
+          <h1>Perfumes disponíveis</h1>
 
-          <div className="catalogFilters">
-            <label>
-              <span>Marca</span>
-              <select value={brand} onChange={(event) => setBrand(event.target.value)}>
-                <option value="Todas">Todas as marcas</option>
-                {brands.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Categoria</span>
-              <select
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
-              >
-                <option value="Todos">Todas</option>
-                {categories.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-            </label>
-            <label>
+          <div className="catalogSimpleFilters">
+            <div className="catalogFilterGroup">
               <span>Público</span>
-              <select value={gender} onChange={(event) => setGender(event.target.value)}>
-                <option value="Todos">Todos</option>
-                {genders.map((item) => (
-                  <option key={item}>{item}</option>
+              <div>
+                {["Todos", "Masculino", "Feminino"].map((option) => (
+                  <button
+                    type="button"
+                    key={option}
+                    className={gender === option ? "active" : ""}
+                    onClick={() => setGender(option)}
+                  >
+                    {option}
+                  </button>
                 ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className={apcOnly ? "catalogApcFilter active" : "catalogApcFilter"}
-              onClick={() => setApcOnly((value) => !value)}
-            >
-              <SlidersHorizontal />
-              Somente com APC
-            </button>
+              </div>
+            </div>
+
+            <div className="catalogFilterGroup">
+              <span>Categoria</span>
+              <div>
+                {["Todos", "Nicho", "Árabe", "Designer"].map((option) => (
+                  <button
+                    type="button"
+                    key={option}
+                    className={category === option ? "active" : ""}
+                    onClick={() => setCategory(option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
-
-        <div className="catalogResultsHead">
-          <div>
-            <span>Disponibilidade atual</span>
-            <h2>
-              {filtered.length} perfume{filtered.length === 1 ? "" : "s"}
-            </h2>
-          </div>
-          <small>Atualizado em {catalogDate(updatedAt)}</small>
-        </div>
 
         {filtered.length ? (
           <section className="catalogGrid">
@@ -268,7 +179,7 @@ function CatalogViewer({
           <div className="catalogEmpty">
             <PackageOpen />
             <h3>Nenhum perfume encontrado</h3>
-            <p>Altere os filtros ou faça uma nova busca.</p>
+            <p>Altere os filtros para visualizar outros perfumes.</p>
           </div>
         )}
       </main>
@@ -353,7 +264,7 @@ export function PublicCatalog() {
     return (
       <div className="catalogStatePage">
         <img src="/icon-512.png" alt="DAF Splits" />
-        <Sparkles />
+        <PackageOpen />
         <h1>Carregando catálogo...</h1>
       </div>
     );
