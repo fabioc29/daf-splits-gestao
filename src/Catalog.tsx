@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
+  ArrowDown,
+  Image as ImageIcon,
   MessageCircle,
   PackageOpen,
   Palette,
+  RefreshCw,
   RotateCcw,
   Save,
   Search,
@@ -39,6 +42,10 @@ export type CatalogSettings = {
   apcUnavailable: string;
   apcUnavailableText: string;
   scarcity: string;
+  groupBackground: string;
+  groupBorder: string;
+  groupButton: string;
+  groupButtonText: string;
 };
 
 const LEGACY_CATALOG_SETTINGS: CatalogSettings = {
@@ -56,6 +63,10 @@ const LEGACY_CATALOG_SETTINGS: CatalogSettings = {
   apcUnavailable: "#ff3545",
   apcUnavailableText: "#ffffff",
   scarcity: "#d7aa36",
+  groupBackground: "#0d0d0d",
+  groupBorder: "#d7aa36",
+  groupButton: "#d7aa36",
+  groupButtonText: "#100d06",
 };
 
 export const DEFAULT_CATALOG_SETTINGS: CatalogSettings = {
@@ -73,6 +84,10 @@ export const DEFAULT_CATALOG_SETTINGS: CatalogSettings = {
   apcUnavailable: "#ef4444",
   apcUnavailableText: "#fff7f7",
   scarcity: "#c1893b",
+  groupBackground: "#050505",
+  groupBorder: "#c1893b",
+  groupButton: "#c1893b",
+  groupButtonText: "#010101",
 };
 
 type ProductLike = {
@@ -174,6 +189,10 @@ function catalogStyle(settings: CatalogSettings): CSSProperties {
     "--catalog-apc-unavailable": settings.apcUnavailable,
     "--catalog-apc-unavailable-text": settings.apcUnavailableText,
     "--catalog-scarcity": settings.scarcity,
+    "--catalog-group-bg": settings.groupBackground,
+    "--catalog-group-border": settings.groupBorder,
+    "--catalog-group-button": settings.groupButton,
+    "--catalog-group-button-text": settings.groupButtonText,
   } as CSSProperties;
 }
 
@@ -261,7 +280,18 @@ function knownFragranticaId(
   }
 
   for (const entry of FRAGRANTICA_IDS) {
-    if (entry.aliases.some((alias) => normalized === alias)) return entry.id;
+    if (
+      entry.aliases.some((alias) => {
+        const normalizedAlias = normalizePerfumeName(alias);
+        return (
+          normalized === normalizedAlias ||
+          (normalizedAlias.length >= 5 && normalized.includes(normalizedAlias)) ||
+          (normalized.length >= 5 && normalizedAlias.includes(normalized))
+        );
+      })
+    ) {
+      return entry.id;
+    }
   }
   return undefined;
 }
@@ -497,13 +527,12 @@ function CatalogViewer({
                 <div className="catalogMediaBlock">
                   <div className={item.apc ? "catalogApcBanner yes" : "catalogApcBanner no"}>
                     <span />
-                    <strong>{item.apc ? "APC Disponível" : "APC Indisponível"}</strong>
+                    <strong>
+                      {item.apc
+                        ? "APC Disponível"
+                        : "Sem APC no momento, mas ainda temos decantes disponíveis"}
+                    </strong>
                   </div>
-                  {!item.apc ? (
-                    <div className="catalogApcUnavailableNote">
-                      Sem APC no momento, mas ainda temos decantes disponíveis.
-                    </div>
-                  ) : null}
 
                   <div className="catalogBottleVisual">
                     {item.imageUrl ? (
@@ -585,12 +614,15 @@ function CatalogViewer({
         )}
 
         <section className="catalogGroupCta">
-          <div>
+          <div className="catalogGroupCtaCopy">
             <span>COMUNIDADE DAF</span>
             <h2>Ainda não faz parte do nosso grupo exclusivo?</h2>
             <p>
               Entre para acompanhar novidades, reposições e oportunidades da DAF Splits.
             </p>
+          </div>
+          <div className="catalogGroupArrow" aria-hidden="true">
+            <ArrowDown />
           </div>
           <a
             href="https://chat.whatsapp.com/CJmt4Dzmln3EuOJoCi0Tkq"
@@ -676,21 +708,57 @@ export function CatalogAdminPreview({
     setDraft((current) => ({ ...current, [key]: value }));
   };
 
-  const colorFields: Array<[keyof CatalogSettings, string]> = [
-    ["whatsapp", "Botão do WhatsApp"],
-    ["whatsappText", "Texto do WhatsApp"],
-    ["apcAvailable", "APC disponível"],
-    ["apcAvailableText", "Texto do APC disponível"],
-    ["apcUnavailable", "APC indisponível"],
-    ["apcUnavailableText", "Texto do APC indisponível"],
-    ["scarcity", "Barra de escassez"],
-    ["accent", "Destaques e filtros"],
-    ["background", "Fundo do catálogo"],
-    ["header", "Fundo do header"],
-    ["card", "Fundo dos cards"],
-    ["text", "Texto principal"],
-    ["muted", "Texto secundário"],
-    ["line", "Bordas"],
+  const editorSections: Array<{
+    title: string;
+    description: string;
+    fields: Array<[keyof CatalogSettings, string]>;
+  }> = [
+    {
+      title: "Estrutura",
+      description: "Fundo, header, cards, textos e contornos do catálogo.",
+      fields: [
+        ["background", "Fundo do catálogo"],
+        ["header", "Header"],
+        ["card", "Cards dos perfumes"],
+        ["line", "Bordas e divisórias"],
+        ["text", "Texto principal"],
+        ["muted", "Texto secundário"],
+      ],
+    },
+    {
+      title: "Filtros e destaques",
+      description: "Cor usada no filtro ativo, lupa e detalhes de destaque.",
+      fields: [["accent", "Filtro ativo e destaques"]],
+    },
+    {
+      title: "APC e estoque",
+      description: "Status de APC e indicador visual dos ml restantes.",
+      fields: [
+        ["apcAvailable", "APC disponível"],
+        ["apcAvailableText", "Texto do APC disponível"],
+        ["apcUnavailable", "Sem APC"],
+        ["apcUnavailableText", "Texto do aviso sem APC"],
+        ["scarcity", "Barra de escassez"],
+      ],
+    },
+    {
+      title: "Solicitação via WhatsApp",
+      description: "Botão presente em cada perfume.",
+      fields: [
+        ["whatsapp", "Botão do WhatsApp"],
+        ["whatsappText", "Texto do botão"],
+      ],
+    },
+    {
+      title: "Comunidade DAF",
+      description: "Bloco final que convida o visitante para o grupo exclusivo.",
+      fields: [
+        ["groupBackground", "Fundo do bloco"],
+        ["groupBorder", "Borda do bloco"],
+        ["groupButton", "Botão do grupo"],
+        ["groupButtonText", "Texto do botão do grupo"],
+      ],
+    },
   ];
 
   return (
@@ -726,10 +794,10 @@ export function CatalogAdminPreview({
             <header>
               <div>
                 <span>EDITOR DO CATÁLOGO</span>
-                <h2>Editar cores</h2>
+                <h2>Personalizar catálogo atual</h2>
                 <p>
-                  Estas configurações aparecem no catálogo público, mas este
-                  editor fica disponível somente no sistema administrativo.
+                  Ajuste os elementos que existem hoje no catálogo público e
+                  acompanhe a prévia antes de salvar.
                 </p>
               </div>
               <button
@@ -743,27 +811,86 @@ export function CatalogAdminPreview({
             </header>
 
             <div
-              className="catalogEditorPreview"
+              className="catalogEditorPreview catalogEditorPreviewCurrent"
               style={catalogStyle(normalizeCatalogSettings(draft))}
             >
-              <div className="catalogEditorPreviewCard">
+              <div className="catalogEditorMiniHeader">
+                <img src="/icon-512.png" alt="" />
+              </div>
+
+              <div className="catalogEditorMiniFilter">
+                <Search />
+                <span>Todos</span>
+                <span>Nicho</span>
+                <span>Árabe</span>
+                <strong>Designer</strong>
+              </div>
+
+              <div className="catalogEditorPreviewCard current">
                 <div className="catalogEditorApc available">APC Disponível</div>
-                <strong>Prévia das cores</strong>
-                <span>Perfume DAF Splits</span>
+                <div className="catalogEditorImagePlaceholder">
+                  <ImageIcon />
+                </div>
+                <span className="catalogEditorBrand">Bidaya</span>
+                <strong>Maktub Gold</strong>
                 <i><em /></i>
                 <button type="button">Solicitar via WhatsApp</button>
               </div>
-              <div className="catalogEditorApc unavailable">APC Indisponível</div>
+
+              <div className="catalogEditorPreviewCard current unavailableCard">
+                <div className="catalogEditorApc unavailable">
+                  Sem APC no momento, mas ainda temos decantes disponíveis
+                </div>
+                <span className="catalogEditorBrand">DAF Splits</span>
+                <strong>Prévia do aviso sem APC</strong>
+              </div>
+
+              <div className="catalogEditorMiniGroup">
+                <span>COMUNIDADE DAF</span>
+                <strong>Ainda não faz parte do nosso grupo exclusivo?</strong>
+                <ArrowDown />
+                <button type="button">Entrar no grupo exclusivo</button>
+              </div>
             </div>
 
-            <div className="catalogColorGrid">
-              {colorFields.map(([key, label]) => (
-                <CatalogColorField
-                  key={key}
-                  label={label}
-                  value={draft[key]}
-                  onChange={(value) => updateDraft(key, value)}
-                />
+            <div className="catalogEditorCoverage">
+              <div>
+                <ImageIcon />
+                <span>
+                  <strong>{previewItems.filter((item) => item.imageUrl).length}/{previewItems.length}</strong>
+                  imagens identificadas
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  const resolved = await enrichCatalogItemsWithImages(baseItems);
+                  setPreviewItems(resolved);
+                }}
+              >
+                <RefreshCw />
+                Atualizar imagens
+              </button>
+            </div>
+
+            <div className="catalogEditorSections">
+              {editorSections.map((section) => (
+                <section key={section.title} className="catalogEditorSection">
+                  <header>
+                    <strong>{section.title}</strong>
+                    <span>{section.description}</span>
+                  </header>
+                  <div className="catalogColorGrid">
+                    {section.fields.map(([key, label]) => (
+                      <CatalogColorField
+                        key={key}
+                        label={label}
+                        value={draft[key]}
+                        onChange={(value) => updateDraft(key, value)}
+                      />
+                    ))}
+                  </div>
+                </section>
               ))}
             </div>
 
@@ -813,14 +940,16 @@ export function PublicCatalog() {
   useEffect(() => {
     let active = true;
 
-    function localCatalogFallback() {
+    async function localCatalogFallback() {
       try {
         const stored = JSON.parse(window.localStorage.getItem("daf-v4") || "null");
         const fallbackItems = catalogItemsFromProducts(
           Array.isArray(stored?.products) ? stored.products : [],
         );
         if (fallbackItems.length) {
-          setItems(fallbackItems);
+          const resolved = await enrichCatalogItemsWithImages(fallbackItems);
+          if (!active) return true;
+          setItems(resolved);
           setSettings(normalizeCatalogSettings(stored?.catalogSettings));
           setUpdatedAt(new Date().toISOString());
           setState("ready");
@@ -860,11 +989,11 @@ export function PublicCatalog() {
           return;
         }
 
-        if (localCatalogFallback()) return;
+        if (await localCatalogFallback()) return;
         setState(error ? "error" : "empty");
       } catch {
         if (!active) return;
-        if (!localCatalogFallback()) setState("error");
+        if (!(await localCatalogFallback())) setState("error");
       }
     })();
 
