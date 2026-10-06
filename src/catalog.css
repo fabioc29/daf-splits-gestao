@@ -2818,3 +2818,29 @@ vercel-toolbar,
     font-size: 9px;
   }
 }
+
+
+/* Correção definitiva da prévia administrativa */
+.catalogExperience.embedded .catalogHeader {
+  display: none !important;
+}
+.catalogExperience.embedded .catalogMain {
+  padding-top: 18px !important;
+}
+
+/* Oculta a Vercel Toolbar quando injetada no preview */
+iframe[src*="vercel.live"],
+iframe[src*="vercel.com/live"],
+iframe[title*="Vercel"],
+[id*="vercel-toolbar"],
+[class*="vercel-toolbar"],
+[data-vercel-toolbar],
+[data-testid*="vercel-toolbar"],
+vercel-live-feedback,
+vercel-feedback,
+vercel-toolbar {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
