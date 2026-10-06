@@ -27,6 +27,13 @@ import {
   ChevronLeft,
   ChevronRight,
   SlidersHorizontal,
+  Sun,
+  Moon,
+  TrendingUp,
+  TrendingDown,
+  Sparkles,
+  PackageOpen,
+  BarChart3,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
@@ -389,10 +396,23 @@ function System({ session }: { session: Session }) {
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const saveVersion = useRef(0);
   const [page, setPage] = useState("dashboard"),
+    [theme, setTheme] = useState<"dark" | "light">(() => {
+      if (typeof window === "undefined") return "dark";
+      const stored = window.localStorage.getItem("daf-theme");
+      if (stored === "light" || stored === "dark") return stored;
+      return window.matchMedia?.("(prefers-color-scheme: light)").matches
+        ? "light"
+        : "dark";
+    }),
     [modal, setModal] = useState<Modal>(null),
     [history, setHistory] = useState(0),
     [supplierHistory, setSupplierHistory] = useState(""),
     [toast, setToast] = useState("");
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("daf-theme", theme);
+  }, [theme]);
+
   function notify(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2600);
@@ -617,6 +637,18 @@ const action =
             <h1>{nav.find((n) => n[0] === page)?.[1]}</h1>
           </div>
           <div className="headerActions">
+            <button
+              type="button"
+              className="themeToggle"
+              onClick={() =>
+                setTheme((current) => (current === "dark" ? "light" : "dark"))
+              }
+              title={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
+              aria-label={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
+            >
+              {theme === "dark" ? <Sun /> : <Moon />}
+              <span>{theme === "dark" ? "Claro" : "Escuro"}</span>
+            </button>
             {page === "dashboard" || page === "finance" ? (
               <button
                 className="secondary reportButton"
