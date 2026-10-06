@@ -34,6 +34,7 @@ import {
   Sparkles,
   PackageOpen,
   BarChart3,
+  CalendarDays,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
@@ -65,6 +66,10 @@ type S = {
     unit?: string;
   }[];
 };
+type LeadSource = "Grupo 1" | "Grupo 2" | "Grupo 3" | "TikTok" | "Shopee";
+const LEAD_SOURCES: LeadSource[] = ["Grupo 1", "Grupo 2", "Grupo 3", "TikTok", "Shopee"];
+const MANUAL_LEAD_SOURCES: LeadSource[] = ["Grupo 1", "Grupo 2", "Grupo 3"];
+
 type C = {
   id: number;
   name: string;
@@ -75,6 +80,7 @@ type C = {
   district?: string;
   city?: string;
   state?: string;
+  leadSource?: LeadSource;
   date: string;
   addresses: {
     label: string;
@@ -891,6 +897,9 @@ function normalizeData(stored: any): D {
     ...client,
     phone: formatClientPhone(client.phone),
     cpf: formatCpf(client.cpf),
+    leadSource: LEAD_SOURCES.includes(client.leadSource as LeadSource)
+      ? client.leadSource
+      : undefined,
   }));
   const rawSales = (merged.sales || []) as V[];
   const ids = rawSales.map((sale) => sale.id).sort((a, b) => a - b);
@@ -1275,20 +1284,54 @@ function saleCostBreakdown(sale: V, d: D) {
     packaging(sale, d.supplies).total;
   return { perfumeCost, operatingExpenses };
 }
-function periodMetrics(
-  d: D,
-  monthKey: string,
-  cutoffDay = periodCutoffDay(monthKey),
-): PeriodMetrics {
+function dateInRange(value: string, start: string, end: string) {
+  return Boolean(value) && value >= start && value <= end;
+}
+function dateKey(date: Date) {
+  const local = new Date(date);
+  local.setMinutes(local.getMinutes() - local.getTimezoneOffset());
+  return local.toISOString().slice(0, 10);
+}
+function shiftDateKey(value: string, delta: number) {
+  const date = new Date(value + "T12:00:00");
+  date.setDate(date.getDate() + delta);
+  return dateKey(date);
+}
+function previousEquivalentRange(start: string, end: string) {
+  const startDate = new Date(start + "T12:00:00");
+  const endDate = new Date(end + "T12:00:00");
+  const span = Math.max(
+    1,
+    Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1,
+  );
+  const previousEnd = shiftDateKey(start, -1);
+  const previousStart = shiftDateKey(previousEnd, -(span - 1));
+  return [previousStart, previousEnd] as const;
+}
+function dateKeysBetween(start: string, end: string) {
+  const keys: string[] = [];
+  let cursor = start;
+  let guard = 0;
+  while (cursor <= end && guard < 370) {
+    keys.push(cursor);
+    cursor = shiftDateKey(cursor, 1);
+    guard += 1;
+  }
+  return keys;
+}
+function rangeLabel(start: string, end: string) {
+  return start === end ? dateBR(start) : `${dateBR(start)} a ${dateBR(end)}`;
+}
+function rangeMetrics(d: D, start: string, end: string): PeriodMetrics {
   const sales = d.sales.filter((sale) => {
     if (
       sale.status === "cancelled" ||
       isNoCost(sale) ||
       isHistoricalSale(sale) ||
-      !sale.date.startsWith(monthKey)
+      !dateInRange(sale.date, start, end)
     )
       return false;
-    return Number(sale.date.slice(8, 10)) <= cutoffDay;
+    return true;
   });
   let perfumeCost = 0;
   let operatingExpenses = 0;
@@ -1345,6 +1388,17 @@ function periodMetrics(
     marketplaceGross,
   };
 }
+function periodMetrics(
+  d: D,
+  monthKey: string,
+  cutoffDay = periodCutoffDay(monthKey),
+): PeriodMetrics {
+  return rangeMetrics(
+    d,
+    monthKey + "-01",
+    monthKey + "-" + String(cutoffDay).padStart(2, "0"),
+  );
+}
 function metricDelta(current: number, previous: number) {
   if (!previous) return current ? null : 0;
   return ((current - previous) / Math.abs(previous)) * 100;
@@ -1372,178 +1426,510 @@ function ComparisonBadge({
   );
 }
 
-function Dash({ d }: { d: D }) {
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const [monthKey, setMonthKey] = useState(today().slice(0, 7));
-  const currentMonth = today().slice(0, 7);
-  const day = periodCutoffDay(monthKey);
-  const days = monthDays(monthKey);
-  const metrics = periodMetrics(d, monthKey, day);
-  const activeSales = metrics.sales;
-  const monthSales = d.sales.filter(
-    (sale) =>
-      sale.date.startsWith(monthKey) &&
-      Number(sale.date.slice(8, 10)) <= day,
+function PeriodSelector({
+  monthKey,
+  setMonthKey,
+  customStart,
+  customEnd,
+  setCustomStart,
+  setCustomEnd,
+  onPeriodChange,
+}: {
+  monthKey: string;
+  setMonthKey: (value: string) => void;
+  customStart: string;
+  customEnd: string;
+  setCustomStart: (value: string) => void;
+  setCustomEnd: (value: string) => void;
+  onPeriodChange?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasCustom = Boolean(customStart);
+  function changeMonth(delta: number) {
+    setMonthKey(shiftMonthKey(monthKey, delta));
+    setCustomStart("");
+    setCustomEnd("");
+    onPeriodChange?.();
+  }
+  return (
+    <div className="periodSelectorWrap">
+      <div className="monthPicker workspaceMonthPicker">
+        <button type="button" onClick={() => changeMonth(-1)} aria-label="Mês anterior">
+          <ChevronLeft />
+        </button>
+        <b>{periodMonthLabel(monthKey)}</b>
+        <button type="button" onClick={() => changeMonth(1)} aria-label="Próximo mês">
+          <ChevronRight />
+        </button>
+      </div>
+      <button
+        type="button"
+        className={"calendarFilterButton" + (hasCustom ? " active" : "")}
+        onClick={() => setOpen((value) => !value)}
+        title="Filtrar por data ou período"
+        aria-label="Filtrar por data ou período"
+      >
+        <CalendarDays />
+      </button>
+      {open ? (
+        <div className="dateRangePopover">
+          <strong>Filtrar por data ou período</strong>
+          <label>
+            <span>Data inicial</span>
+            <input
+              type="date"
+              value={customStart}
+              onChange={(event) => {
+                setCustomStart(event.target.value);
+                if (customEnd && event.target.value > customEnd) {
+                  setCustomEnd(event.target.value);
+                }
+              }}
+            />
+          </label>
+          <label>
+            <span>Data final</span>
+            <input
+              type="date"
+              min={customStart || undefined}
+              value={customEnd}
+              onChange={(event) => setCustomEnd(event.target.value)}
+            />
+          </label>
+          <small>Para consultar um único dia, selecione apenas a data inicial.</small>
+          <div className="dateRangeActions">
+            <button
+              type="button"
+              onClick={() => {
+                setCustomStart("");
+                setCustomEnd("");
+                setOpen(false);
+                onPeriodChange?.();
+              }}
+            >
+              Limpar
+            </button>
+            <button
+              type="button"
+              className="primary"
+              disabled={!customStart}
+              onClick={() => {
+                if (customStart && customEnd && customEnd < customStart) {
+                  setCustomEnd(customStart);
+                }
+                setOpen(false);
+                onPeriodChange?.();
+              }}
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
-  const monthTotals = { gross: metrics.gross, paid: metrics.paid };
-  const estimatedProfit = metrics.profit;
-  const estimatedMargin = metrics.margin;
-  const previousMonthKey = shiftMonthKey(monthKey, -1);
-  const previousMetrics = periodMetrics(
-    d,
-    previousMonthKey,
-    Math.min(day, monthDays(previousMonthKey)),
-  );
-  const comparisonLabel =
-    "vs. " +
-    periodMonthLabel(previousMonthKey).replace(/^./, (letter) =>
-      letter.toUpperCase(),
-    );
+}
 
-  const daily = Array.from({ length: days }, (_, i) =>
-    activeSales
-      .filter((sale) => Number(sale.date.slice(8, 10)) === i + 1)
-      .reduce((sum, sale) => sum + Math.max(0, sale.total), 0),
+function HealthGauge({
+  gross,
+  paid,
+  perfumeCost,
+  suppliesCost,
+  freightCost,
+  marketplaceFees,
+  otherExpenses,
+  purchases,
+}: {
+  gross: number;
+  paid: number;
+  perfumeCost: number;
+  suppliesCost: number;
+  freightCost: number;
+  marketplaceFees: number;
+  otherExpenses: number;
+  purchases: number;
+}) {
+  const operatingCosts =
+    perfumeCost + suppliesCost + freightCost + marketplaceFees + otherExpenses;
+  const operatingResult = gross - operatingCosts;
+  const margin = gross ? (operatingResult / gross) * 100 : 0;
+  const cashGeneration =
+    paid - purchases - freightCost - marketplaceFees - otherExpenses;
+  const cashRatio = gross ? (cashGeneration / gross) * 100 : -20;
+  const clamp = (value: number) => Math.max(0, Math.min(100, value));
+  const marginScore = clamp(((margin + 5) / 35) * 100);
+  const cashScore = clamp(((cashRatio + 20) / 40) * 100);
+  const score = gross ? Math.round(marginScore * 0.65 + cashScore * 0.35) : 0;
+  const status =
+    !gross ? "Sem dados" : score < 34 ? "Atenção" : score < 67 ? "Estável" : "Saudável";
+  const needleAngle = -90 + score * 1.8;
+  return (
+    <div className="panel companyHealthPanel">
+      <div className="panelHeading">
+        <div>
+          <span className="eyebrow">Saúde da empresa</span>
+          <h2>Indicador do período</h2>
+          <p>Rentabilidade + geração de caixa com base nos lançamentos.</p>
+        </div>
+      </div>
+      <div className="gaugeWrap">
+        <div className="gaugeDial">
+          <div
+            className="gaugeNeedle"
+            style={{ transform: `translateX(-50%) rotate(${needleAngle}deg)` }}
+          />
+          <div className="gaugeCenter">
+            <b>{score}</b>
+            <span>{status}</span>
+          </div>
+          <small className="gaugeLeft">Crítica</small>
+          <small className="gaugeMiddle">Atenção</small>
+          <small className="gaugeRight">Saudável</small>
+        </div>
+      </div>
+      <div className="healthBreakdown">
+        <div><span>Vendas</span><b>{brl(gross)}</b></div>
+        <div><span>Custos de perfumes</span><b>- {brl(perfumeCost)}</b></div>
+        <div><span>Insumos consumidos</span><b>- {brl(suppliesCost)}</b></div>
+        <div><span>Fretes</span><b>- {brl(freightCost)}</b></div>
+        <div><span>Taxas marketplace</span><b>- {brl(marketplaceFees)}</b></div>
+        <div><span>Outras despesas de vendas</span><b>- {brl(otherExpenses)}</b></div>
+        <div><span>Compras/despesas lançadas</span><b>- {brl(purchases)}</b></div>
+        <div className="healthResult">
+          <span>Resultado operacional</span>
+          <b>{brl(operatingResult)} · {margin.toFixed(1).replace(".", ",")}%</b>
+        </div>
+        <div className={"healthResult " + (cashGeneration >= 0 ? "positive" : "negative")}>
+          <span>Geração de caixa</span>
+          <b>{brl(cashGeneration)}</b>
+        </div>
+      </div>
+    </div>
   );
-  const avg =
-      daily.slice(0, day).reduce((sum, value) => sum + value, 0) /
-      Math.max(1, day),
-    max = Math.max(avg, ...daily, 1);
-  const displayedDailyTotal = daily.reduce(
-    (sum, value, index) =>
-      sum + (monthKey === currentMonth && index >= day ? avg : value),
-    0,
-  );
-  const categories = ["Nicho", "Árabe", "Designer"].map((category) => ({
-    category,
-    value: activeSales.reduce(
-      (sum, s) =>
-        sum +
-        s.items
-        .filter(
-          (x) =>
-            d.products.find((p) => p.id === x.productId)?.category === category,
-        )
-        .reduce((n, x) => n + x.ml, 0),
-      0,
-    ),
-  }));
-  const catTotal = categories.reduce((n, x) => n + x.value, 0);
-  const summarySales = monthSales.filter((sale) => !isHistoricalSale(sale));
-  const directOrders = summarySales.filter(
+}
+
+function OrderSummaryChart({ sales }: { sales: V[] }) {
+  const directOrders = sales.filter(
     (sale) => sale.status !== "cancelled" && !isMarketplaceSale(sale),
   ).length;
-  const tiktokOrders = summarySales.filter(
-    (sale) =>
-      sale.status !== "cancelled" && sale.marketplace === "TikTok Shop",
+  const tiktokOrders = sales.filter(
+    (sale) => sale.status !== "cancelled" && sale.marketplace === "TikTok Shop",
   ).length;
-  const shopeeOrders = summarySales.filter(
-    (sale) =>
-      sale.status !== "cancelled" && sale.marketplace === "Shopee",
+  const shopeeOrders = sales.filter(
+    (sale) => sale.status !== "cancelled" && sale.marketplace === "Shopee",
   ).length;
-  const cancelledOrders = summarySales.filter(
-    (sale) => sale.status === "cancelled",
-  ).length;
-  const summaryCount =
-    directOrders + tiktokOrders + shopeeOrders + cancelledOrders;
-  const summaryPct = (value: number) =>
-    summaryCount ? Math.round((value / summaryCount) * 100) : 0;
-  const directEnd = summaryCount ? (directOrders / summaryCount) * 360 : 0;
-  const tiktokEnd =
-    summaryCount
-      ? ((directOrders + tiktokOrders) / summaryCount) * 360
-      : 0;
-  const shopeeEnd =
-    summaryCount
-      ? ((directOrders + tiktokOrders + shopeeOrders) / summaryCount) * 360
-      : 0;
-  const summaryItems = [
+  const cancelledOrders = sales.filter((sale) => sale.status === "cancelled").length;
+  const total = directOrders + tiktokOrders + shopeeOrders + cancelledOrders;
+  const pct = (value: number) => (total ? Math.round((value / total) * 100) : 0);
+  const segments = [
     { label: "Venda direta", value: directOrders, color: "#22a66f" },
     { label: "TikTok Shop", value: tiktokOrders, color: "#5DC9D6" },
     { label: "Shopee", value: shopeeOrders, color: "#EE4D2D" },
     { label: "Cancelados", value: cancelledOrders, color: "#05070a" },
   ];
   return (
+    <div className="panel orderOriginSummary">
+      <h2>Resumo dos pedidos</h2>
+      <p className="chartExplanation chartExplanationTop">
+        Distribuição dos pedidos no período.
+      </p>
+      <InteractiveDonutChart
+        segments={segments}
+        centerTop="Total"
+        centerBottom={`${total} pedidos`}
+        className="sideInteractiveDonut"
+        infoPrefix="Origem"
+      />
+      <div className="orderOriginLegend">
+        <p className="direct">
+          <span className="orderOriginText"><strong>Venda direta</strong><small>{pct(directOrders)}%</small></span>
+          <b>{directOrders} pedido{directOrders === 1 ? "" : "s"}</b>
+        </p>
+        <p className="tiktok">
+          <span className="orderOriginText"><strong>TikTok Shop</strong><small>{pct(tiktokOrders)}%</small></span>
+          <b>{tiktokOrders} pedido{tiktokOrders === 1 ? "" : "s"}</b>
+        </p>
+        <p className="shopee">
+          <span className="orderOriginText"><strong>Shopee</strong><small>{pct(shopeeOrders)}%</small></span>
+          <b>{shopeeOrders} pedido{shopeeOrders === 1 ? "" : "s"}</b>
+        </p>
+        <p className="cancelled">
+          <span className="orderOriginText"><strong>Cancelados</strong><small>{pct(cancelledOrders)}%</small></span>
+          <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CategoryChart({ d, sales }: { d: D; sales: V[] }) {
+  const categories = ["Nicho", "Árabe", "Designer"].map((category) => ({
+    category,
+    value: sales.reduce(
+      (sum, sale) =>
+        sum +
+        sale.items
+          .filter(
+            (item) =>
+              d.products.find((product) => product.id === item.productId)?.category ===
+              category,
+          )
+          .reduce((itemSum, item) => itemSum + item.ml, 0),
+      0,
+    ),
+  }));
+  const total = categories.reduce((sum, item) => sum + item.value, 0);
+  return (
+    <div className="panel categories">
+      <h2>Vendas por categoria</h2>
+      <p className="chartExplanation chartExplanationTop">
+        Distribuição dos mls vendidos no período.
+      </p>
+      <InteractiveDonutChart
+        segments={categories.map((item) => ({
+          label: item.category,
+          value: item.value,
+          color:
+            item.category === "Nicho"
+              ? "#e0b43c"
+              : item.category === "Árabe"
+                ? "#8b5cf6"
+                : "#2f80ed",
+        }))}
+        centerTop="Total vendido"
+        centerBottom={`${total.toLocaleString("pt-BR")}mls`}
+        className="sideInteractiveDonut"
+        infoPrefix="Categoria"
+      />
+      <div className="categoryLegend categoryPercentLegend">
+        {categories.map((item) => {
+          const percentage = total ? Math.round((item.value / total) * 100) : 0;
+          return (
+            <div
+              key={item.category}
+              className={item.category
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")}
+            >
+              <span className="categoryPercentText">
+                <strong>{item.category}</strong>
+                <small>{percentage}%</small>
+              </span>
+              <b className="categorySoldMl">
+                {item.value.toLocaleString("pt-BR")} ml vendidos
+              </b>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LeadRanking({ d, start, end }: { d: D; start: string; end: string }) {
+  const [includeMarketplaces, setIncludeMarketplaces] = useState(false);
+  const normalizeName = (value: string) =>
+    value.trim().toLocaleLowerCase("pt-BR").replace(/\s+/g, " ");
+  const countSource = (source: LeadSource) => {
+    const leads = new Set(
+      d.clients
+        .filter(
+          (client) =>
+            client.leadSource === source && dateInRange(client.date, start, end),
+        )
+        .map((client) => normalizeName(client.name))
+        .filter(Boolean),
+    );
+    if (source === "TikTok" || source === "Shopee") {
+      const marketplace = source === "TikTok" ? "TikTok Shop" : "Shopee";
+      d.sales
+        .filter(
+          (sale) =>
+            sale.status !== "cancelled" &&
+            sale.marketplace === marketplace &&
+            dateInRange(sale.date, start, end),
+        )
+        .forEach((sale) => {
+          const name = normalizeName(saleCustomer(sale, d));
+          if (name && name !== "cliente não informado") leads.add(name);
+        });
+    }
+    return leads.size;
+  };
+  const sources: LeadSource[] = includeMarketplaces
+    ? ["Grupo 1", "Grupo 2", "Grupo 3", "TikTok", "Shopee"]
+    : ["Grupo 1", "Grupo 2", "Grupo 3"];
+  const ranking = sources
+    .map((source, index) => ({ source, count: countSource(source), index }))
+    .sort((a, b) => b.count - a.count || a.index - b.index);
+  const max = Math.max(1, ...ranking.map((item) => item.count));
+  return (
+    <div className="panel leadRankingPanel">
+      <div className="leadRankingHead">
+        <div>
+          <h2>Ranking de grupos</h2>
+          <p>Disputa de aquisição de leads no período.</p>
+        </div>
+        <button
+          type="button"
+          className={includeMarketplaces ? "active" : ""}
+          onClick={() => setIncludeMarketplaces((value) => !value)}
+        >
+          {includeMarketplaces ? "Ocultar marketplaces" : "Incluir TikTok/Shopee"}
+        </button>
+      </div>
+      <div className="leadRankingList">
+        {ranking.map((item, index) => (
+          <div key={item.source}>
+            <span className="leadRankPosition">{index + 1}º</span>
+            <div className="leadRankContent">
+              <span>
+                <strong>{item.source}</strong>
+                <b>{item.count} lead{item.count === 1 ? "" : "s"}</b>
+              </span>
+              <i><em style={{ width: `${Math.max(5, (item.count / max) * 100)}%` }} /></i>
+            </div>
+          </div>
+        ))}
+      </div>
+      <small className="leadRankingReset">
+        A contagem reinicia automaticamente a cada novo mês.
+      </small>
+    </div>
+  );
+}
+
+function Dash({ d }: { d: D }) {
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [monthKey, setMonthKey] = useState(today().slice(0, 7));
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const currentMonth = today().slice(0, 7);
+  const cutoff = periodCutoffDay(monthKey);
+  const defaultStart = monthKey + "-01";
+  const defaultEnd = monthKey + "-" + String(cutoff).padStart(2, "0");
+  const customRange = Boolean(customStart);
+  const rangeStart = customStart || defaultStart;
+  const rangeEnd =
+    customStart && customEnd && customEnd >= customStart
+      ? customEnd
+      : customStart || defaultEnd;
+  const metrics = rangeMetrics(d, rangeStart, rangeEnd);
+  const activeSales = metrics.sales;
+  const periodSales = d.sales.filter(
+    (sale) => !isHistoricalSale(sale) && dateInRange(sale.date, rangeStart, rangeEnd),
+  );
+  const [previousStart, previousEnd] = customRange
+    ? previousEquivalentRange(rangeStart, rangeEnd)
+    : (() => {
+        const previousMonth = shiftMonthKey(monthKey, -1);
+        return [
+          previousMonth + "-01",
+          previousMonth +
+            "-" +
+            String(Math.min(cutoff, monthDays(previousMonth))).padStart(2, "0"),
+        ] as const;
+      })();
+  const previousMetrics = rangeMetrics(d, previousStart, previousEnd);
+  const comparisonLabel = customRange
+    ? "vs. período anterior"
+    : "vs. " +
+      periodMonthLabel(shiftMonthKey(monthKey, -1)).replace(/^./, (letter) =>
+        letter.toUpperCase(),
+      );
+
+  const daysInMonth = monthDays(monthKey);
+  const chartKeys = customRange
+    ? dateKeysBetween(rangeStart, rangeEnd)
+    : Array.from(
+        { length: daysInMonth },
+        (_, index) => monthKey + "-" + String(index + 1).padStart(2, "0"),
+      );
+  const daily = chartKeys.map((key) =>
+    activeSales
+      .filter((sale) => sale.date === key)
+      .reduce((sum, sale) => sum + Math.max(0, sale.total), 0),
+  );
+  const actualDays = customRange ? Math.max(1, chartKeys.length) : Math.max(1, cutoff);
+  const avg = metrics.gross / actualDays;
+  const displayValues = daily.map((value, index) =>
+    !customRange && monthKey === currentMonth && index >= cutoff ? avg : value,
+  );
+  const displayedTotal = displayValues.reduce((sum, value) => sum + value, 0);
+  const max = Math.max(avg, ...displayValues, 1);
+  const projection =
+    !customRange && monthKey === currentMonth ? avg * daysInMonth : metrics.gross;
+
+  const suppliesCost = activeSales.reduce(
+    (sum, sale) => sum + packaging(sale, d.supplies).total,
+    0,
+  );
+  const freightCost = activeSales.reduce(
+    (sum, sale) => sum + Math.max(0, Number(sale.shippingCost || 0)),
+    0,
+  );
+  const marketplaceFees = activeSales.reduce(
+    (sum, sale) => sum + Math.max(0, Number(sale.marketplaceFee || 0)),
+    0,
+  );
+  const otherExpenses = activeSales.reduce(
+    (sum, sale) => sum + Math.max(0, Number(sale.expenses || 0)),
+    0,
+  );
+  const purchases = d.purchases
+    .filter((purchase) => dateInRange(purchase.date, rangeStart, rangeEnd))
+    .reduce((sum, purchase) => sum + Math.max(0, Number(purchase.total || 0)), 0);
+
+  return (
     <>
       <div className="workspaceToolbar dashboardMonthToolbar">
         <div>
           <span className="eyebrow">Visão executiva</span>
           <h2>
-            {periodMonthLabel(monthKey).replace(/^./, (letter) =>
-              letter.toUpperCase(),
-            )}
+            {customRange
+              ? "Período personalizado"
+              : periodMonthLabel(monthKey).replace(/^./, (letter) =>
+                  letter.toUpperCase(),
+                )}
           </h2>
-          <p>
-            Período: 01/{monthKey.slice(5, 7)} a{" "}
-            {String(day).padStart(2, "0")}/{monthKey.slice(5, 7)}
-          </p>
+          <p>Período: {rangeLabel(rangeStart, rangeEnd)}</p>
         </div>
-        <div className="monthPicker workspaceMonthPicker">
-          <button
-            type="button"
-            onClick={() => {
-              setMonthKey((current) => shiftMonthKey(current, -1));
-              setSelectedDay(null);
-            }}
-            aria-label="Mês anterior"
-          >
-            <ChevronLeft />
-          </button>
-          <b>{periodMonthLabel(monthKey)}</b>
-          <button
-            type="button"
-            onClick={() => {
-              setMonthKey((current) => shiftMonthKey(current, 1));
-              setSelectedDay(null);
-            }}
-            aria-label="Próximo mês"
-          >
-            <ChevronRight />
-          </button>
-        </div>
+        <PeriodSelector
+          monthKey={monthKey}
+          setMonthKey={setMonthKey}
+          customStart={customStart}
+          customEnd={customEnd}
+          setCustomStart={setCustomStart}
+          setCustomEnd={setCustomEnd}
+          onPeriodChange={() => setSelectedDay(null)}
+        />
       </div>
 
       <div className="executiveMetricGrid">
         <div className="metricCard metricBlue">
           <span>Faturamento</span>
-          <b>{brl(monthTotals.gross)}</b>
+          <b>{brl(metrics.gross)}</b>
           <small>{activeSales.length} pedido(s) no período</small>
-          <ComparisonBadge
-            value={metricDelta(monthTotals.gross, previousMetrics.gross)}
-            label={comparisonLabel}
-          />
+          <ComparisonBadge value={metricDelta(metrics.gross, previousMetrics.gross)} label={comparisonLabel} />
         </div>
         <div className="metricCard metricViolet">
           <span>Pedidos</span>
           <b>{activeSales.length}</b>
           <small>{metrics.uniqueClients} cliente(s) únicos</small>
-          <ComparisonBadge
-            value={metricDelta(activeSales.length, previousMetrics.orders)}
-            label={comparisonLabel}
-          />
+          <ComparisonBadge value={metricDelta(activeSales.length, previousMetrics.orders)} label={comparisonLabel} />
         </div>
         <div className="metricCard metricGreen">
           <span>Lucro estimado</span>
-          <b>{brl(estimatedProfit)}</b>
-          <small>
-            Margem de{" "}
-            {estimatedMargin.toLocaleString("pt-BR", {
-              maximumFractionDigits: 1,
-            })}%
-          </small>
-          <ComparisonBadge
-            value={metricDelta(estimatedProfit, previousMetrics.profit)}
-            label={comparisonLabel}
-          />
+          <b>{brl(metrics.profit)}</b>
+          <small>Margem de {metrics.margin.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</small>
+          <ComparisonBadge value={metricDelta(metrics.profit, previousMetrics.profit)} label={comparisonLabel} />
         </div>
         <div className="metricCard metricCyan">
           <span>Ticket médio</span>
           <b>{brl(metrics.ticket)}</b>
           <small>Valor médio por pedido</small>
-          <ComparisonBadge
-            value={metricDelta(metrics.ticket, previousMetrics.ticket)}
-            label={comparisonLabel}
-          />
+          <ComparisonBadge value={metricDelta(metrics.ticket, previousMetrics.ticket)} label={comparisonLabel} />
         </div>
         <div className="metricCard metricOrange">
           <span>Frascos vendidos</span>
@@ -1553,155 +1939,76 @@ function Dash({ d }: { d: D }) {
         <div className="metricCard metricPink">
           <span>Volume vendido</span>
           <b>{metrics.ml.toLocaleString("pt-BR")} ml</b>
-          <small>{brl(monthTotals.paid)} já recebidos</small>
+          <small>{brl(metrics.paid)} já recebidos</small>
         </div>
       </div>
-      <div className="grid">
-        <div className="dashboardMain">
-          <div className="panel chart">
-            <h2>Faturamento consolidado + tendência</h2>
-            <p>Passe o mouse ou toque em uma barra para ver o valor</p>
-            <div className="stats">
-              Média diária <b>{brl(avg)}</b> · Projeção mensal{" "}
-              <b>{brl(avg * days)}</b>
-            </div>
-            <div
-              className={"bars" + (selectedDay !== null ? " hasSelection" : "")}
-            >
-              {daily.map((value, i) => {
-                const n = i >= day ? avg : value;
-                const percentage = displayedDailyTotal
-                  ? Math.round((n / displayedDailyTotal) * 100)
-                  : 0;
-                return (
-                  <button
-                    key={i}
-                    className={selectedDay === i ? "selected" : ""}
-                    aria-pressed={selectedDay === i}
-                    aria-label={`Dia ${i + 1}: ${brl(n)} · ${percentage}% do gráfico`}
-                    onPointerEnter={(event) => {
-                      if (event.pointerType === "mouse") setSelectedDay(i);
-                    }}
-                    onPointerLeave={(event) => {
-                      if (event.pointerType === "mouse") setSelectedDay(null);
-                    }}
-                    onClick={() => {
-                      const desktopHover = window.matchMedia(
-                        "(hover: hover) and (pointer: fine)",
-                      ).matches;
-                      if (desktopHover) return;
-                      setSelectedDay((current) => (current === i ? null : i));
-                    }}
-                  >
-                    <span>
-                      {brl(n)}
-                      <small>{percentage}%</small>
-                    </span>
-                    <i
-                      className={
-                        monthKey === currentMonth && i >= day ? "future" : ""
-                      }
-                      style={{ height: Math.max(4, (n / max) * 100) + "%" }}
-                    />
-                    <small>{i + 1}</small>
-                  </button>
-                );
-              })}
-            </div>
+
+      <div className="dashboardTopGrid">
+        <div className="panel chart dashboardRevenueChart">
+          <h2>Faturamento consolidado + tendência</h2>
+          <p>Passe o mouse ou toque em uma barra para ver o valor</p>
+          <div className="stats">
+            Média diária <b>{brl(avg)}</b> · Projeção/total do período <b>{brl(projection)}</b>
           </div>
-          <PaymentBreakdown d={d} sales={activeSales} compact />
-        </div>
-        <div className="sidecharts">
-          <div className="panel orderOriginSummary">
-            <h2>Resumo dos pedidos</h2>
-            <p className="chartExplanation chartExplanationTop">
-              Distribuição dos pedidos do mês por origem.
-            </p>
-            <InteractiveDonutChart
-              segments={summaryItems}
-              centerTop="Total"
-              centerBottom={`${summaryCount} pedidos`}
-              className="sideInteractiveDonut"
-              infoPrefix="Origem"
-            />
-            <div className="orderOriginLegend">
-              <p className="direct">
-                <span className="orderOriginText">
-                  <strong>Venda direta</strong>
-                  <small>{summaryPct(directOrders)}%</small>
-                </span>
-                <b>{directOrders} pedido{directOrders === 1 ? "" : "s"}</b>
-              </p>
-              <p className="tiktok">
-                <span className="orderOriginText">
-                  <strong>TikTok Shop</strong>
-                  <small>{summaryPct(tiktokOrders)}%</small>
-                </span>
-                <b>{tiktokOrders} pedido{tiktokOrders === 1 ? "" : "s"}</b>
-              </p>
-              <p className="shopee">
-                <span className="orderOriginText">
-                  <strong>Shopee</strong>
-                  <small>{summaryPct(shopeeOrders)}%</small>
-                </span>
-                <b>{shopeeOrders} pedido{shopeeOrders === 1 ? "" : "s"}</b>
-              </p>
-              <p className="cancelled">
-                <span className="orderOriginText">
-                  <strong>Cancelados</strong>
-                  <small>{summaryPct(cancelledOrders)}%</small>
-                </span>
-                <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
-              </p>
-            </div>
-          </div>
-          <div className="panel categories">
-            <h2>Vendas por categoria</h2>
-            <p className="chartExplanation chartExplanationTop">
-              Distribuição dos mls vendidos no mês.
-            </p>
-            <InteractiveDonutChart
-              segments={categories.map((item) => ({
-                label: item.category,
-                value: item.value,
-                color:
-                  item.category === "Nicho"
-                    ? "#e0b43c"
-                    : item.category === "Árabe"
-                      ? "#8b5cf6"
-                      : "#2f80ed",
-              }))}
-              centerTop="Total vendido"
-              centerBottom={`${catTotal.toLocaleString("pt-BR")}mls`}
-              className="sideInteractiveDonut"
-              infoPrefix="Categoria"
-            />
-            <div className="categoryLegend categoryPercentLegend">
-              {categories.map((x) => {
-                const percentage = catTotal
-                  ? Math.round((x.value / catTotal) * 100)
-                  : 0;
-                return (
-                  <div
-                    key={x.category}
-                    className={x.category
-                      .toLowerCase()
-                      .normalize("NFD")
-                      .replace(/[\u0300-\u036f]/g, "")}
-                  >
-                    <span className="categoryPercentText">
-                      <strong>{x.category}</strong>
-                      <small>{percentage}%</small>
-                    </span>
-                    <b className="categorySoldMl">
-                      {x.value.toLocaleString("pt-BR")} ml vendidos
-                    </b>
-                  </div>
-                );
-              })}
-            </div>
+          <div className={"bars" + (selectedDay !== null ? " hasSelection" : "")}>
+            {displayValues.map((value, index) => {
+              const percentage = displayedTotal
+                ? Math.round((value / displayedTotal) * 100)
+                : 0;
+              const future =
+                !customRange && monthKey === currentMonth && index >= cutoff;
+              return (
+                <button
+                  key={chartKeys[index]}
+                  className={selectedDay === index ? "selected" : ""}
+                  aria-pressed={selectedDay === index}
+                  aria-label={`${dateBR(chartKeys[index])}: ${brl(value)} · ${percentage}% do gráfico`}
+                  onPointerEnter={(event) => {
+                    if (event.pointerType === "mouse") setSelectedDay(index);
+                  }}
+                  onPointerLeave={(event) => {
+                    if (event.pointerType === "mouse") setSelectedDay(null);
+                  }}
+                  onClick={() => {
+                    const desktopHover = window.matchMedia(
+                      "(hover: hover) and (pointer: fine)",
+                    ).matches;
+                    if (desktopHover) return;
+                    setSelectedDay((current) => (current === index ? null : index));
+                  }}
+                >
+                  <span>
+                    {brl(value)}
+                    <small>{percentage}%</small>
+                  </span>
+                  <i
+                    className={future ? "future" : ""}
+                    style={{ height: Math.max(4, (value / max) * 100) + "%" }}
+                  />
+                  <small>{customRange ? dateBR(chartKeys[index]).slice(0, 5) : index + 1}</small>
+                </button>
+              );
+            })}
           </div>
         </div>
+
+        <HealthGauge
+          gross={metrics.gross}
+          paid={metrics.paid}
+          perfumeCost={metrics.perfumeCost}
+          suppliesCost={suppliesCost}
+          freightCost={freightCost}
+          marketplaceFees={marketplaceFees}
+          otherExpenses={otherExpenses}
+          purchases={purchases}
+        />
+      </div>
+
+      <div className="dashboardLowerGrid">
+        <OrderSummaryChart sales={periodSales} />
+        <PaymentBreakdown d={d} sales={activeSales} compact />
+        <CategoryChart d={d} sales={activeSales} />
+        <LeadRanking d={d} start={rangeStart} end={rangeEnd} />
       </div>
     </>
   );
@@ -5488,8 +5795,11 @@ function Clients({
             </i>
             <h3>{c.name}</h3>
             <p>
-              {c.phone} · CEP {c.cep}
+              {c.phone || "Sem telefone"} · {c.cep ? `CEP ${c.cep}` : "CEP não informado"}
             </p>
+            <span className={"leadSourceBadge " + (c.leadSource ? "filled" : "empty")}>
+              {c.leadSource || "Origem do lead não definida"}
+            </span>
             <div className="clientActions">
               <button onClick={() => history(c.id)}>Ver histórico</button>
               <button onClick={() => edit(c.id)}>
@@ -5908,23 +6218,38 @@ function Finance({
   notify: (message: string) => void;
 }) {
   const [month, setMonth] = useState(today().slice(0, 7));
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
   const cutoff = periodCutoffDay(month);
-  const metrics = periodMetrics(d, month, cutoff);
-  const previousMonth = shiftMonthKey(month, -1);
-  const previous = periodMetrics(
-    d,
-    previousMonth,
-    Math.min(cutoff, monthDays(previousMonth)),
-  );
-  const comparisonLabel =
-    "vs. " +
-    periodMonthLabel(previousMonth).replace(/^./, (letter) =>
-      letter.toUpperCase(),
-    );
-  const purchases = d.purchases.filter(
-    (purchase) =>
-      purchase.date.startsWith(month) &&
-      Number(purchase.date.slice(8, 10)) <= cutoff,
+  const defaultStart = month + "-01";
+  const defaultEnd = month + "-" + String(cutoff).padStart(2, "0");
+  const customRange = Boolean(customStart);
+  const rangeStart = customStart || defaultStart;
+  const rangeEnd =
+    customStart && customEnd && customEnd >= customStart
+      ? customEnd
+      : customStart || defaultEnd;
+  const metrics = rangeMetrics(d, rangeStart, rangeEnd);
+  const [previousStart, previousEnd] = customRange
+    ? previousEquivalentRange(rangeStart, rangeEnd)
+    : (() => {
+        const previousMonth = shiftMonthKey(month, -1);
+        return [
+          previousMonth + "-01",
+          previousMonth +
+            "-" +
+            String(Math.min(cutoff, monthDays(previousMonth))).padStart(2, "0"),
+        ] as const;
+      })();
+  const previous = rangeMetrics(d, previousStart, previousEnd);
+  const comparisonLabel = customRange
+    ? "vs. período anterior"
+    : "vs. " +
+      periodMonthLabel(shiftMonthKey(month, -1)).replace(/^./, (letter) =>
+        letter.toUpperCase(),
+      );
+  const purchases = d.purchases.filter((purchase) =>
+    dateInRange(purchase.date, rangeStart, rangeEnd),
   );
   const purchaseExpenses = purchases.reduce(
     (sum, purchase) => sum + Math.max(0, Number(purchase.total || 0)),
@@ -5937,7 +6262,7 @@ function Finance({
     (sum, product) => sum + Math.max(0, product.stock) * product.cost,
     0,
   );
-  const marketplacePendingValue = d.sales
+  const marketplacePendingValue = metrics.sales
     .filter(
       (sale) =>
         sale.status !== "cancelled" &&
@@ -5952,32 +6277,22 @@ function Finance({
         <div>
           <span className="eyebrow">Centro financeiro</span>
           <h2>
-            {periodMonthLabel(month).replace(/^./, (letter) =>
-              letter.toUpperCase(),
-            )}
+            {customRange
+              ? "Período personalizado"
+              : periodMonthLabel(month).replace(/^./, (letter) =>
+                  letter.toUpperCase(),
+                )}
           </h2>
-          <p>
-            Período: 01/{month.slice(5, 7)} a{" "}
-            {String(cutoff).padStart(2, "0")}/{month.slice(5, 7)}
-          </p>
+          <p>Período: {rangeLabel(rangeStart, rangeEnd)}</p>
         </div>
-        <div className="monthPicker workspaceMonthPicker">
-          <button
-            type="button"
-            onClick={() => setMonth((current) => shiftMonthKey(current, -1))}
-            aria-label="Mês anterior"
-          >
-            <ChevronLeft />
-          </button>
-          <b>{periodMonthLabel(month)}</b>
-          <button
-            type="button"
-            onClick={() => setMonth((current) => shiftMonthKey(current, 1))}
-            aria-label="Próximo mês"
-          >
-            <ChevronRight />
-          </button>
-        </div>
+        <PeriodSelector
+          monthKey={month}
+          setMonthKey={setMonth}
+          customStart={customStart}
+          customEnd={customEnd}
+          setCustomStart={setCustomStart}
+          setCustomEnd={setCustomEnd}
+        />
       </div>
 
       <div className="financeMetricGrid">
@@ -5985,19 +6300,12 @@ function Finance({
           <span>Faturamento</span>
           <b>{brl(metrics.gross)}</b>
           <small>{metrics.orders} pedido(s)</small>
-          <ComparisonBadge
-            value={metricDelta(metrics.gross, previous.gross)}
-            label={comparisonLabel}
-          />
+          <ComparisonBadge value={metricDelta(metrics.gross, previous.gross)} label={comparisonLabel} />
         </div>
         <div className="metricCard metricGreen">
           <span>Total recebido</span>
           <b>{brl(metrics.paid)}</b>
-          <small>
-            {metrics.gross
-              ? Math.round((metrics.paid / metrics.gross) * 100)
-              : 0}% realizado
-          </small>
+          <small>{metrics.gross ? Math.round((metrics.paid / metrics.gross) * 100) : 0}% realizado</small>
         </div>
         <div className="metricCard metricOrange">
           <span>A receber</span>
@@ -6007,13 +6315,8 @@ function Finance({
         <div className="metricCard metricCyan">
           <span>Lucro estimado</span>
           <b>{brl(metrics.profit)}</b>
-          <small>
-            Margem {metrics.margin.toFixed(1).replace(".", ",")}%
-          </small>
-          <ComparisonBadge
-            value={metricDelta(metrics.profit, previous.profit)}
-            label={comparisonLabel}
-          />
+          <small>Margem {metrics.margin.toFixed(1).replace(".", ",")}%</small>
+          <ComparisonBadge value={metricDelta(metrics.profit, previous.profit)} label={comparisonLabel} />
         </div>
         <div className="metricCard metricViolet">
           <span>Compras no período</span>
@@ -6039,51 +6342,24 @@ function Finance({
             <BarChart3 />
           </div>
           <div className="statementRows">
-            <div>
-              <span>Receita bruta</span>
-              <b>{brl(metrics.gross)}</b>
-            </div>
-            <div>
-              <span>(−) Custo dos perfumes</span>
-              <b>{brl(metrics.perfumeCost)}</b>
-            </div>
-            <div>
-              <span>(−) Taxas, fretes e insumos</span>
-              <b>{brl(metrics.operatingExpenses)}</b>
-            </div>
-            <div className="statementTotal">
-              <span>Lucro estimado</span>
-              <b>{brl(metrics.profit)}</b>
-            </div>
+            <div><span>Receita bruta</span><b>{brl(metrics.gross)}</b></div>
+            <div><span>(−) Custo dos perfumes</span><b>{brl(metrics.perfumeCost)}</b></div>
+            <div><span>(−) Taxas, fretes e insumos</span><b>{brl(metrics.operatingExpenses)}</b></div>
+            <div className="statementTotal"><span>Lucro estimado</span><b>{brl(metrics.profit)}</b></div>
           </div>
           <div className="financeHealthGrid">
-            <div>
-              <span>Margem</span>
-              <b>{metrics.margin.toFixed(1).replace(".", ",")}%</b>
-            </div>
-            <div>
-              <span>Estoque a custo</span>
-              <b>{brl(inventoryCost)}</b>
-            </div>
-            <div>
-              <span>Marketplace pendente</span>
-              <b>{brl(marketplacePendingValue)}</b>
-            </div>
+            <div><span>Margem</span><b>{metrics.margin.toFixed(1).replace(".", ",")}%</b></div>
+            <div><span>Estoque a custo</span><b>{brl(inventoryCost)}</b></div>
+            <div><span>Marketplace pendente</span><b>{brl(marketplacePendingValue)}</b></div>
           </div>
         </div>
       </div>
 
-      <div className="financeSecondaryGrid">
+      <div className="financeSecondaryGrid single">
         <InventoryProjection d={d} />
-        <MarketplaceForecast d={d} set={set} notify={notify} />
       </div>
 
-      <ProfitControl
-        d={d}
-        sales={metrics.sales}
-        set={set}
-        notify={notify}
-      />
+      <ProfitControl d={d} sales={metrics.sales} set={set} notify={notify} />
     </div>
   );
 }
@@ -6748,6 +7024,7 @@ function Form({
     district: existingClient?.district || "",
     city: existingClient?.city || "",
     state: existingClient?.state || "",
+    leadSource: existingClient?.leadSource || "",
     label: existingClient?.addresses[0]?.label || "Principal",
   });
   const [clientLookupMessage, setClientLookupMessage] = useState("");
@@ -6791,6 +7068,7 @@ function Form({
       district: found.district || "",
       city: found.city || "",
       state: found.state || "",
+      leadSource: found.leadSource || "",
       label: found.addresses[0]?.label || "Principal",
     });
     setClientLookupMessage(`Cliente encontrado: ${found.name}`);
@@ -7145,18 +7423,49 @@ function Form({
         };
       }
       const typedClientName = isMarketplace
-      ? ""
-      : String(f.clientName || "").trim();
-    const matchedClient = isMarketplace
-      ? undefined
-      : x.clients.find(
-          (client) =>
-            client.name.trim().toLowerCase() ===
-            typedClientName.toLowerCase(),
-        );
-    let clientId = isMarketplace ? 0 : matchedClient?.id || 0,
-      clients = x.clients;
-    if (newClient && !isMarketplace) {
+        ? String(f.marketplaceCustomer || "").trim()
+        : String(f.clientName || "").trim();
+      const matchedClient = x.clients.find(
+        (client) =>
+          client.name.trim().toLowerCase() === typedClientName.toLowerCase(),
+      );
+      let clientId = matchedClient?.id || 0,
+        clients = x.clients;
+
+      if (isMarketplace && typedClientName) {
+        const marketplaceLeadSource: LeadSource =
+          String(f.marketplace) === "Shopee" ? "Shopee" : "TikTok";
+        if (matchedClient) {
+          if (!matchedClient.leadSource) {
+            clients = clients.map((client) =>
+              client.id === matchedClient.id
+                ? { ...client, leadSource: marketplaceLeadSource }
+                : client,
+            );
+          }
+        } else {
+          clientId = Date.now();
+          clients = [
+            ...clients,
+            {
+              id: clientId,
+              name: typedClientName,
+              phone: "",
+              cpf: "",
+              cep: "",
+              number: "",
+              district: "",
+              city: "",
+              state: "",
+              leadSource: marketplaceLeadSource,
+              date: String(f.date),
+              addresses: [],
+            },
+          ];
+        }
+      }
+
+      if (newClient && !isMarketplace) {
         clientId = Date.now();
         const address = String(f.newAddress || "");
         clients = [
@@ -7171,6 +7480,9 @@ function Form({
             district: String(f.newDistrict || ""),
             city: String(f.newCity || ""),
             state: String(f.newState || ""),
+            leadSource: MANUAL_LEAD_SOURCES.includes(String(f.newLeadSource) as LeadSource)
+              ? (String(f.newLeadSource) as LeadSource)
+              : undefined,
             date: String(f.date),
             addresses: address ? [{
               label: "Principal",
@@ -7208,7 +7520,7 @@ function Form({
         date: String(f.date),
         clientId,
         customerName: isMarketplace
-        ? String(f.marketplaceCustomer || "").trim()
+        ? typedClientName
         : newClient || matchedClient
           ? undefined
           : typedClientName || undefined,
@@ -7342,6 +7654,11 @@ function Form({
                   <Field n="newNumber" l="Número (opcional)" required={false} />
                   <Field n="newCep" l="CEP (opcional)" required={false} />
                 </div>
+                <Select
+                  n="newLeadSource"
+                  l="Origem do lead / Grupo"
+                  o={MANUAL_LEAD_SOURCES.map((source) => [source, source])}
+                />
               </>
             ) : (
               <Select n="clientId" l="Cliente" o={d.clients.map((client) => [client.id, client.name])} />
@@ -7428,6 +7745,11 @@ function Form({
                       <label><span>Cidade (opcional)</span><input name="newCity" value={clientDraft.city} onChange={(e) => setClientDraft((c) => ({ ...c, city: e.target.value }))} /></label>
                       <label><span>Estado (opcional)</span><select name="newState" value={clientDraft.state} onChange={(e) => setClientDraft((c) => ({ ...c, state: e.target.value }))}><option value="">Selecione...</option>{BRAZIL_STATES.map((state) => <option key={state}>{state}</option>)}</select></label>
                     </div>
+                    <Select
+                      n="newLeadSource"
+                      l="Origem do lead / Grupo"
+                      o={MANUAL_LEAD_SOURCES.map((source) => [source, source])}
+                    />
                     {clientLookupMessage ? <small className="cepStatus">{clientLookupMessage}</small> : null}
                   </>
                 ) : (
@@ -7949,6 +8271,30 @@ function Form({
                 <input name="state" value={clientDraft.state} onChange={(event) => setClientDraft((current) => ({ ...current, state: event.target.value }))} />
               </label>
             </div>
+            <label>
+              <span>Origem do lead / Grupo</span>
+              <select
+                name="leadSource"
+                value={clientDraft.leadSource}
+                onChange={(event) =>
+                  setClientDraft((current) => ({
+                    ...current,
+                    leadSource: event.target.value,
+                  }))
+                }
+                required
+              >
+                <option value="" disabled>Selecione...</option>
+                <option value="Grupo 1">Grupo 1</option>
+                <option value="Grupo 2">Grupo 2</option>
+                <option value="Grupo 3">Grupo 3</option>
+                <option value="TikTok" disabled={clientDraft.leadSource !== "TikTok"}>TikTok (automático)</option>
+                <option value="Shopee" disabled={clientDraft.leadSource !== "Shopee"}>Shopee (automático)</option>
+              </select>
+              <small className="fieldHint">
+                TikTok e Shopee são preenchidos automaticamente pelas vendas de marketplace.
+              </small>
+            </label>
             {clientLookupMessage ? <p className="lookupMessage">{clientLookupMessage}</p> : null}
             {Array.from({ length: Math.max(0, addressCount - 1) }, (_, offset) => {
               const i = offset + 1;
@@ -8106,6 +8452,9 @@ const mkC = (f: any, n: number, id = Date.now()): C => ({
   district: String(f.district || ""),
   city: String(f.city || ""),
   state: String(f.state || ""),
+  leadSource: LEAD_SOURCES.includes(String(f.leadSource) as LeadSource)
+    ? (String(f.leadSource) as LeadSource)
+    : undefined,
   date: String(f.date),
   addresses: Array.from({ length: n }, (_, i) => ({
     label: String(f["label" + i] || ""),
