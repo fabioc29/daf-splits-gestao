@@ -1930,49 +1930,51 @@ function LeadRanking({ d, start, end }: { d: D; start: string; end: string }) {
         </button>
       </div>
 
-      <div className="groupRankingMetricButtons" role="group" aria-label="Classificar ranking de grupos">
-        <button
-          type="button"
-          className={metric === "revenue" ? "active" : ""}
-          onClick={() => setMetric("revenue")}
-        >
-          Faturamento
-        </button>
-        <button
-          type="button"
-          className={metric === "orders" ? "active" : ""}
-          onClick={() => setMetric("orders")}
-        >
-          Pedidos
-        </button>
-        <button
-          type="button"
-          className={metric === "ticket" ? "active" : ""}
-          onClick={() => setMetric("ticket")}
-        >
-          Ticket médio
-        </button>
-      </div>
+      <div className="leadRankingBody">
+        <div className="groupRankingMetricButtons" role="group" aria-label="Classificar ranking de grupos">
+          <button
+            type="button"
+            className={metric === "revenue" ? "active" : ""}
+            onClick={() => setMetric("revenue")}
+          >
+            Faturamento
+          </button>
+          <button
+            type="button"
+            className={metric === "orders" ? "active" : ""}
+            onClick={() => setMetric("orders")}
+          >
+            Pedidos
+          </button>
+          <button
+            type="button"
+            className={metric === "ticket" ? "active" : ""}
+            onClick={() => setMetric("ticket")}
+          >
+            Ticket médio
+          </button>
+        </div>
 
-      <div className="leadRankingList">
-        {ranking.map((item, index) => (
-          <div key={item.source}>
-            <span className="leadRankPosition">{index + 1}º</span>
-            <div className="leadRankContent">
-              <span>
-                <strong>{item.source}</strong>
-                <b>{formatMetric(item)}</b>
-              </span>
-              <i>
-                <em style={{ width: `${item.value ? Math.max(5, (item.value / max) * 100) : 0}%` }} />
-              </i>
-              <small>
-                {brl(item.revenue)} · {item.orders} pedido{item.orders === 1 ? "" : "s"} ·
-                ticket {brl(item.ticket)}
-              </small>
+        <div className="leadRankingList">
+          {ranking.map((item, index) => (
+            <div key={item.source}>
+              <span className="leadRankPosition">{index + 1}º</span>
+              <div className="leadRankContent">
+                <span>
+                  <strong>{item.source}</strong>
+                  <b>{formatMetric(item)}</b>
+                </span>
+                <i>
+                  <em style={{ width: `${item.value ? Math.max(5, (item.value / max) * 100) : 0}%` }} />
+                </i>
+                <small>
+                  {brl(item.revenue)} · {item.orders} pedido{item.orders === 1 ? "" : "s"} ·
+                  ticket {brl(item.ticket)}
+                </small>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
       <small className="leadRankingReset">
         Critério atual: {metricLabel}. O ranking acompanha o período selecionado.
