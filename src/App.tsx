@@ -1757,19 +1757,23 @@ function OrderSummaryChart({ sales }: { sales: V[] }) {
     { label: "Cancelados", value: cancelledOrders, color: "#05070a" },
   ];
   return (
-    <div className="panel orderOriginSummary">
-      <h2>Resumo dos pedidos</h2>
-      <p className="chartExplanation chartExplanationTop">
-        Distribuição dos pedidos no período.
-      </p>
-      <InteractiveDonutChart
-        segments={segments}
-        centerTop="Total"
-        centerBottom={`${total} pedidos`}
-        className="sideInteractiveDonut"
-        infoPrefix="Origem"
-      />
-      <div className="orderOriginLegend">
+    <div className="panel dashboardMetricPanel orderOriginSummary">
+      <div className="dashboardMiniHeader">
+        <h2>Resumo dos pedidos</h2>
+        <p>Distribuição dos pedidos no período.</p>
+      </div>
+
+      <div className="dashboardMiniVisual">
+        <InteractiveDonutChart
+          segments={segments}
+          centerTop="Total"
+          centerBottom={`${total} pedidos`}
+          className="sideInteractiveDonut"
+          infoPrefix="Origem"
+        />
+      </div>
+
+      <div className="dashboardMiniLegend orderOriginLegend">
         <p className="direct">
           <span className="orderOriginText"><strong>Venda direta</strong><small>{pct(directOrders)}%</small></span>
           <b>{directOrders} pedido{directOrders === 1 ? "" : "s"}</b>
@@ -1809,28 +1813,32 @@ function CategoryChart({ d, sales }: { d: D; sales: V[] }) {
   }));
   const total = categories.reduce((sum, item) => sum + item.value, 0);
   return (
-    <div className="panel categories">
-      <h2>Vendas por categoria</h2>
-      <p className="chartExplanation chartExplanationTop">
-        Distribuição dos mls vendidos no período.
-      </p>
-      <InteractiveDonutChart
-        segments={categories.map((item) => ({
-          label: item.category,
-          value: item.value,
-          color:
-            item.category === "Nicho"
-              ? "#e0b43c"
-              : item.category === "Árabe"
-                ? "#8b5cf6"
-                : "#2f80ed",
-        }))}
-        centerTop="Total vendido"
-        centerBottom={`${total.toLocaleString("pt-BR")}mls`}
-        className="sideInteractiveDonut"
-        infoPrefix="Categoria"
-      />
-      <div className="categoryLegend categoryPercentLegend">
+    <div className="panel dashboardMetricPanel categories">
+      <div className="dashboardMiniHeader">
+        <h2>Vendas por categoria</h2>
+        <p>Distribuição dos mls vendidos no período.</p>
+      </div>
+
+      <div className="dashboardMiniVisual">
+        <InteractiveDonutChart
+          segments={categories.map((item) => ({
+            label: item.category,
+            value: item.value,
+            color:
+              item.category === "Nicho"
+                ? "#e0b43c"
+                : item.category === "Árabe"
+                  ? "#8b5cf6"
+                  : "#2f80ed",
+          }))}
+          centerTop="Total vendido"
+          centerBottom={`${total.toLocaleString("pt-BR")}mls`}
+          className="sideInteractiveDonut"
+          infoPrefix="Categoria"
+        />
+      </div>
+
+      <div className="dashboardMiniLegend categoryLegend categoryPercentLegend">
         {categories.map((item) => {
           const percentage = total ? Math.round((item.value / total) * 100) : 0;
           return (
@@ -1907,8 +1915,8 @@ function LeadRanking({ d, start, end }: { d: D; start: string; end: string }) {
         : brl(item.ticket);
 
   return (
-    <div className="panel leadRankingPanel">
-      <div className="leadRankingHead">
+    <div className="panel dashboardMetricPanel leadRankingPanel">
+      <div className="dashboardMiniHeader leadRankingHead">
         <div>
           <h2>Ranking de grupos</h2>
           <p>Performance comercial por origem no período.</p>
@@ -5940,13 +5948,15 @@ function Clients({
   const [rankingOpen, setRankingOpen] = useState(false);
   const [groupFilterOpen, setGroupFilterOpen] = useState(false);
   const [groupFilter, setGroupFilter] = useState<"" | "Grupo 1" | "Grupo 2" | "Grupo 3">("");
-  const clients = d.clients.filter((client) => {
-    const matchesName = client.name
-      .toLowerCase()
-      .includes(query.trim().toLowerCase());
-    const matchesGroup = !groupFilter || client.leadSource === groupFilter;
-    return matchesName && matchesGroup;
-  });
+  const groupClients = d.clients.filter(
+    (client) => !groupFilter || client.leadSource === groupFilter,
+  );
+  const clients = groupClients.filter((client) =>
+    client.name.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+  const clientCountLabel = groupFilter
+    ? `Clientes no ${groupFilter}`
+    : "Clientes cadastrados";
 
   const clientRanking = d.clients
     .map((client) => {
@@ -5991,7 +6001,7 @@ function Clients({
   return (
     <>
       <div className="clientsTopRow">
-        <Cards v={[[String(d.clients.length), "Clientes cadastrados"]]} />
+        <Cards v={[[String(groupClients.length), clientCountLabel]]} />
         <button
           type="button"
           className="clientRankingButton"
@@ -6574,12 +6584,16 @@ function PaymentBreakdown({
   return (
     <div
       className={
-        "panel financeChart modernPaymentChart" + (compact ? " compact" : "")
+        "panel dashboardMetricPanel financeChart modernPaymentChart" +
+        (compact ? " compact" : "")
       }
     >
-      <div>
+      <div className="dashboardMiniHeader">
         <h2>Vendas por forma de pagamento</h2>
         <p>Distribuição do faturamento do período selecionado.</p>
+      </div>
+
+      <div className="dashboardMiniVisual">
         <InteractiveDonutChart
           segments={payments.map((item) => ({
             label: item.name,
@@ -6592,7 +6606,8 @@ function PaymentBreakdown({
           infoPrefix="Forma de pagamento"
         />
       </div>
-      <div className="paymentLegend">
+
+      <div className="dashboardMiniLegend paymentLegend">
         {payments.map((x) => (
           <div key={x.name}>
             <i style={{ background: x.color }} />
