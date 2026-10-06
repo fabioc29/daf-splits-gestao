@@ -43,6 +43,7 @@ import {
   CatalogAdminPreview,
   PublicCatalog,
   catalogItemsFromProducts,
+  enrichCatalogItemsWithImages,
 } from "./Catalog";
 
 type P = {
@@ -493,6 +494,9 @@ function System({ session }: { session: Session }) {
           if (!error) {
             // Snapshot público: somente dados seguros do estoque.
             // Falhas aqui não interrompem o salvamento administrativo.
+            const catalogItems = await enrichCatalogItemsWithImages(
+              catalogItemsFromProducts(data.products),
+            );
             await supabase
               .from("public_catalogs")
               .upsert(
@@ -501,7 +505,7 @@ function System({ session }: { session: Session }) {
                   slug: "daf-splits",
                   name: "DAF Splits",
                   published: true,
-                  items: catalogItemsFromProducts(data.products),
+                  items: catalogItems,
                 },
                 { onConflict: "user_id" },
               );
