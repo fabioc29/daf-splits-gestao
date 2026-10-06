@@ -25,46 +25,46 @@
 }
 
 .catalogHeader {
+  position: sticky;
+  top: 0;
+  z-index: 80;
+  width: 100%;
+  border-bottom: 1px solid transparent;
+  background: rgb(8 10 14 / 42%);
+  backdrop-filter: blur(14px);
+  transition:
+    background .2s ease,
+    border-color .2s ease,
+    box-shadow .2s ease;
+}
+
+.catalogHeader.scrolled {
+  background: #080a0ef2;
+  border-bottom-color: var(--catalog-line);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 24%);
+}
+
+.catalogHeaderInner {
   max-width: 1280px;
+  min-height: 112px;
   margin: 0 auto;
-  padding: 26px 28px 18px;
+  padding: 12px 28px;
+  display: grid;
+  place-items: center;
 }
 
-.catalogBrand {
-  width: fit-content;
-  display: flex;
-  align-items: center;
-  gap: 14px;
+.catalogHeaderLogo {
+  width: 104px;
+  height: 88px;
+  object-fit: contain;
+  display: block;
 }
 
-.catalogBrand img,
 .catalogStatePage > img {
   width: 64px;
   height: 64px;
   object-fit: contain;
   border-radius: 14px;
-}
-
-.catalogBrand > div {
-  display: grid;
-  justify-items: center;
-  text-align: center;
-  gap: 4px;
-}
-
-.catalogBrand span {
-  color: var(--catalog-gold);
-  font-size: 19px;
-  font-weight: 950;
-  letter-spacing: .16em;
-  line-height: 1;
-}
-
-.catalogBrand small {
-  color: var(--catalog-muted);
-  font-size: 10px;
-  letter-spacing: .16em;
-  text-align: center;
 }
 
 .catalogMain {
@@ -118,9 +118,8 @@
 
 .catalogSimpleFilters {
   display: flex;
-  flex-wrap: wrap;
-  gap: 18px 26px;
-  align-items: flex-end;
+  align-items: center;
+  gap: 14px;
 }
 
 .catalogFilterGroup {
@@ -174,13 +173,15 @@
 }
 
 .catalogCard {
+  position: relative;
   min-width: 0;
   padding: 13px;
   border: 1px solid var(--catalog-line);
-  border-radius: 16px;
+  border-radius: 18px;
   background: var(--catalog-panel);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   transition: border-color .18s ease, transform .18s ease;
 }
 
@@ -280,10 +281,7 @@
   margin-top: auto;
   padding-top: 10px;
   border-top: 1px solid var(--catalog-line);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 9px;
+  display: block;
 }
 
 .catalogAvailability small,
@@ -301,33 +299,46 @@
   font-size: 13px;
 }
 
-.catalogApc {
-  min-height: 29px;
-  padding: 0 8px;
-  border: 1px solid;
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+.catalogAvailability small {
+  color: var(--catalog-muted);
   font-size: 7px;
-  font-weight: 900;
-  white-space: nowrap;
 }
 
-.catalogApc svg {
-  width: 13px;
+.catalogAvailability b {
+  margin-top: 3px;
+  font-size: 13px;
 }
 
-.catalogApc.yes {
-  border-color: #43bd8645;
-  background: #43bd8612;
-  color: var(--catalog-green);
+.catalogApcBanner {
+  min-height: 42px;
+  margin: -13px -13px 13px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: -.01em;
 }
 
-.catalogApc.no {
-  border-color: #7d848e38;
-  background: #7d848e0d;
-  color: #9aa2ae;
+.catalogApcBanner > span {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .72;
+}
+
+.catalogApcBanner.yes {
+  background: #11bfae;
+  color: #07110f;
+}
+
+.catalogApcBanner.no {
+  background: #ff3545;
+  color: #fff;
 }
 
 .catalogEmpty,
@@ -400,25 +411,15 @@
     padding-right: 14px;
   }
 
-  .catalogHeader {
-    padding-top: 18px;
+  .catalogHeaderInner {
+    min-height: 92px;
+    padding-left: 14px;
+    padding-right: 14px;
   }
 
-  .catalogBrand {
-    gap: 10px;
-  }
-
-  .catalogBrand img {
-    width: 54px;
-    height: 54px;
-  }
-
-  .catalogBrand span {
-    font-size: 16px;
-  }
-
-  .catalogBrand small {
-    font-size: 8.5px;
+  .catalogHeaderLogo {
+    width: 88px;
+    height: 72px;
   }
 
   .catalogSimpleFilters {
