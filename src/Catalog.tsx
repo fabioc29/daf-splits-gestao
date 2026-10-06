@@ -295,26 +295,53 @@ export function PublicCatalog() {
 
   useEffect(() => {
     let active = true;
-    (async () => {
-      const { data, error } = await supabase
-        .from("public_catalogs")
-        .select("items, updated_at")
-        .eq("slug", "daf-splits")
-        .eq("published", true)
-        .maybeSingle();
 
-      if (!active) return;
-      if (error) {
-        setState("error");
-        return;
+    function localCatalogFallback() {
+      try {
+        const stored = JSON.parse(window.localStorage.getItem("daf-v4") || "null");
+        const fallbackItems = catalogItemsFromProducts(
+          Array.isArray(stored?.products) ? stored.products : [],
+        );
+        if (fallbackItems.length) {
+          setItems(fallbackItems);
+          setUpdatedAt(new Date().toISOString());
+          setState("ready");
+          return true;
+        }
+      } catch {
+        // Sem dados locais disponíveis.
       }
+      return false;
+    }
 
-      const catalogItems = Array.isArray(data?.items)
-        ? (data.items as CatalogItem[])
-        : [];
-      setItems(catalogItems);
-      setUpdatedAt(String(data?.updated_at || ""));
-      setState(catalogItems.length ? "ready" : "empty");
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("public_catalogs")
+          .select("items, updated_at")
+          .eq("slug", "daf-splits")
+          .eq("published", true)
+          .maybeSingle();
+
+        if (!active) return;
+
+        const catalogItems = !error && Array.isArray(data?.items)
+          ? (data.items as CatalogItem[])
+          : [];
+
+        if (catalogItems.length) {
+          setItems(catalogItems);
+          setUpdatedAt(String(data?.updated_at || ""));
+          setState("ready");
+          return;
+        }
+
+        if (localCatalogFallback()) return;
+        setState(error ? "error" : "empty");
+      } catch {
+        if (!active) return;
+        if (!localCatalogFallback()) setState("error");
+      }
     })();
 
     return () => {
