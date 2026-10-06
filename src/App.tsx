@@ -30,6 +30,7 @@ import {
 import { automaticPackaging, packaging, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
+import { CRMFeedPanel } from "./crm/CRMFeedPanel";
 
 type P = {
   id: number;
@@ -241,6 +242,7 @@ const nav = [
   ["clients", "Clientes", Users],
   ["receivables", "Vendas a receber", ReceiptText],
   ["finance", "Financeiro", Wallet],
+  ["crm", "Integração CRM", Cloud],
 ] as const;
 
 export default function App() {
@@ -631,6 +633,8 @@ function System({ session }: { session: Session }) {
               edit={(id) => setModal({ type: "sale", id })}
               notify={notify}
             />
+          ) : page === "crm" ? (
+            <CRMFeedPanel userId={session.user.id} synced={sync === "saved"} />
           ) : page === "stock" ? (
             <Stock
               d={data}
