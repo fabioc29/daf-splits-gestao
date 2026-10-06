@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { PackageOpen } from "lucide-react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { PackageOpen, Palette, RotateCcw, Save, X } from "lucide-react";
 import { supabase } from "./supabase";
 import "./catalog.css";
 
@@ -16,6 +16,40 @@ export type CatalogItem = {
   fragranticaId?: number;
 };
 
+export type CatalogSettings = {
+  background: string;
+  header: string;
+  card: string;
+  text: string;
+  muted: string;
+  line: string;
+  accent: string;
+  whatsapp: string;
+  whatsappText: string;
+  apcAvailable: string;
+  apcAvailableText: string;
+  apcUnavailable: string;
+  apcUnavailableText: string;
+  scarcity: string;
+};
+
+export const DEFAULT_CATALOG_SETTINGS: CatalogSettings = {
+  background: "#080a0e",
+  header: "#000000",
+  card: "#111111",
+  text: "#f6f1e8",
+  muted: "#929cab",
+  line: "#252c37",
+  accent: "#d7aa36",
+  whatsapp: "#d7aa36",
+  whatsappText: "#100d06",
+  apcAvailable: "#2fa974",
+  apcAvailableText: "#07110f",
+  apcUnavailable: "#ff3545",
+  apcUnavailableText: "#ffffff",
+  scarcity: "#d7aa36",
+};
+
 type ProductLike = {
   id: number;
   brand: string;
@@ -26,6 +60,93 @@ type ProductLike = {
   apc: number;
   bottle?: number;
 };
+
+type CatalogSettingsEnvelope = {
+  __catalogSettings: CatalogSettings;
+};
+
+const CATALOG_SETTINGS_KEYS = Object.keys(
+  DEFAULT_CATALOG_SETTINGS,
+) as Array<keyof CatalogSettings>;
+
+function normalizeHex(value: unknown, fallback: string) {
+  const normalized = String(value || "").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(normalized)
+    ? normalized.toLowerCase()
+    : fallback;
+}
+
+export function normalizeCatalogSettings(value: unknown): CatalogSettings {
+  const source =
+    value && typeof value === "object"
+      ? (value as Partial<CatalogSettings>)
+      : {};
+  return CATALOG_SETTINGS_KEYS.reduce(
+    (settings, key) => {
+      settings[key] = normalizeHex(
+        source[key],
+        DEFAULT_CATALOG_SETTINGS[key],
+      );
+      return settings;
+    },
+    { ...DEFAULT_CATALOG_SETTINGS },
+  );
+}
+
+export function catalogSnapshotPayload(
+  items: CatalogItem[],
+  settings: CatalogSettings,
+) {
+  return [
+    { __catalogSettings: normalizeCatalogSettings(settings) },
+    ...items,
+  ];
+}
+
+function readCatalogSnapshot(value: unknown): {
+  items: CatalogItem[];
+  settings: CatalogSettings;
+} {
+  const list = Array.isArray(value) ? value : [];
+  const envelope = list.find(
+    (entry) =>
+      entry &&
+      typeof entry === "object" &&
+      "__catalogSettings" in (entry as Record<string, unknown>),
+  ) as CatalogSettingsEnvelope | undefined;
+
+  const items = list.filter(
+    (entry) =>
+      entry &&
+      typeof entry === "object" &&
+      "id" in (entry as Record<string, unknown>) &&
+      !("__catalogSettings" in (entry as Record<string, unknown>)),
+  ) as CatalogItem[];
+
+  return {
+    items,
+    settings: normalizeCatalogSettings(envelope?.__catalogSettings),
+  };
+}
+
+function catalogStyle(settings: CatalogSettings): CSSProperties {
+  return {
+    "--catalog-bg": settings.background,
+    "--catalog-header": settings.header,
+    "--catalog-panel": settings.card,
+    "--catalog-text": settings.text,
+    "--catalog-muted": settings.muted,
+    "--catalog-line": settings.line,
+    "--catalog-gold": settings.accent,
+    "--catalog-whatsapp": settings.whatsapp,
+    "--catalog-whatsapp-text": settings.whatsappText,
+    "--catalog-apc-available": settings.apcAvailable,
+    "--catalog-apc-available-text": settings.apcAvailableText,
+    "--catalog-apc-unavailable": settings.apcUnavailable,
+    "--catalog-apc-unavailable-text": settings.apcUnavailableText,
+    "--catalog-scarcity": settings.scarcity,
+  } as CSSProperties;
+}
 
 
 const FRAGRANTICA_SOCIAL_CARD_BASE =
@@ -231,10 +352,12 @@ export function catalogItemsFromProducts(products: ProductLike[]): CatalogItem[]
 
 function CatalogViewer({
   items,
+  settings,
   updatedAt: _updatedAt,
   adminPreview = false,
 }: {
   items: CatalogItem[];
+  settings: CatalogSettings;
   updatedAt?: string;
   adminPreview?: boolean;
 }) {
@@ -257,7 +380,10 @@ function CatalogViewer({
   );
 
   return (
-    <div className={adminPreview ? "catalogExperience embedded" : "catalogExperience"}>
+    <div
+      className={adminPreview ? "catalogExperience embedded" : "catalogExperience"}
+      style={catalogStyle(settings)}
+    >
       <header className={"catalogHeader" + (headerScrolled ? " scrolled" : "")}>
         <div className="catalogHeaderInner">
           <div className="catalogHeaderBrand" aria-label="DAF Splits">
@@ -389,9 +515,56 @@ function CatalogViewer({
   );
 }
 
-export function CatalogAdminPreview({ products }: { products: ProductLike[] }) {
+function CatalogColorField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="catalogColorField">
+      <span>{label}</span>
+      <div>
+        <input
+          type="color"
+          value={normalizeHex(value, "#000000")}
+          onChange={(event) => onChange(event.target.value)}
+          aria-label={`Selecionar cor de ${label}`}
+        />
+        <input
+          type="text"
+          value={value}
+          maxLength={7}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={() => onChange(normalizeHex(value, "#000000"))}
+          spellCheck={false}
+          aria-label={`Código hexadecimal de ${label}`}
+        />
+      </div>
+    </label>
+  );
+}
+
+export function CatalogAdminPreview({
+  products,
+  settings,
+  onSettingsChange,
+}: {
+  products: ProductLike[];
+  settings: CatalogSettings;
+  onSettingsChange: (settings: CatalogSettings) => void;
+}) {
+  const normalizedSettings = useMemo(
+    () => normalizeCatalogSettings(settings),
+    [settings],
+  );
   const baseItems = useMemo(() => catalogItemsFromProducts(products), [products]);
   const [previewItems, setPreviewItems] = useState(baseItems);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [draft, setDraft] = useState<CatalogSettings>(normalizedSettings);
 
   useEffect(() => {
     let active = true;
@@ -404,17 +577,143 @@ export function CatalogAdminPreview({ products }: { products: ProductLike[] }) {
     };
   }, [baseItems]);
 
+  useEffect(() => {
+    if (!editorOpen) setDraft(normalizedSettings);
+  }, [normalizedSettings, editorOpen]);
+
+  const updateDraft = (key: keyof CatalogSettings, value: string) => {
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const colorFields: Array<[keyof CatalogSettings, string]> = [
+    ["whatsapp", "Botão do WhatsApp"],
+    ["whatsappText", "Texto do WhatsApp"],
+    ["apcAvailable", "APC disponível"],
+    ["apcAvailableText", "Texto do APC disponível"],
+    ["apcUnavailable", "APC indisponível"],
+    ["apcUnavailableText", "Texto do APC indisponível"],
+    ["scarcity", "Barra de escassez"],
+    ["accent", "Destaques e filtros"],
+    ["background", "Fundo do catálogo"],
+    ["header", "Fundo do header"],
+    ["card", "Fundo dos cards"],
+    ["text", "Texto principal"],
+    ["muted", "Texto secundário"],
+    ["line", "Bordas"],
+  ];
+
   return (
-    <CatalogViewer
-      items={previewItems}
-      updatedAt={new Date().toISOString()}
-      adminPreview
-    />
+    <div className="catalogAdminArea">
+      <div className="catalogAdminToolbar">
+        <div>
+          <span>Personalização</span>
+          <strong>Visual do catálogo público</strong>
+        </div>
+        <button
+          type="button"
+          className="catalogEditButton"
+          onClick={() => {
+            setDraft(normalizedSettings);
+            setEditorOpen(true);
+          }}
+        >
+          <Palette />
+          Editar
+        </button>
+      </div>
+
+      <CatalogViewer
+        items={previewItems}
+        settings={normalizedSettings}
+        updatedAt={new Date().toISOString()}
+        adminPreview
+      />
+
+      {editorOpen ? (
+        <div className="catalogEditorOverlay">
+          <div className="catalogEditorDialog">
+            <header>
+              <div>
+                <span>EDITOR DO CATÁLOGO</span>
+                <h2>Editar cores</h2>
+                <p>
+                  Estas configurações aparecem no catálogo público, mas este
+                  editor fica disponível somente no sistema administrativo.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="catalogEditorClose"
+                onClick={() => setEditorOpen(false)}
+                aria-label="Fechar editor"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div
+              className="catalogEditorPreview"
+              style={catalogStyle(normalizeCatalogSettings(draft))}
+            >
+              <div className="catalogEditorPreviewCard">
+                <div className="catalogEditorApc available">APC Disponível</div>
+                <strong>Prévia das cores</strong>
+                <span>Perfume DAF Splits</span>
+                <i><em /></i>
+                <button type="button">Solicitar via WhatsApp</button>
+              </div>
+              <div className="catalogEditorApc unavailable">APC Indisponível</div>
+            </div>
+
+            <div className="catalogColorGrid">
+              {colorFields.map(([key, label]) => (
+                <CatalogColorField
+                  key={key}
+                  label={label}
+                  value={draft[key]}
+                  onChange={(value) => updateDraft(key, value)}
+                />
+              ))}
+            </div>
+
+            <footer>
+              <button
+                type="button"
+                className="catalogResetButton"
+                onClick={() => setDraft({ ...DEFAULT_CATALOG_SETTINGS })}
+              >
+                <RotateCcw />
+                Restaurar padrão
+              </button>
+              <div>
+                <button type="button" onClick={() => setEditorOpen(false)}>
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  className="catalogSaveButton"
+                  onClick={() => {
+                    onSettingsChange(normalizeCatalogSettings(draft));
+                    setEditorOpen(false);
+                  }}
+                >
+                  <Save />
+                  Salvar cores
+                </button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
 export function PublicCatalog() {
   const [items, setItems] = useState<CatalogItem[]>([]);
+  const [settings, setSettings] = useState<CatalogSettings>(
+    DEFAULT_CATALOG_SETTINGS,
+  );
   const [updatedAt, setUpdatedAt] = useState("");
   const [state, setState] = useState<"loading" | "ready" | "empty" | "error">(
     "loading",
@@ -431,6 +730,7 @@ export function PublicCatalog() {
         );
         if (fallbackItems.length) {
           setItems(fallbackItems);
+          setSettings(normalizeCatalogSettings(stored?.catalogSettings));
           setUpdatedAt(new Date().toISOString());
           setState("ready");
           return true;
@@ -452,16 +752,18 @@ export function PublicCatalog() {
 
         if (!active) return;
 
-        const catalogItems = !error && Array.isArray(data?.items)
-          ? (data.items as CatalogItem[]).map((item) =>
-              applyKnownFragranticaImage(item),
-            )
-          : [];
+        const snapshot = !error
+          ? readCatalogSnapshot(data?.items)
+          : { items: [], settings: DEFAULT_CATALOG_SETTINGS };
+        const catalogItems = snapshot.items.map((item) =>
+          applyKnownFragranticaImage(item),
+        );
 
         if (catalogItems.length) {
           const resolved = await enrichCatalogItemsWithImages(catalogItems);
           if (!active) return;
           setItems(resolved);
+          setSettings(snapshot.settings);
           setUpdatedAt(String(data?.updated_at || ""));
           setState("ready");
           return;
@@ -504,5 +806,11 @@ export function PublicCatalog() {
     );
   }
 
-  return <CatalogViewer items={items} updatedAt={updatedAt} />;
+  return (
+    <CatalogViewer
+      items={items}
+      settings={settings}
+      updatedAt={updatedAt}
+    />
+  );
 }
