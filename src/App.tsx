@@ -578,7 +578,7 @@ const action =
   return (
     <div className="shell">
       <aside>
-        <img src={LOGO} alt="DAF Splits" />
+        <img className="sidebarLogo" src={LOGO} alt="DAF Splits" />
         <nav>
           {nav.map(([id, label, Icon]) => (
             <button
@@ -1444,13 +1444,36 @@ function PeriodSelector({
   onPeriodChange?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [draftStart, setDraftStart] = useState("");
+  const [draftEnd, setDraftEnd] = useState("");
   const hasCustom = Boolean(customStart);
+  const defaultStart = monthKey + "-01";
+  const defaultEnd =
+    monthKey === today().slice(0, 7)
+      ? monthKey + "-" + String(periodCutoffDay(monthKey)).padStart(2, "0")
+      : monthKey + "-" + String(monthDays(monthKey)).padStart(2, "0");
+
   function changeMonth(delta: number) {
-    setMonthKey(shiftMonthKey(monthKey, delta));
+    const next = shiftMonthKey(monthKey, delta);
+    setMonthKey(next);
     setCustomStart("");
     setCustomEnd("");
+    setDraftStart("");
+    setDraftEnd("");
+    setOpen(false);
     onPeriodChange?.();
   }
+  function toggleCalendar() {
+    setOpen((current) => {
+      const next = !current;
+      if (next) {
+        setDraftStart(customStart || defaultStart);
+        setDraftEnd(customEnd || (customStart ? customStart : defaultEnd));
+      }
+      return next;
+    });
+  }
+
   return (
     <div className="periodSelectorWrap">
       <div className="monthPicker workspaceMonthPicker">
@@ -1465,7 +1488,7 @@ function PeriodSelector({
       <button
         type="button"
         className={"calendarFilterButton" + (hasCustom ? " active" : "")}
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggleCalendar}
         title="Filtrar por data ou período"
         aria-label="Filtrar por data ou período"
       >
@@ -1478,12 +1501,11 @@ function PeriodSelector({
             <span>Data inicial</span>
             <input
               type="date"
-              value={customStart}
+              value={draftStart}
               onChange={(event) => {
-                setCustomStart(event.target.value);
-                if (customEnd && event.target.value > customEnd) {
-                  setCustomEnd(event.target.value);
-                }
+                const value = event.target.value;
+                setDraftStart(value);
+                if (draftEnd && value > draftEnd) setDraftEnd(value);
               }}
             />
           </label>
@@ -1491,18 +1513,23 @@ function PeriodSelector({
             <span>Data final</span>
             <input
               type="date"
-              min={customStart || undefined}
-              value={customEnd}
-              onChange={(event) => setCustomEnd(event.target.value)}
+              min={draftStart || undefined}
+              value={draftEnd}
+              onChange={(event) => setDraftEnd(event.target.value)}
             />
           </label>
-          <small>Para consultar um único dia, selecione apenas a data inicial.</small>
+          <small>
+            O mês selecionado já aparece preenchido. Para consultar um único dia,
+            escolha a mesma data no início e no fim.
+          </small>
           <div className="dateRangeActions">
             <button
               type="button"
               onClick={() => {
                 setCustomStart("");
                 setCustomEnd("");
+                setDraftStart(defaultStart);
+                setDraftEnd(defaultEnd);
                 setOpen(false);
                 onPeriodChange?.();
               }}
@@ -1512,11 +1539,12 @@ function PeriodSelector({
             <button
               type="button"
               className="primary"
-              disabled={!customStart}
+              disabled={!draftStart}
               onClick={() => {
-                if (customStart && customEnd && customEnd < customStart) {
-                  setCustomEnd(customStart);
-                }
+                const safeEnd =
+                  draftEnd && draftEnd >= draftStart ? draftEnd : draftStart;
+                setCustomStart(draftStart);
+                setCustomEnd(safeEnd);
                 setOpen(false);
                 onPeriodChange?.();
               }}
@@ -1532,6 +1560,7 @@ function PeriodSelector({
 
 function HealthGauge({
   gross,
+  previousGross,
   paid,
   perfumeCost,
   suppliesCost,
@@ -1541,6 +1570,7 @@ function HealthGauge({
   purchases,
 }: {
   gross: number;
+  previousGross: number;
   paid: number;
   perfumeCost: number;
   suppliesCost: number;
@@ -1555,53 +1585,144 @@ function HealthGauge({
   const margin = gross ? (operatingResult / gross) * 100 : 0;
   const cashGeneration =
     paid - purchases - freightCost - marketplaceFees - otherExpenses;
-  const cashRatio = gross ? (cashGeneration / gross) * 100 : -20;
-  const clamp = (value: number) => Math.max(0, Math.min(100, value));
-  const marginScore = clamp(((margin + 5) / 35) * 100);
-  const cashScore = clamp(((cashRatio + 20) / 40) * 100);
-  const score = gross ? Math.round(marginScore * 0.65 + cashScore * 0.35) : 0;
+  const cashRatio = gross ? (cashGeneration / gross) * 100 : -100;
+  const receivedRatio = gross ? (paid / gross) * 100 : 0;
+  const expenseRatio = gross
+    ? ((operatingCosts + purchases) / gross) * 100
+    : 100;
+
+  const revenueRatio =
+    previousGross > 0 ? gross / previousGross : gross > 0 ? 1.1 : 0;
+  const revenueScore =
+    revenueRatio >= 1.1
+      ? 100
+      : revenueRatio >= 0.95
+        ? 85
+        : revenueRatio >= 0.8
+          ? 65
+          : revenueRatio >= 0.65
+            ? 45
+            : revenueRatio >= 0.5
+              ? 25
+              : 0;
+  const marginScore =
+    margin >= 25
+      ? 100
+      : margin >= 18
+        ? 80
+        : margin >= 10
+          ? 60
+          : margin >= 5
+            ? 40
+            : margin >= 0
+              ? 20
+              : 0;
+  const cashScore =
+    cashRatio >= 15
+      ? 100
+      : cashRatio >= 5
+        ? 70
+        : cashRatio >= 0
+          ? 50
+          : cashRatio >= -10
+            ? 25
+            : 0;
+  const receivedScore =
+    receivedRatio >= 90
+      ? 100
+      : receivedRatio >= 75
+        ? 75
+        : receivedRatio >= 60
+          ? 50
+          : receivedRatio >= 40
+            ? 25
+            : 0;
+  const efficiencyScore =
+    expenseRatio <= 45
+      ? 100
+      : expenseRatio <= 60
+        ? 75
+        : expenseRatio <= 75
+          ? 50
+          : expenseRatio <= 90
+            ? 25
+            : 0;
+
+  let score = gross
+    ? Math.round(
+        revenueScore * 0.45 +
+          marginScore * 0.2 +
+          cashScore * 0.15 +
+          receivedScore * 0.1 +
+          efficiencyScore * 0.1,
+      )
+    : 0;
+
+  // Travas de realidade: um mês muito abaixo não pode ficar "verde"
+  // só porque poucas vendas tiveram margem elevada.
+  if (previousGross > 0) {
+    if (revenueRatio < 0.5) score = Math.min(score, 39);
+    else if (revenueRatio < 0.6) score = Math.min(score, 49);
+    else if (revenueRatio < 0.7) score = Math.min(score, 59);
+  }
+  if (operatingResult < 0) score = Math.min(score, 45);
+  if (cashGeneration < 0) score = Math.min(score, 49);
+
   const status =
-    !gross ? "Sem dados" : score < 34 ? "Atenção" : score < 67 ? "Estável" : "Saudável";
-  const needleAngle = -90 + score * 1.8;
+    !gross ? "Sem dados" : score <= 39 ? "Crítico" : score <= 69 ? "Moderado" : "Saudável";
+  const needleRotation = Math.max(0, Math.min(180, score * 1.8));
+
   return (
     <div className="panel companyHealthPanel">
-      <div className="panelHeading">
+      <div className="panelHeading healthPanelHeading">
         <div>
           <span className="eyebrow">Saúde da empresa</span>
           <h2>Indicador do período</h2>
-          <p>Rentabilidade + geração de caixa com base nos lançamentos.</p>
+          <p>Desempenho, rentabilidade e caixa com comparação ao período anterior.</p>
         </div>
       </div>
-      <div className="gaugeWrap">
-        <div className="gaugeDial">
-          <div
-            className="gaugeNeedle"
-            style={{ transform: `translateX(-50%) rotate(${needleAngle}deg)` }}
+
+      <div className="healthGaugeOnly" aria-label={`Saúde da empresa: ${score} de 100, ${status}`}>
+        <svg className="healthGaugeSvg" viewBox="0 0 320 190" role="img">
+          <path
+            className="healthGaugeTrack"
+            d="M 40 160 A 120 120 0 0 1 280 160"
+            pathLength="100"
           />
-          <div className="gaugeCenter">
-            <b>{score}</b>
-            <span>{status}</span>
-          </div>
-          <small className="gaugeLeft">Crítica</small>
-          <small className="gaugeMiddle">Atenção</small>
-          <small className="gaugeRight">Saudável</small>
-        </div>
-      </div>
-      <div className="healthBreakdown">
-        <div><span>Vendas</span><b>{brl(gross)}</b></div>
-        <div><span>Custos de perfumes</span><b>- {brl(perfumeCost)}</b></div>
-        <div><span>Insumos consumidos</span><b>- {brl(suppliesCost)}</b></div>
-        <div><span>Fretes</span><b>- {brl(freightCost)}</b></div>
-        <div><span>Taxas marketplace</span><b>- {brl(marketplaceFees)}</b></div>
-        <div><span>Outras despesas de vendas</span><b>- {brl(otherExpenses)}</b></div>
-        <div><span>Compras/despesas lançadas</span><b>- {brl(purchases)}</b></div>
-        <div className="healthResult">
-          <span>Resultado operacional</span>
-          <b>{brl(operatingResult)} · {margin.toFixed(1).replace(".", ",")}%</b>
-        </div>
-        <div className={"healthResult " + (cashGeneration >= 0 ? "positive" : "negative")}>
-          <span>Geração de caixa</span>
-          <b>{brl(cashGeneration)}</b>
+          <path
+            className="healthGaugeArc critical"
+            d="M 40 160 A 120 120 0 0 1 280 160"
+            pathLength="100"
+            strokeDasharray="40 60"
+          />
+          <path
+            className="healthGaugeArc moderate"
+            d="M 40 160 A 120 120 0 0 1 280 160"
+            pathLength="100"
+            strokeDasharray="30 70"
+            strokeDashoffset="-40"
+          />
+          <path
+            className="healthGaugeArc healthy"
+            d="M 40 160 A 120 120 0 0 1 280 160"
+            pathLength="100"
+            strokeDasharray="30 70"
+            strokeDashoffset="-70"
+          />
+          <g
+            className="healthGaugeNeedle"
+            style={{ transform: `rotate(${needleRotation}deg)` }}
+          >
+            <line x1="160" y1="160" x2="57" y2="160" />
+          </g>
+          <circle className="healthGaugeHub" cx="160" cy="160" r="8" />
+          <text className="healthGaugeLabel left" x="42" y="184">CRÍTICO</text>
+          <text className="healthGaugeLabel middle" x="160" y="184">MODERADO</text>
+          <text className="healthGaugeLabel right" x="278" y="184">SAUDÁVEL</text>
+        </svg>
+        <div className="healthGaugeScore">
+          <b>{score}</b>
+          <span>{status}</span>
         </div>
       </div>
     </div>
@@ -1729,47 +1850,60 @@ function CategoryChart({ d, sales }: { d: D; sales: V[] }) {
 
 function LeadRanking({ d, start, end }: { d: D; start: string; end: string }) {
   const [includeMarketplaces, setIncludeMarketplaces] = useState(false);
-  const normalizeName = (value: string) =>
-    value.trim().toLocaleLowerCase("pt-BR").replace(/\s+/g, " ");
-  const countSource = (source: LeadSource) => {
-    const leads = new Set(
-      d.clients
-        .filter(
-          (client) =>
-            client.leadSource === source && dateInRange(client.date, start, end),
-        )
-        .map((client) => normalizeName(client.name))
-        .filter(Boolean),
-    );
-    if (source === "TikTok" || source === "Shopee") {
-      const marketplace = source === "TikTok" ? "TikTok Shop" : "Shopee";
-      d.sales
-        .filter(
-          (sale) =>
-            sale.status !== "cancelled" &&
-            sale.marketplace === marketplace &&
-            dateInRange(sale.date, start, end),
-        )
-        .forEach((sale) => {
-          const name = normalizeName(saleCustomer(sale, d));
-          if (name && name !== "cliente não informado") leads.add(name);
-        });
-    }
-    return leads.size;
+  const [metric, setMetric] = useState<"revenue" | "orders" | "ticket">("revenue");
+
+  const sourceOfSale = (sale: V): LeadSource | undefined => {
+    if (sale.marketplace === "TikTok Shop") return "TikTok";
+    if (sale.marketplace === "Shopee") return "Shopee";
+    return d.clients.find((client) => client.id === sale.clientId)?.leadSource;
   };
+
+  const sales = d.sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      dateInRange(sale.date, start, end),
+  );
+
   const sources: LeadSource[] = includeMarketplaces
     ? ["Grupo 1", "Grupo 2", "Grupo 3", "TikTok", "Shopee"]
     : ["Grupo 1", "Grupo 2", "Grupo 3"];
+
   const ranking = sources
-    .map((source, index) => ({ source, count: countSource(source), index }))
-    .sort((a, b) => b.count - a.count || a.index - b.index);
-  const max = Math.max(1, ...ranking.map((item) => item.count));
+    .map((source, index) => {
+      const sourceSales = sales.filter((sale) => sourceOfSale(sale) === source);
+      const revenue = sourceSales.reduce(
+        (sum, sale) => sum + Math.max(0, Number(sale.total || 0)),
+        0,
+      );
+      const orders = sourceSales.length;
+      const ticket = orders ? revenue / orders : 0;
+      const value =
+        metric === "revenue" ? revenue : metric === "orders" ? orders : ticket;
+      return { source, revenue, orders, ticket, value, index };
+    })
+    .sort((a, b) => b.value - a.value || b.revenue - a.revenue || a.index - b.index);
+
+  const max = Math.max(1, ...ranking.map((item) => item.value));
+  const metricLabel =
+    metric === "revenue"
+      ? "Faturamento"
+      : metric === "orders"
+        ? "Pedidos"
+        : "Ticket médio";
+  const formatMetric = (item: (typeof ranking)[number]) =>
+    metric === "revenue"
+      ? brl(item.revenue)
+      : metric === "orders"
+        ? `${item.orders} pedido${item.orders === 1 ? "" : "s"}`
+        : brl(item.ticket);
+
   return (
     <div className="panel leadRankingPanel">
       <div className="leadRankingHead">
         <div>
           <h2>Ranking de grupos</h2>
-          <p>Disputa de aquisição de leads no período.</p>
+          <p>Performance comercial por origem no período.</p>
         </div>
         <button
           type="button"
@@ -1779,6 +1913,21 @@ function LeadRanking({ d, start, end }: { d: D; start: string; end: string }) {
           {includeMarketplaces ? "Ocultar marketplaces" : "Incluir TikTok/Shopee"}
         </button>
       </div>
+
+      <label className="groupRankingMetric">
+        <span>Classificar por</span>
+        <select
+          value={metric}
+          onChange={(event) =>
+            setMetric(event.target.value as "revenue" | "orders" | "ticket")
+          }
+        >
+          <option value="revenue">Faturamento</option>
+          <option value="orders">Pedidos</option>
+          <option value="ticket">Ticket médio</option>
+        </select>
+      </label>
+
       <div className="leadRankingList">
         {ranking.map((item, index) => (
           <div key={item.source}>
@@ -1786,15 +1935,21 @@ function LeadRanking({ d, start, end }: { d: D; start: string; end: string }) {
             <div className="leadRankContent">
               <span>
                 <strong>{item.source}</strong>
-                <b>{item.count} lead{item.count === 1 ? "" : "s"}</b>
+                <b>{formatMetric(item)}</b>
               </span>
-              <i><em style={{ width: `${Math.max(5, (item.count / max) * 100)}%` }} /></i>
+              <i>
+                <em style={{ width: `${item.value ? Math.max(5, (item.value / max) * 100) : 0}%` }} />
+              </i>
+              <small>
+                {brl(item.revenue)} · {item.orders} pedido{item.orders === 1 ? "" : "s"} ·
+                ticket {brl(item.ticket)}
+              </small>
             </div>
           </div>
         ))}
       </div>
       <small className="leadRankingReset">
-        A contagem reinicia automaticamente a cada novo mês.
+        Critério atual: {metricLabel}. O ranking acompanha o período selecionado.
       </small>
     </div>
   );
@@ -1994,6 +2149,7 @@ function Dash({ d }: { d: D }) {
 
         <HealthGauge
           gross={metrics.gross}
+          previousGross={previousMetrics.gross}
           paid={metrics.paid}
           perfumeCost={metrics.perfumeCost}
           suppliesCost={suppliesCost}
@@ -5758,9 +5914,40 @@ function Clients({
   notify: (s: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [rankingOpen, setRankingOpen] = useState(false);
   const clients = d.clients.filter((client) =>
     client.name.toLowerCase().includes(query.trim().toLowerCase()),
   );
+
+  const clientRanking = d.clients
+    .map((client) => {
+      const sales = d.sales.filter(
+        (sale) =>
+          sale.clientId === client.id &&
+          sale.status !== "cancelled" &&
+          !isNoCost(sale),
+      );
+      const spent = sales.reduce(
+        (sum, sale) => sum + Math.max(0, Number(sale.total || 0)),
+        0,
+      );
+      const orders = sales.length;
+      return {
+        client,
+        spent,
+        orders,
+        ticket: orders ? spent / orders : 0,
+      };
+    })
+    .filter((item) => item.spent > 0 || item.orders > 0)
+    .sort(
+      (a, b) =>
+        b.spent - a.spent ||
+        b.orders - a.orders ||
+        b.ticket - a.ticket ||
+        a.client.name.localeCompare(b.client.name, "pt-BR"),
+    );
+
   function remove(id: number) {
     if (d.sales.some((s) => s.clientId === id)) {
       window.alert(
@@ -5774,7 +5961,18 @@ function Clients({
   }
   return (
     <>
-      <Cards v={[[String(d.clients.length), "Clientes cadastrados"]]} />
+      <div className="clientsTopRow">
+        <Cards v={[[String(d.clients.length), "Clientes cadastrados"]]} />
+        <button
+          type="button"
+          className="clientRankingButton"
+          onClick={() => setRankingOpen(true)}
+        >
+          <BarChart3 />
+          Ranking dos clientes
+        </button>
+      </div>
+
       <div className="clientSearch">
         <Search />
         <input
@@ -5816,6 +6014,49 @@ function Clients({
       </div>
       {!clients.length ? (
         <p className="empty">Nenhum cliente encontrado.</p>
+      ) : null}
+
+      {rankingOpen ? (
+        <div className="overlay">
+          <div className="systemDialog clientRankingDialog">
+            <header>
+              <div>
+                <small>RELACIONAMENTO COM CLIENTES</small>
+                <h2>Ranking dos clientes</h2>
+                <p>
+                  Ordenado principalmente pelo valor total gasto. Número de pedidos é
+                  usado como desempate.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRankingOpen(false)}
+                aria-label="Fechar ranking dos clientes"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="clientRankingList">
+              {clientRanking.map((item, index) => (
+                <div key={item.client.id}>
+                  <span className="clientRankingPosition">{index + 1}º</span>
+                  <div>
+                    <strong>{item.client.name}</strong>
+                    <small>
+                      {item.orders} pedido{item.orders === 1 ? "" : "s"} · ticket médio{" "}
+                      {brl(item.ticket)}
+                    </small>
+                  </div>
+                  <b>{brl(item.spent)}</b>
+                </div>
+              ))}
+              {!clientRanking.length ? (
+                <p className="empty">Ainda não há compras suficientes para montar o ranking.</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
       ) : null}
     </>
   );
@@ -5927,7 +6168,12 @@ function SupplierHistory({
 }) {
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [month, setMonth] = useState("");
+  const [month, setMonth] = useState(() => {
+    const latest = d.purchases
+      .filter((purchase) => purchase.supplier === name)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    return latest?.date?.slice(0, 7) || today().slice(0, 7);
+  });
   const [purchaseDay, setPurchaseDay] = useState("");
   const purchases = d.purchases
     .filter((purchase) => purchase.supplier === name)
@@ -6038,33 +6284,45 @@ function SupplierHistory({
                 aria-label="Pesquisar produto no histórico do fornecedor"
               />
             </label>
+            <div className="historyMonthPicker" aria-label="Mês do histórico do fornecedor">
+              <button
+                type="button"
+                onClick={() => setMonth((current) => shiftMonthKey(current || today().slice(0, 7), -1))}
+                aria-label="Mês anterior"
+              >
+                <ChevronLeft />
+              </button>
+              <b>{month ? periodMonthLabel(month) : "Todo o histórico"}</b>
+              <button
+                type="button"
+                onClick={() => setMonth((current) => shiftMonthKey(current || today().slice(0, 7), 1))}
+                aria-label="Próximo mês"
+              >
+                <ChevronRight />
+              </button>
+              <button
+                type="button"
+                className="historyAllButton"
+                onClick={() => {
+                  setMonth("");
+                  setPurchaseDay("");
+                }}
+              >
+                Todos
+              </button>
+            </div>
             <button
               type="button"
-              className={
-                showFilters || month || purchaseDay
-                  ? "historyFilterButton active"
-                  : "historyFilterButton"
-              }
+              className={showFilters || purchaseDay ? "historyFilterButton active" : "historyFilterButton"}
               onClick={() => setShowFilters((visible) => !visible)}
             >
-              <SlidersHorizontal />
-              Filtrar por data
+              <CalendarDays />
+              Data específica
             </button>
           </div>
 
           {showFilters ? (
-            <div className="supplierHistoryFilters">
-              <label>
-                <span>Mês</span>
-                <input
-                  type="month"
-                  value={month}
-                  onChange={(event) => {
-                    setMonth(event.target.value);
-                    if (event.target.value) setPurchaseDay("");
-                  }}
-                />
-              </label>
+            <div className="supplierHistoryFilters compact">
               <label>
                 <span>Data específica</span>
                 <input
@@ -6079,11 +6337,11 @@ function SupplierHistory({
               <button
                 type="button"
                 onClick={() => {
-                  setMonth("");
                   setPurchaseDay("");
+                  if (!month) setMonth(today().slice(0, 7));
                 }}
               >
-                Limpar filtro
+                Limpar data
               </button>
             </div>
           ) : null}
@@ -8744,7 +9002,12 @@ function History({ id, d, close }: { id: number; d: D; close: () => void }) {
   const c = d.clients.find((client) => client.id === id);
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [month, setMonth] = useState("");
+  const [month, setMonth] = useState(() => {
+    const latest = d.sales
+      .filter((sale) => sale.clientId === id)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    return latest?.date?.slice(0, 7) || today().slice(0, 7);
+  });
   const [saleDay, setSaleDay] = useState("");
   const customerSales = d.sales
     .filter((sale) => sale.clientId === id)
@@ -8872,33 +9135,45 @@ const apcCount = completedSales.reduce(
                 aria-label="Pesquisar perfume no histórico do cliente"
               />
             </label>
+            <div className="historyMonthPicker" aria-label="Mês do histórico do cliente">
+              <button
+                type="button"
+                onClick={() => setMonth((current) => shiftMonthKey(current || today().slice(0, 7), -1))}
+                aria-label="Mês anterior"
+              >
+                <ChevronLeft />
+              </button>
+              <b>{month ? periodMonthLabel(month) : "Todo o histórico"}</b>
+              <button
+                type="button"
+                onClick={() => setMonth((current) => shiftMonthKey(current || today().slice(0, 7), 1))}
+                aria-label="Próximo mês"
+              >
+                <ChevronRight />
+              </button>
+              <button
+                type="button"
+                className="historyAllButton"
+                onClick={() => {
+                  setMonth("");
+                  setSaleDay("");
+                }}
+              >
+                Todos
+              </button>
+            </div>
             <button
               type="button"
-              className={
-                showFilters || month || saleDay
-                  ? "historyFilterButton active"
-                  : "historyFilterButton"
-              }
+              className={showFilters || saleDay ? "historyFilterButton active" : "historyFilterButton"}
               onClick={() => setShowFilters((visible) => !visible)}
             >
-              <SlidersHorizontal />
-              Filtrar por data
+              <CalendarDays />
+              Data específica
             </button>
           </div>
 
           {showFilters ? (
-            <div className="clientHistoryFilters">
-              <label>
-                <span>Mês</span>
-                <input
-                  type="month"
-                  value={month}
-                  onChange={(event) => {
-                    setMonth(event.target.value);
-                    if (event.target.value) setSaleDay("");
-                  }}
-                />
-              </label>
+            <div className="clientHistoryFilters compact">
               <label>
                 <span>Data específica</span>
                 <input
@@ -8913,11 +9188,11 @@ const apcCount = completedSales.reduce(
               <button
                 type="button"
                 onClick={() => {
-                  setMonth("");
                   setSaleDay("");
+                  if (!month) setMonth(today().slice(0, 7));
                 }}
               >
-                Limpar filtro
+                Limpar data
               </button>
             </div>
           ) : null}
