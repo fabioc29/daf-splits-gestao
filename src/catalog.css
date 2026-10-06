@@ -2844,3 +2844,446 @@ vercel-toolbar {
   opacity: 0 !important;
   pointer-events: none !important;
 }
+
+
+/* =========================================================
+   DAF — acabamento final catálogo + editor atual
+   ========================================================= */
+
+.catalogHeader {
+  background: color-mix(in srgb, var(--catalog-header) 58%, transparent) !important;
+  backdrop-filter: blur(16px) saturate(115%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(115%) !important;
+  transition:
+    background .22s ease,
+    border-color .22s ease,
+    box-shadow .22s ease,
+    backdrop-filter .22s ease !important;
+}
+
+.catalogHeader.scrolled {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--catalog-header) 98%, transparent),
+      color-mix(in srgb, var(--catalog-header) 94%, var(--catalog-gold) 3%)
+    ) !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--catalog-gold) 20%, var(--catalog-line)) !important;
+  box-shadow: 0 12px 36px rgb(0 0 0 / 44%) !important;
+  backdrop-filter: blur(22px) saturate(125%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(125%) !important;
+}
+
+.catalogHeaderInner {
+  position: relative !important;
+  width: 100% !important;
+  min-height: 118px !important;
+}
+
+.catalogHeaderLogo {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 104px !important;
+  height: 104px !important;
+  margin: 0 !important;
+  transform: translate(-50%, -50%) !important;
+  object-fit: contain !important;
+}
+
+/* APC: sem box duplicado, mensagem única dentro da faixa */
+.catalogApcUnavailableNote {
+  display: none !important;
+}
+
+.catalogApcBanner.no {
+  min-height: 44px !important;
+  padding: 8px 13px !important;
+  line-height: 1.25 !important;
+  text-align: center;
+}
+
+.catalogApcBanner.no strong {
+  max-width: 100%;
+  font-size: 9.5px;
+  line-height: 1.25;
+}
+
+/* Comunidade: pergunta, seta e botão totalmente centralizados */
+.catalogGroupCta {
+  margin-top: 58px !important;
+  padding: 42px 30px 38px !important;
+  border-color: var(--catalog-group-border) !important;
+  background:
+    radial-gradient(
+      circle at 50% 0%,
+      color-mix(in srgb, var(--catalog-gold) 8%, transparent),
+      transparent 55%
+    ),
+    var(--catalog-group-bg) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  text-align: center !important;
+}
+
+.catalogGroupCtaCopy {
+  width: min(100%, 820px);
+  margin: 0 auto;
+  text-align: center;
+}
+
+.catalogGroupCtaCopy > span {
+  display: block;
+  color: var(--catalog-gold);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .16em;
+}
+
+.catalogGroupCtaCopy h2 {
+  max-width: 760px;
+  margin: 9px auto 0 !important;
+  font-size: clamp(26px, 3.2vw, 40px);
+  line-height: 1.08;
+}
+
+.catalogGroupCtaCopy p {
+  max-width: 690px;
+  margin: 11px auto 0 !important;
+}
+
+.catalogGroupArrow {
+  width: 42px;
+  height: 42px;
+  margin: 18px auto 12px;
+  border: 1px solid color-mix(in srgb, var(--catalog-group-border) 54%, transparent);
+  border-radius: 999px;
+  color: var(--catalog-gold);
+  display: grid;
+  place-items: center;
+  animation: catalogArrowBounce 1.45s ease-in-out infinite;
+}
+
+.catalogGroupArrow svg {
+  width: 19px;
+  height: 19px;
+}
+
+@keyframes catalogArrowBounce {
+  0%, 100% { transform: translateY(0); opacity: .72; }
+  50% { transform: translateY(7px); opacity: 1; }
+}
+
+.catalogGroupCta > a {
+  min-width: 250px !important;
+  min-height: 52px !important;
+  margin: 0 auto !important;
+  background: var(--catalog-group-button) !important;
+  color: var(--catalog-group-button-text) !important;
+}
+
+/* =========================================================
+   Editor administrativo alinhado ao catálogo atual
+   ========================================================= */
+
+.catalogEditorDialog {
+  width: min(1040px, 96vw) !important;
+  max-height: min(900px, 94vh) !important;
+}
+
+.catalogEditorPreviewCurrent {
+  margin-top: 16px !important;
+  padding: 18px !important;
+  border-radius: 16px !important;
+  background: var(--catalog-bg) !important;
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.catalogEditorMiniHeader {
+  grid-column: 1 / -1;
+  min-height: 72px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 12px;
+  background: var(--catalog-header);
+  display: grid;
+  place-items: center;
+}
+
+.catalogEditorMiniHeader img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+}
+
+.catalogEditorMiniFilter {
+  grid-column: 1 / -1;
+  min-height: 46px;
+  padding: 5px 8px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 11px;
+  background: var(--catalog-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.catalogEditorMiniFilter > svg {
+  width: 15px;
+  color: var(--catalog-muted);
+}
+
+.catalogEditorMiniFilter > span,
+.catalogEditorMiniFilter > strong {
+  min-height: 31px;
+  padding: 0 11px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--catalog-muted);
+  font-size: 8px;
+}
+
+.catalogEditorMiniFilter > strong {
+  background: var(--catalog-gold);
+  color: var(--catalog-whatsapp-text);
+}
+
+.catalogEditorPreviewCard.current {
+  max-width: none !important;
+  min-height: 250px;
+  padding: 11px !important;
+  border-color: var(--catalog-line) !important;
+  background: var(--catalog-card) !important;
+}
+
+.catalogEditorPreviewCard.current .catalogEditorApc {
+  width: 100%;
+  min-height: 32px;
+  margin: 0 0 9px;
+}
+
+.catalogEditorPreviewCard.current.unavailableCard .catalogEditorApc {
+  min-height: 46px;
+  padding: 7px 9px;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.catalogEditorImagePlaceholder {
+  min-height: 94px;
+  margin-bottom: 10px;
+  border-radius: 9px;
+  background: #f3f0eb;
+  color: #777;
+  display: grid;
+  place-items: center;
+}
+
+.catalogEditorImagePlaceholder svg {
+  width: 29px;
+  height: 29px;
+}
+
+.catalogEditorBrand {
+  display: block;
+  margin: 0 0 2px !important;
+  color: var(--catalog-muted) !important;
+  font-size: 8px !important;
+}
+
+.catalogEditorPreviewCard.current > strong {
+  color: var(--catalog-text);
+  font-size: 13px;
+}
+
+.catalogEditorPreviewCard.current > i > em {
+  background: var(--catalog-scarcity);
+}
+
+.catalogEditorPreviewCard.current > button {
+  background: var(--catalog-whatsapp);
+  color: var(--catalog-whatsapp-text);
+}
+
+.catalogEditorMiniGroup {
+  grid-column: 1 / -1;
+  min-height: 170px;
+  padding: 20px;
+  border: 1px solid var(--catalog-group-border);
+  border-radius: 13px;
+  background: var(--catalog-group-bg);
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.catalogEditorMiniGroup > span {
+  color: var(--catalog-gold);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+.catalogEditorMiniGroup > strong {
+  max-width: 460px;
+  color: var(--catalog-text);
+  font-size: 15px;
+}
+
+.catalogEditorMiniGroup > svg {
+  width: 17px;
+  color: var(--catalog-gold);
+}
+
+.catalogEditorMiniGroup > button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--catalog-group-button);
+  color: var(--catalog-group-button-text);
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.catalogEditorCoverage {
+  margin-top: 14px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.catalogEditorCoverage > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.catalogEditorCoverage > div > svg {
+  width: 18px;
+  color: var(--accent);
+}
+
+.catalogEditorCoverage > div span {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.catalogEditorCoverage > div strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.catalogEditorCoverage > button {
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 9px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.catalogEditorCoverage > button svg {
+  width: 15px;
+}
+
+.catalogEditorSections {
+  margin-top: 15px;
+  display: grid;
+  gap: 11px;
+}
+
+.catalogEditorSection {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel-2) 78%, transparent);
+}
+
+.catalogEditorSection > header {
+  margin-bottom: 10px;
+  display: grid;
+  gap: 3px;
+}
+
+.catalogEditorSection > header strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.catalogEditorSection > header span {
+  color: var(--muted);
+  font-size: 8.5px;
+  line-height: 1.4;
+}
+
+.catalogEditorSection .catalogColorGrid {
+  margin-top: 0 !important;
+}
+
+/* Preview do painel não deve participar da sticky stack */
+.catalogExperience.embedded .catalogMain {
+  padding-top: 16px !important;
+}
+
+@media (max-width: 720px) {
+  .catalogHeaderInner {
+    min-height: 104px !important;
+  }
+
+  .catalogHeaderLogo {
+    width: 88px !important;
+    height: 88px !important;
+  }
+
+  .catalogGroupCta {
+    padding: 30px 18px 26px !important;
+  }
+
+  .catalogGroupCta > a {
+    width: min(100%, 310px) !important;
+    min-width: 0 !important;
+  }
+
+  .catalogEditorPreviewCurrent {
+    grid-template-columns: 1fr !important;
+  }
+
+  .catalogEditorMiniHeader,
+  .catalogEditorMiniFilter,
+  .catalogEditorMiniGroup {
+    grid-column: 1 !important;
+  }
+
+  .catalogEditorCoverage {
+    display: grid;
+  }
+
+  .catalogEditorCoverage > button {
+    width: 100%;
+    justify-content: center;
+  }
+}
