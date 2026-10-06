@@ -1,13 +1,19 @@
 :root {
   --catalog-bg: #080a0e;
-  --catalog-panel: #11151c;
+  --catalog-header: #000000;
+  --catalog-panel: #111111;
   --catalog-panel-2: #151b24;
   --catalog-line: #252c37;
   --catalog-text: #f6f1e8;
   --catalog-muted: #929cab;
   --catalog-gold: #d7aa36;
-  --catalog-gold-soft: #d7aa3618;
-  --catalog-green: #43bd86;
+  --catalog-whatsapp: #d7aa36;
+  --catalog-whatsapp-text: #100d06;
+  --catalog-apc-available: #2fa974;
+  --catalog-apc-available-text: #07110f;
+  --catalog-apc-unavailable: #ff3545;
+  --catalog-apc-unavailable-text: #ffffff;
+  --catalog-scarcity: #d7aa36;
 }
 
 .catalogExperience {
@@ -30,7 +36,7 @@
   z-index: 80;
   width: 100%;
   border-bottom: 1px solid transparent;
-  background: #000;
+  background: var(--catalog-header);
   transition:
     background .2s ease,
     border-color .2s ease,
@@ -38,7 +44,7 @@
 }
 
 .catalogHeader.scrolled {
-  background: #000000f7;
+  background: color-mix(in srgb, var(--catalog-header) 96%, transparent);
   border-bottom-color: #3a3020;
   box-shadow: 0 12px 30px rgb(0 0 0 / 35%);
 }
@@ -101,7 +107,7 @@
   padding: 11px 13px;
   border: 1px solid #6f5b263d;
   border-radius: 12px;
-  background: var(--catalog-gold-soft);
+  background: color-mix(in srgb, var(--catalog-gold) 10%, transparent);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -185,7 +191,7 @@
 
 .catalogFilterGroup button.active {
   border-color: var(--catalog-gold);
-  background: var(--catalog-gold-soft);
+  background: color-mix(in srgb, var(--catalog-gold) 10%, transparent);
   color: var(--catalog-gold);
 }
 
@@ -201,7 +207,7 @@
   padding: 18px;
   border: 1px solid #272727;
   border-radius: 22px;
-  background: #111;
+  background: var(--catalog-panel);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -308,7 +314,7 @@
 
 .catalogCardIdentity h3 {
   margin: 0;
-  color: #fff;
+  color: var(--catalog-text);
   font-size: 21px;
   line-height: 1.16;
   letter-spacing: -.025em;
@@ -317,7 +323,7 @@
 .catalogCardIdentity > span {
   display: block;
   margin-top: 9px;
-  color: #9aa3b5;
+  color: var(--catalog-muted);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0;
@@ -336,7 +342,7 @@
 }
 
 .catalogScarcityText span {
-  color: #a9b2c3;
+  color: var(--catalog-muted);
   font-size: 11.5px;
   font-weight: 750;
 }
@@ -354,7 +360,7 @@
   height: 100%;
   display: block;
   border-radius: inherit;
-  background: var(--catalog-gold);
+  background: var(--catalog-scarcity);
   box-shadow: 0 0 12px rgb(215 170 54 / 20%);
 }
 
@@ -363,8 +369,8 @@
   min-height: 50px;
   margin-top: 22px;
   border-radius: 13px;
-  background: var(--catalog-gold);
-  color: #100d06;
+  background: var(--catalog-whatsapp);
+  color: var(--catalog-whatsapp-text);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -414,13 +420,13 @@
 }
 
 .catalogApcBanner.yes {
-  background: #2fa974;
-  color: #07110f;
+  background: var(--catalog-apc-available);
+  color: var(--catalog-apc-available-text);
 }
 
 .catalogApcBanner.no {
-  background: #ff3545;
-  color: #fff;
+  background: var(--catalog-apc-unavailable);
+  color: var(--catalog-apc-unavailable-text);
 }
 
 .catalogEmpty,
@@ -551,4 +557,362 @@
 .catalogGender,
 .catalogAvailability {
   display: none !important;
+}
+
+
+/* =========================================================
+   Editor administrativo de cores do catálogo
+   ========================================================= */
+
+.catalogAdminArea {
+  display: grid;
+  gap: 14px;
+}
+
+.catalogAdminToolbar {
+  min-height: 72px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.catalogAdminToolbar > div {
+  display: grid;
+  gap: 3px;
+}
+
+.catalogAdminToolbar > div > span {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+.catalogAdminToolbar > div > strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.catalogEditButton {
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.catalogEditButton:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.catalogEditButton svg {
+  width: 17px;
+}
+
+.catalogEditorOverlay {
+  position: fixed;
+  z-index: 400;
+  inset: 0;
+  padding: 22px;
+  background: rgb(0 0 0 / 68%);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+}
+
+.catalogEditorDialog {
+  width: min(940px, 96vw);
+  max-height: min(860px, 94vh);
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 30px 80px rgb(0 0 0 / 38%);
+}
+
+.catalogEditorDialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.catalogEditorDialog > header > div > span {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: .09em;
+}
+
+.catalogEditorDialog > header h2 {
+  margin: 5px 0 0;
+  font-size: 22px;
+}
+
+.catalogEditorDialog > header p {
+  max-width: 620px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.catalogEditorClose {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.catalogEditorClose svg {
+  width: 17px;
+}
+
+.catalogEditorPreview {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--catalog-bg);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+
+.catalogEditorPreviewCard {
+  max-width: 430px;
+  padding: 12px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 14px;
+  background: var(--catalog-panel);
+  color: var(--catalog-text);
+}
+
+.catalogEditorApc {
+  min-height: 31px;
+  padding: 0 10px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 950;
+}
+
+.catalogEditorPreviewCard > .catalogEditorApc {
+  width: 100%;
+  margin-bottom: 13px;
+}
+
+.catalogEditorApc.available {
+  background: var(--catalog-apc-available);
+  color: var(--catalog-apc-available-text);
+}
+
+.catalogEditorApc.unavailable {
+  background: var(--catalog-apc-unavailable);
+  color: var(--catalog-apc-unavailable-text);
+}
+
+.catalogEditorPreviewCard > strong,
+.catalogEditorPreviewCard > span {
+  display: block;
+}
+
+.catalogEditorPreviewCard > strong {
+  font-size: 14px;
+}
+
+.catalogEditorPreviewCard > span {
+  margin-top: 4px;
+  color: var(--catalog-muted);
+  font-size: 9px;
+}
+
+.catalogEditorPreviewCard > i {
+  height: 7px;
+  margin-top: 13px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--catalog-line) 90%, transparent);
+  display: block;
+}
+
+.catalogEditorPreviewCard > i > em {
+  width: 58%;
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: var(--catalog-scarcity);
+}
+
+.catalogEditorPreviewCard > button {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 13px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--catalog-whatsapp);
+  color: var(--catalog-whatsapp-text);
+  font-weight: 950;
+}
+
+.catalogColorGrid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.catalogColorField {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  display: grid;
+  gap: 7px;
+}
+
+.catalogColorField > span {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 850;
+}
+
+.catalogColorField > div {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.catalogColorField input[type="color"] {
+  width: 42px;
+  height: 38px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+  cursor: pointer;
+}
+
+.catalogColorField input[type="text"] {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.catalogEditorDialog > footer {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.catalogEditorDialog > footer > div {
+  display: flex;
+  gap: 8px;
+}
+
+.catalogEditorDialog > footer button {
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.catalogEditorDialog > footer button svg {
+  width: 15px;
+}
+
+.catalogEditorDialog > footer .catalogSaveButton {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.catalogEditorDialog > footer .catalogResetButton {
+  color: var(--muted);
+}
+
+@media (max-width: 680px) {
+  .catalogAdminToolbar {
+    display: grid;
+  }
+
+  .catalogEditButton {
+    width: 100%;
+  }
+
+  .catalogEditorOverlay {
+    padding: 10px;
+  }
+
+  .catalogEditorDialog {
+    width: 100%;
+    padding: 14px;
+  }
+
+  .catalogEditorPreview {
+    grid-template-columns: 1fr;
+  }
+
+  .catalogEditorApc.unavailable {
+    width: 100%;
+  }
+
+  .catalogColorGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .catalogEditorDialog > footer {
+    display: grid;
+  }
+
+  .catalogEditorDialog > footer > div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 }
