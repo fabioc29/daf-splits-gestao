@@ -4843,3 +4843,2663 @@ input[type="number"]::-webkit-outer-spin-button {
     gap: 6px;
   }
 }
+
+
+/* =========================================================
+   DAF UI 2026 — visual system, light/dark and compact dashboards
+   ========================================================= */
+:root,
+:root[data-theme="dark"] {
+  --bg: #090d14;
+  --panel: #111722;
+  --panel-2: #161e2b;
+  --panel-3: #1b2534;
+  --line: #263142;
+  --line-strong: #354256;
+  --text: #f4f7fb;
+  --muted: #8c98aa;
+  --gold: #7186ff;
+  --accent: #7186ff;
+  --accent-strong: #5b6ef5;
+  --accent-soft: #7186ff1f;
+  --success: #32bf8a;
+  --success-soft: #32bf8a18;
+  --warning: #f2b84b;
+  --danger: #ef6670;
+  --danger-soft: #ef667018;
+  --cyan: #54c7d4;
+  --sidebar: #070a10;
+  --input: #0d131d;
+  --hover: #182232;
+  --shadow: 0 12px 34px rgb(0 0 0 / 24%);
+  --soft-shadow: 0 5px 18px rgb(0 0 0 / 13%);
+}
+:root[data-theme="light"] {
+  --bg: #f2f5f9;
+  --panel: #ffffff;
+  --panel-2: #f7f9fc;
+  --panel-3: #eef2f7;
+  --line: #dde3ec;
+  --line-strong: #cbd4e1;
+  --text: #172033;
+  --muted: #6e7a8c;
+  --gold: #5b6ef5;
+  --accent: #5b6ef5;
+  --accent-strong: #4859db;
+  --accent-soft: #5b6ef515;
+  --success: #168a65;
+  --success-soft: #168a6512;
+  --warning: #b87c18;
+  --danger: #cf4654;
+  --danger-soft: #cf465412;
+  --cyan: #168da0;
+  --sidebar: #ffffff;
+  --input: #f8fafc;
+  --hover: #edf1f7;
+  --shadow: 0 12px 34px rgb(37 54 82 / 10%);
+  --soft-shadow: 0 5px 18px rgb(37 54 82 / 8%);
+}
+html {
+  background: var(--bg);
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  transition: background-color .2s ease, color .2s ease;
+}
+.shell {
+  background: var(--bg);
+}
+aside {
+  width: 236px;
+  padding: 20px 14px;
+  background: var(--sidebar);
+  color: var(--text);
+  border-right: 1px solid var(--line);
+  box-shadow: 8px 0 30px rgb(0 0 0 / 7%);
+}
+aside > img {
+  width: 156px;
+  height: 64px;
+  margin: 0 10px 18px;
+  border: 1px solid var(--line);
+  background: #050505;
+}
+aside nav {
+  gap: 4px;
+}
+aside nav button {
+  min-height: 42px;
+  border-radius: 10px;
+  color: var(--muted);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 750;
+}
+aside nav button.on,
+aside nav button:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 3px 0 var(--accent);
+}
+aside nav button.on svg {
+  color: var(--accent);
+}
+aside > footer {
+  border-color: var(--line);
+  color: var(--text);
+}
+aside > footer small {
+  color: var(--muted);
+}
+main {
+  margin-left: 236px;
+  width: calc(100% - 236px);
+}
+main > header {
+  height: 80px;
+  padding: 14px 24px;
+  background: rgb(17 23 34 / 88%);
+  border-color: var(--line);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 22px rgb(0 0 0 / 8%);
+}
+:root[data-theme="light"] main > header {
+  background: rgb(255 255 255 / 90%);
+}
+main > header h1 {
+  font-size: 23px;
+  letter-spacing: -.03em;
+}
+main > header small,
+.eyebrow {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.content {
+  padding: 20px 24px 28px;
+  gap: 14px;
+}
+.panel,
+.cards > div,
+.products > div,
+.clients > div {
+  background: var(--panel);
+  border-color: var(--line);
+  border-radius: 16px;
+  box-shadow: var(--soft-shadow);
+}
+.panel {
+  padding: 17px;
+}
+.panel h2 {
+  font-size: 16px;
+  letter-spacing: -.02em;
+}
+.panel > p,
+.panelHeading p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.panelHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.panelHeading h2 {
+  margin: 2px 0 0;
+}
+.panelHeading p {
+  margin: 5px 0 0;
+}
+.panelHeading > svg {
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+.primary {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 6px 16px rgb(91 110 245 / 18%);
+}
+.primary:hover {
+  background: var(--accent-strong);
+}
+.secondary,
+.iconButton,
+.filterButton,
+.overdueFilter {
+  border-color: var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+}
+.secondary:hover,
+.iconButton:hover,
+.filterButton:hover,
+.overdueFilter:hover {
+  border-color: var(--line-strong);
+  background: var(--hover);
+}
+.themeToggle {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+}
+.themeToggle svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+.themeToggle span {
+  font-size: 11px;
+}
+.monthPicker,
+.salesSearch input,
+.salesFilters,
+.salesFilters input,
+.salesFilters select,
+.clientSearch input,
+.purchaseSearch input,
+.stockSearch input,
+.shippingSearch input,
+.segmented,
+.receivableTabs,
+.shipping details,
+.prepare > div,
+.forecastList > div {
+  background: var(--panel-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+.monthPicker button,
+.filterButton,
+.salesFilters > button,
+.overdueFilter {
+  color: var(--text);
+}
+.monthPicker {
+  border-radius: 12px;
+}
+.segmented button {
+  background: transparent;
+  color: var(--muted);
+  border-color: transparent;
+}
+.segmented button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+input,
+select,
+textarea {
+  accent-color: var(--accent);
+}
+.overlay {
+  background: rgb(3 7 14 / 72%);
+  backdrop-filter: blur(7px);
+}
+.overlay > form,
+.overlay > .systemDialog,
+.overlay > .history,
+.overlay .systemDialog,
+.costEditor {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--line);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
+}
+.overlay input,
+.overlay select,
+.overlay textarea,
+.brandManagerSearch input,
+.brandCreateDialog > label > input,
+.brandManagerRow input,
+.brandProductsList > div,
+.brandProductsSummary > div,
+.simplifiedPrepareList > div,
+.quickQuoteCard {
+  background: var(--input);
+  color: var(--text);
+  border-color: var(--line);
+}
+.brandProductsList b,
+.brandProductsSummary b,
+.costEditorSection h3,
+.costEditorSummary b,
+.saleSupplies > strong,
+.installmentSummary b {
+  color: var(--text);
+}
+.brandProductsList small,
+.brandProductsSummary span,
+.saleSupplyList > div > small {
+  color: var(--muted);
+}
+table {
+  margin-top: 10px;
+}
+th,
+td {
+  border-color: var(--line);
+}
+th {
+  color: var(--muted);
+  letter-spacing: .04em;
+}
+tbody tr {
+  transition: background-color .14s ease;
+}
+tbody tr:hover {
+  background: var(--accent-soft);
+}
+
+/* Executive toolbar */
+.workspaceToolbar {
+  min-height: 66px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background:
+    linear-gradient(120deg, var(--panel), var(--panel-2));
+  box-shadow: var(--soft-shadow);
+  padding: 13px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.workspaceToolbar h2 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  text-transform: capitalize;
+}
+.workspaceToolbar p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.workspaceMonthPicker {
+  width: min(330px, 100%);
+  background: var(--input);
+  text-transform: capitalize;
+}
+
+/* KPI cards */
+.executiveMetricGrid,
+.financeMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 11px;
+}
+.metricCard {
+  min-width: 0;
+  min-height: 122px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--soft-shadow);
+}
+.metricCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--metric-accent, var(--accent));
+}
+.metricCard::after {
+  content: "";
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  right: -42px;
+  top: -48px;
+  border-radius: 50%;
+  background: var(--metric-soft, var(--accent-soft));
+}
+.metricCard > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.metricCard > b {
+  margin-top: 7px;
+  font-size: clamp(17px, 1.35vw, 23px);
+  line-height: 1.05;
+  letter-spacing: -.035em;
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+}
+.metricCard > small:not(.metricDelta) {
+  color: var(--muted);
+  font-size: 9px;
+  margin-top: 5px;
+  line-height: 1.3;
+}
+.metricBlue { --metric-accent: #5b8def; --metric-soft: #5b8def18; }
+.metricViolet { --metric-accent: #9b7cff; --metric-soft: #9b7cff18; }
+.metricGreen { --metric-accent: #32bf8a; --metric-soft: #32bf8a18; }
+.metricCyan { --metric-accent: #54c7d4; --metric-soft: #54c7d418; }
+.metricOrange { --metric-accent: #f2b84b; --metric-soft: #f2b84b18; }
+.metricPink { --metric-accent: #e878a7; --metric-soft: #e878a718; }
+.metricRed { --metric-accent: #ef6670; --metric-soft: #ef667018; }
+.metricDelta {
+  margin-top: auto;
+  padding-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8.5px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.metricDelta svg {
+  width: 12px;
+  height: 12px;
+}
+.metricDelta span {
+  color: var(--muted);
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.metricDelta.positive { color: var(--success); }
+.metricDelta.negative { color: var(--danger); }
+.metricDelta.neutral { color: var(--muted); }
+
+/* Dashboard compact layout */
+.dashboardMonthToolbar {
+  margin-bottom: 0;
+}
+.grid {
+  grid-template-columns: minmax(0, 1.65fr) minmax(290px, .72fr);
+  gap: 14px;
+}
+.dashboardMain,
+.sidecharts {
+  gap: 14px;
+}
+.dashboardMain .panel,
+.sidecharts .panel {
+  min-width: 0;
+}
+.chart {
+  min-height: 0;
+}
+.chart > h2 {
+  margin-bottom: 0;
+}
+.chart > p {
+  margin: 5px 0 0;
+}
+.stats {
+  margin: 10px 0 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  padding: 6px 9px;
+  color: var(--muted);
+}
+.stats b {
+  color: var(--text);
+}
+.bars {
+  height: 220px;
+  gap: 4px;
+  padding-top: 39px;
+  border-color: var(--line);
+}
+.bars button > span {
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: var(--soft-shadow);
+}
+.bars button > span small {
+  color: inherit;
+  opacity: .7;
+}
+.bars i {
+  max-width: 18px;
+  background: linear-gradient(180deg, #7d8fff, #5b6ef5);
+}
+.bars i.future {
+  background: var(--line-strong);
+}
+.bars.hasSelection button:not(.selected) i {
+  opacity: .22;
+}
+.bars button.selected i {
+  transform: scaleX(1.45);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 18px rgb(91 110 245 / 26%);
+}
+.sidecharts .panel {
+  padding: 14px;
+}
+.sideInteractiveDonut svg {
+  width: 112px !important;
+  height: 112px !important;
+}
+.sidecharts .interactiveDonutInfo {
+  margin-top: 6px;
+}
+.orderOriginLegend,
+.categoryPercentLegend {
+  gap: 6px;
+}
+.orderOriginLegend p,
+.categoryPercentLegend > div {
+  padding: 7px 9px 7px 25px;
+  border-radius: 9px;
+  background: var(--panel-2) !important;
+  border-color: var(--line) !important;
+}
+.categoryPercentLegend > div {
+  padding-left: 9px;
+}
+.orderOriginLegend p > b,
+.categoryPercentLegend .categorySoldMl {
+  font-size: 10px;
+}
+.chartExplanationTop,
+.sidecharts .panel > p {
+  font-size: 10px !important;
+}
+.interactiveDonutHole {
+  fill: var(--panel);
+}
+.interactiveDonutEmpty {
+  stroke: var(--line-strong);
+}
+.interactiveDonutInfo {
+  background: var(--panel-2);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+/* Payment chart */
+.modernPaymentChart {
+  min-width: 0;
+}
+.modernPaymentChart.compact {
+  display: grid;
+  grid-template-columns: minmax(150px, .78fr) minmax(190px, 1.22fr);
+  align-items: center;
+  gap: 10px;
+  padding: 15px;
+}
+.modernPaymentChart.compact .paymentInteractiveDonut svg,
+.dashboardMain .paymentInteractiveDonut svg,
+.financePrimaryGrid .paymentInteractiveDonut svg {
+  width: 145px !important;
+  height: 145px !important;
+}
+.modernPaymentChart.compact .paymentInteractiveDonut {
+  margin: 8px auto 0;
+}
+.paymentLegend {
+  gap: 6px;
+}
+.paymentLegend > div {
+  min-height: 42px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2) !important;
+}
+.paymentLegend > div:hover {
+  background: var(--panel-2) !important;
+}
+.paymentLegend b {
+  font-size: 10px;
+}
+.paymentLegend span {
+  font-size: 10px;
+}
+.paymentLegend small {
+  font-size: 8px;
+}
+
+/* Finance compact workspace */
+.financeWorkspace {
+  display: grid;
+  gap: 13px;
+}
+.financePrimaryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr);
+  gap: 13px;
+}
+.financeSecondaryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr);
+  gap: 13px;
+}
+.financePrimaryGrid > *,
+.financeSecondaryGrid > * {
+  min-width: 0;
+}
+.financeStatement {
+  display: grid;
+  gap: 11px;
+}
+.statementRows {
+  display: grid;
+  gap: 3px;
+}
+.statementRows > div {
+  min-height: 34px;
+  padding: 7px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.statementRows > div:nth-child(odd) {
+  background: var(--panel-2);
+}
+.statementRows b {
+  color: var(--text);
+  font-size: 11px;
+}
+.statementRows .statementTotal {
+  margin-top: 5px;
+  background: var(--success-soft);
+  color: var(--text);
+  border: 1px solid rgb(50 191 138 / 20%);
+}
+.statementRows .statementTotal b {
+  color: var(--success);
+  font-size: 14px;
+}
+.financeHealthGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.financeHealthGrid > div {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+}
+.financeHealthGrid span,
+.financeHealthGrid b {
+  display: block;
+}
+.financeHealthGrid span {
+  color: var(--muted);
+  font-size: 8px;
+}
+.financeHealthGrid b {
+  margin-top: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.financeSecondaryGrid .inventoryProjection {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+.financeSecondaryGrid .inventoryProjection > div {
+  padding: 8px 0;
+}
+.financeSecondaryGrid .inventoryProjection > div + div {
+  border-left: 0;
+  border-top: 1px solid var(--line);
+}
+.financeSecondaryGrid .inventoryProjection b {
+  font-size: 17px;
+  margin: 3px 0;
+}
+.financeSecondaryGrid .inventoryProjection span,
+.financeSecondaryGrid .inventoryProjection small {
+  font-size: 9px;
+}
+.financeSecondaryGrid .marketplaceForecast {
+  gap: 10px;
+}
+.financeSecondaryGrid .forecastHead p {
+  margin: 4px 0 0;
+  font-size: 9px;
+}
+.financeSecondaryGrid .forecastList {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  max-height: 150px;
+  overflow: auto;
+}
+.financeSecondaryGrid .forecastList > div {
+  padding: 9px;
+  background: var(--panel-2);
+}
+.financeSecondaryGrid .forecastList b {
+  font-size: 14px;
+  margin: 3px 0;
+}
+.financeSecondaryGrid .forecastList span,
+.financeSecondaryGrid .forecastList small {
+  font-size: 8px;
+}
+.profitControl {
+  gap: 11px;
+}
+.profitControl > .cards {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.profitControl > .cards > div {
+  background: var(--panel-2);
+  border-color: var(--line);
+  padding: 11px;
+}
+.profitControl > .cards span {
+  font-size: 9px;
+}
+.profitControl > .cards b {
+  margin-top: 4px;
+  font-size: 16px;
+}
+.marginTrack {
+  height: 7px;
+  background: var(--line);
+}
+.marginTrack i {
+  background: linear-gradient(90deg, var(--accent), var(--success));
+}
+
+/* Whole-system surface refresh */
+.products,
+.clients {
+  gap: 11px;
+}
+.products > div,
+.clients > div {
+  padding: 15px;
+}
+.products > div > i,
+.clients > div > i {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.prepare,
+.shipping {
+  gap: 9px;
+}
+.prepare > div,
+.shipping details {
+  border-radius: 12px;
+  padding: 12px;
+}
+.apcButton {
+  background: var(--input);
+  color: var(--muted);
+  border-color: var(--line);
+}
+.apcButton.active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.installmentSummary,
+.costEditorSummary span {
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.costEditorSection,
+.shippingCostBox {
+  border-color: var(--line);
+}
+.clientHistoryStats > div,
+.supplierHistoryStats > div {
+  background: var(--panel-2);
+  border-color: var(--line);
+}
+.sync {
+  color: var(--muted);
+}
+.navAlert {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+/* Light-mode cleanup for legacy hard-coded surfaces */
+:root[data-theme="light"] .marketplaceButton,
+:root[data-theme="light"] .segmented button,
+:root[data-theme="light"] .preparationStatus select,
+:root[data-theme="light"] .shipping details,
+:root[data-theme="light"] .prepare > div,
+:root[data-theme="light"] .forecastList > div,
+:root[data-theme="light"] .orderOriginLegend p,
+:root[data-theme="light"] .categoryPercentLegend > div,
+:root[data-theme="light"] .paymentLegend > div,
+:root[data-theme="light"] .profitControl > .cards > div {
+  background: var(--panel-2);
+  color: var(--text);
+}
+:root[data-theme="light"] .preparationStatus select {
+  border-color: var(--line-strong);
+}
+:root[data-theme="light"] .primary {
+  color: #fff;
+}
+:root[data-theme="light"] .interactiveDonutHole {
+  fill: var(--panel);
+}
+
+/* Responsive */
+@media (max-width: 1500px) {
+  .executiveMetricGrid,
+  .financeMetricGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1180px) {
+  .grid,
+  .financePrimaryGrid,
+  .financeSecondaryGrid {
+    grid-template-columns: 1fr;
+  }
+  .sidecharts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboardMain .financeChart {
+    grid-template-columns: minmax(150px, .75fr) minmax(220px, 1.25fr);
+  }
+}
+@media (max-width: 900px) {
+  .executiveMetricGrid,
+  .financeMetricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspaceToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .workspaceMonthPicker {
+    width: 100%;
+  }
+  .sidecharts {
+    grid-template-columns: 1fr;
+  }
+  .headerActions .themeToggle span {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  aside {
+    width: auto;
+  }
+  main {
+    margin-left: 0;
+    width: 100%;
+  }
+  main > header {
+    height: 72px;
+  }
+  .content {
+    padding: 14px;
+  }
+  .executiveMetricGrid,
+  .financeMetricGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .metricCard {
+    min-height: 112px;
+    padding: 12px;
+  }
+  .metricCard > b {
+    font-size: 18px;
+  }
+  .modernPaymentChart.compact,
+  .dashboardMain .financeChart {
+    grid-template-columns: 1fr;
+  }
+  .financeHealthGrid {
+    grid-template-columns: 1fr;
+  }
+  .financeSecondaryGrid .forecastList {
+    grid-template-columns: 1fr;
+    max-height: none;
+  }
+}
+@media (max-width: 470px) {
+  .executiveMetricGrid,
+  .financeMetricGrid {
+    grid-template-columns: 1fr;
+  }
+  .themeToggle {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+  .workspaceToolbar {
+    padding: 12px;
+  }
+}
+
+/* Preserve clean print output */
+@media print {
+  :root,
+  :root[data-theme="dark"],
+  :root[data-theme="light"] {
+    --bg: #fff;
+    --panel: #fff;
+    --panel-2: #fff;
+    --line: #d8dde5;
+    --text: #111827;
+    --muted: #526071;
+  }
+}
+
+
+/* =========================================================
+   DAF — período personalizado, origem de leads e saúde
+   ========================================================= */
+
+/* Sidebar: mais respiro e alinhamento consistente */
+aside nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 10px;
+}
+aside nav button {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 13px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  line-height: 1.2;
+  text-align: left;
+}
+aside nav button > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+aside nav button .navAlertGroup {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+/* Seletor de período */
+.periodSelectorWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.periodSelectorWrap .workspaceMonthPicker {
+  flex: 1 1 270px;
+}
+.calendarFilterButton {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: .18s ease;
+}
+.calendarFilterButton:hover,
+.calendarFilterButton.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.calendarFilterButton svg {
+  width: 18px;
+  height: 18px;
+}
+.dateRangePopover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 9px);
+  right: 0;
+  width: min(340px, calc(100vw - 40px));
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 22px 56px rgb(0 0 0 / 24%);
+  display: grid;
+  gap: 10px;
+}
+.dateRangePopover > strong {
+  font-size: 12px;
+}
+.dateRangePopover label {
+  display: grid;
+  gap: 5px;
+}
+.dateRangePopover label span,
+.dateRangePopover > small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.dateRangePopover input {
+  min-height: 40px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--input);
+  color: var(--text);
+  padding: 0 10px;
+}
+.dateRangeActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 2px;
+}
+.dateRangeActions button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+}
+.dateRangeActions .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.dateRangeActions button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* Nova composição da Visão Geral */
+.dashboardTopGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(360px, .82fr);
+  gap: 14px;
+  align-items: stretch;
+}
+.dashboardTopGrid > *,
+.dashboardLowerGrid > * {
+  min-width: 0;
+}
+.dashboardRevenueChart {
+  min-height: 100%;
+}
+.dashboardRevenueChart .bars {
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: thin;
+}
+.dashboardRevenueChart .bars > button {
+  min-width: 12px;
+}
+.dashboardLowerGrid {
+  display: grid;
+  grid-template-columns:
+    minmax(220px, .88fr)
+    minmax(245px, 1.06fr)
+    minmax(220px, .92fr)
+    minmax(240px, 1.05fr);
+  gap: 12px;
+  align-items: stretch;
+}
+.dashboardLowerGrid .panel {
+  padding: 13px;
+  height: 100%;
+}
+.dashboardLowerGrid .panel > h2,
+.dashboardLowerGrid .leadRankingHead h2 {
+  font-size: 14px;
+}
+.dashboardLowerGrid .panel > p,
+.dashboardLowerGrid .leadRankingHead p {
+  font-size: 9px;
+  line-height: 1.35;
+}
+.dashboardLowerGrid .sideInteractiveDonut svg,
+.dashboardLowerGrid .paymentInteractiveDonut svg {
+  width: 106px !important;
+  height: 106px !important;
+}
+.dashboardLowerGrid .interactiveDonut {
+  margin-top: 5px;
+}
+.dashboardLowerGrid .interactiveDonutInfo {
+  min-height: 28px;
+  padding: 5px 7px;
+}
+.dashboardLowerGrid .orderOriginLegend,
+.dashboardLowerGrid .categoryPercentLegend,
+.dashboardLowerGrid .paymentLegend {
+  gap: 5px;
+}
+.dashboardLowerGrid .orderOriginLegend p,
+.dashboardLowerGrid .categoryPercentLegend > div,
+.dashboardLowerGrid .paymentLegend > div {
+  min-height: 34px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.dashboardLowerGrid .modernPaymentChart.compact {
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 4px;
+  padding: 13px;
+}
+.dashboardLowerGrid .modernPaymentChart.compact .paymentInteractiveDonut {
+  margin-top: 5px;
+}
+.dashboardLowerGrid .paymentLegend > div {
+  min-height: 34px;
+}
+.dashboardLowerGrid .paymentLegend b,
+.dashboardLowerGrid .paymentLegend span,
+.dashboardLowerGrid .orderOriginLegend p > b,
+.dashboardLowerGrid .categoryPercentLegend .categorySoldMl {
+  font-size: 9px;
+}
+.dashboardLowerGrid .paymentLegend small,
+.dashboardLowerGrid .orderOriginLegend small,
+.dashboardLowerGrid .categoryPercentLegend small {
+  font-size: 7.5px;
+}
+
+/* Velocímetro de saúde */
+.companyHealthPanel {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 9px;
+  overflow: hidden;
+}
+.gaugeWrap {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+.gaugeDial {
+  width: min(300px, 96%);
+  aspect-ratio: 2 / 1.08;
+  position: relative;
+  overflow: hidden;
+}
+.gaugeDial::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px 999px 0 0;
+  background: conic-gradient(
+    from 270deg at 50% 100%,
+    #df4a56 0deg 60deg,
+    #e2ad35 60deg 120deg,
+    #2fa974 120deg 180deg,
+    transparent 180deg 360deg
+  );
+}
+.gaugeDial::after {
+  content: "";
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  bottom: 0;
+  height: 70%;
+  border-radius: 999px 999px 0 0;
+  background: var(--panel);
+}
+.gaugeNeedle {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 2px;
+  width: 3px;
+  height: 72%;
+  border-radius: 999px;
+  background: var(--text);
+  transform-origin: 50% 100%;
+  transition: transform .5s ease;
+  box-shadow: 0 0 8px rgb(0 0 0 / 20%);
+}
+.gaugeNeedle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 15px;
+  height: 15px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: var(--text);
+  border: 4px solid var(--panel);
+}
+.gaugeCenter {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 4px;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  line-height: 1;
+}
+.gaugeCenter b {
+  font-size: 26px;
+  letter-spacing: -.05em;
+}
+.gaugeCenter span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.gaugeDial > small {
+  position: absolute;
+  z-index: 4;
+  bottom: 8px;
+  font-size: 7px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.gaugeLeft { left: 2%; }
+.gaugeMiddle { left: 50%; transform: translateX(-50%); }
+.gaugeRight { right: 2%; }
+.healthBreakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  align-content: end;
+}
+.healthBreakdown > div {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.healthBreakdown span,
+.healthBreakdown b {
+  display: block;
+}
+.healthBreakdown span {
+  color: var(--muted);
+  font-size: 7.5px;
+}
+.healthBreakdown b {
+  margin-top: 3px;
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.healthBreakdown .healthResult {
+  grid-column: span 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  background: var(--accent-soft);
+}
+.healthBreakdown .healthResult b {
+  margin-top: 0;
+}
+.healthBreakdown .healthResult.positive b { color: var(--success); }
+.healthBreakdown .healthResult.negative b { color: var(--danger); }
+
+/* Ranking mensal de leads */
+.leadRankingPanel {
+  display: flex;
+  flex-direction: column;
+}
+.leadRankingHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.leadRankingHead h2 {
+  margin: 0;
+}
+.leadRankingHead p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.leadRankingHead button {
+  min-height: 30px;
+  max-width: 116px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 7.5px;
+  line-height: 1.15;
+  font-weight: 900;
+  cursor: pointer;
+}
+.leadRankingHead button.active,
+.leadRankingHead button:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.leadRankingList {
+  display: grid;
+  gap: 7px;
+  margin-top: 13px;
+}
+.leadRankingList > div {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+.leadRankPosition {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+}
+.leadRankingList > div:first-child .leadRankPosition {
+  background: #e0b43c20;
+  border-color: #e0b43c55;
+  color: #d3a11f;
+}
+.leadRankContent {
+  min-width: 0;
+}
+.leadRankContent > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 7px;
+  font-size: 9px;
+}
+.leadRankContent > span b {
+  color: var(--muted);
+  font-size: 8px;
+  white-space: nowrap;
+}
+.leadRankContent > i {
+  height: 5px;
+  margin-top: 5px;
+  display: block;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--line);
+}
+.leadRankContent > i > em {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--success));
+  transition: width .25s ease;
+}
+.leadRankingReset {
+  margin-top: auto;
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 7.5px;
+}
+
+/* Origem no cadastro/listagem de clientes */
+.leadSourceBadge {
+  width: fit-content;
+  margin-top: 3px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 900;
+}
+.leadSourceBadge.filled {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+}
+.leadSourceBadge.empty {
+  color: var(--muted);
+  background: var(--panel-2);
+}
+.fieldHint {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+/* Forecast de marketplace removido: projeção de estoque ocupa a largura */
+.financeSecondaryGrid.single {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 1380px) {
+  .dashboardTopGrid {
+    grid-template-columns: minmax(0, 1.45fr) minmax(330px, .8fr);
+  }
+  .dashboardLowerGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 980px) {
+  .dashboardTopGrid {
+    grid-template-columns: 1fr;
+  }
+  .companyHealthPanel {
+    min-height: 440px;
+  }
+}
+@media (max-width: 720px) {
+  aside nav {
+    gap: 6px;
+  }
+  .periodSelectorWrap {
+    width: 100%;
+  }
+  .periodSelectorWrap .workspaceMonthPicker {
+    min-width: 0;
+    width: auto;
+  }
+  .dateRangePopover {
+    right: 0;
+  }
+  .dashboardLowerGrid {
+    grid-template-columns: 1fr;
+  }
+  .healthBreakdown {
+    grid-template-columns: 1fr;
+  }
+  .healthBreakdown .healthResult {
+    grid-column: auto;
+  }
+  .dashboardRevenueChart .bars > button {
+    min-width: 18px;
+  }
+}
+@media (max-width: 470px) {
+  .periodSelectorWrap {
+    align-items: stretch;
+  }
+  .calendarFilterButton {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+  .dateRangePopover {
+    width: calc(100vw - 28px);
+    right: -1px;
+  }
+}
+
+
+/* =========================================================
+   DAF — refinamento de saúde, rankings e históricos
+   ========================================================= */
+
+/* Logo livre no menu lateral */
+aside > img.sidebarLogo {
+  width: 176px;
+  height: auto;
+  max-height: 74px;
+  object-fit: contain;
+  object-position: center;
+  margin: 2px auto 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+aside nav {
+  width: 100%;
+}
+
+/* O gráfico de faturamento deve caber inteiro até em meses de 31 dias */
+.dashboardRevenueChart .bars {
+  width: 100%;
+  overflow: visible;
+  scrollbar-width: none;
+  display: grid;
+  align-items: end;
+  gap: clamp(1px, .23vw, 4px);
+}
+.dashboardRevenueChart .bars::-webkit-scrollbar {
+  display: none;
+}
+.dashboardRevenueChart .bars > button {
+  min-width: 0;
+  width: 100%;
+}
+.dashboardRevenueChart .bars i {
+  width: min(70%, 16px);
+  min-width: 3px;
+}
+.dashboardRevenueChart .bars small {
+  font-size: clamp(6px, .48vw, 9px);
+}
+
+/* Velocímetro — versão SVG alinhada e sem cards auxiliares */
+.companyHealthPanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.healthPanelHeading {
+  flex: 0 0 auto;
+}
+.healthGaugeOnly {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 250px;
+  display: grid;
+  place-items: center;
+  padding: 6px 0 0;
+}
+.healthGaugeSvg {
+  width: min(100%, 390px);
+  height: auto;
+  overflow: visible;
+}
+.healthGaugeTrack,
+.healthGaugeArc {
+  fill: none;
+  stroke-width: 28;
+  stroke-linecap: butt;
+}
+.healthGaugeTrack {
+  stroke: var(--line);
+  opacity: .55;
+}
+.healthGaugeArc.critical {
+  stroke: #e34b57;
+}
+.healthGaugeArc.moderate {
+  stroke: #e7ad2f;
+}
+.healthGaugeArc.healthy {
+  stroke: #2fac7a;
+}
+.healthGaugeNeedle {
+  transform-origin: 160px 160px;
+  transition: transform .5s cubic-bezier(.2,.8,.2,1);
+}
+.healthGaugeNeedle line {
+  stroke: var(--text);
+  stroke-width: 4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 18%));
+}
+.healthGaugeHub {
+  fill: var(--text);
+  stroke: var(--panel);
+  stroke-width: 4;
+}
+.healthGaugeLabel {
+  fill: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .045em;
+}
+.healthGaugeLabel.left {
+  text-anchor: start;
+}
+.healthGaugeLabel.middle {
+  text-anchor: middle;
+}
+.healthGaugeLabel.right {
+  text-anchor: end;
+}
+.healthGaugeScore {
+  position: absolute;
+  left: 50%;
+  top: 57%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  line-height: 1;
+  pointer-events: none;
+}
+.healthGaugeScore b {
+  font-size: clamp(32px, 3vw, 48px);
+  letter-spacing: -.06em;
+}
+.healthGaugeScore span {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+/* antiga listagem detalhada fica fora do velocímetro */
+.companyHealthPanel .healthBreakdown,
+.companyHealthPanel .gaugeWrap,
+.companyHealthPanel .gaugeDial {
+  display: none !important;
+}
+
+/* Ranking dos grupos */
+.groupRankingMetric {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+}
+.groupRankingMetric > span {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+.groupRankingMetric select {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0 8px;
+  font-size: 9px;
+  font-weight: 800;
+}
+.leadRankContent > small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 7px;
+  line-height: 1.25;
+}
+
+/* Clientes — botão e ranking */
+.clientsTopRow {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+}
+.clientsTopRow > .cards {
+  flex: 1 1 auto;
+}
+.clientRankingButton {
+  flex: 0 0 auto;
+  min-width: 190px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-weight: 900;
+  box-shadow: var(--soft-shadow);
+}
+.clientRankingButton svg {
+  width: 18px;
+  color: var(--accent);
+}
+.clientRankingDialog {
+  width: min(760px, calc(100vw - 28px));
+  max-height: calc(100vh - 36px);
+}
+.clientRankingDialog header {
+  align-items: flex-start;
+}
+.clientRankingDialog header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.clientRankingList {
+  display: grid;
+  gap: 8px;
+  max-height: min(66vh, 620px);
+  overflow: auto;
+  padding-right: 3px;
+}
+.clientRankingList > div {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+.clientRankingPosition {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+}
+.clientRankingList > div:first-child .clientRankingPosition {
+  border-color: #d7a62570;
+  background: #d7a62516;
+  color: #d7a625;
+}
+.clientRankingList strong,
+.clientRankingList small {
+  display: block;
+}
+.clientRankingList strong {
+  color: var(--text);
+  font-size: 12px;
+}
+.clientRankingList small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.clientRankingList > div > b {
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Histórico de fornecedor e cliente: contraste correto no tema ativo */
+.supplierHistoryImproved,
+.clientHistory {
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line);
+}
+.supplierHistoryHeader,
+.clientHistoryHeader {
+  border-color: var(--line) !important;
+}
+.supplierHistoryHeader > div > small,
+.clientHistoryHeader > div > small {
+  color: var(--accent);
+}
+.supplierHistoryTitle h2,
+.clientHistoryTitle h2 {
+  color: var(--text) !important;
+}
+.supplierHistoryTitle span,
+.clientHistoryTitle span,
+.clientHistoryContact {
+  color: var(--muted) !important;
+}
+.supplierHistoryStats > div,
+.clientHistoryStats > div {
+  border-color: var(--line) !important;
+  background: var(--panel-2) !important;
+}
+.supplierHistoryStats span,
+.clientHistoryStats span {
+  color: var(--muted) !important;
+}
+.supplierHistoryStats b,
+.clientHistoryStats b {
+  color: var(--text) !important;
+}
+.supplierHistoryContent,
+.clientHistorySales {
+  border-color: var(--line) !important;
+  background: var(--panel-2) !important;
+}
+.supplierHistoryContentHead h3,
+.clientHistorySalesHead h3 {
+  color: var(--text) !important;
+}
+.supplierHistoryContentHead p,
+.clientHistorySalesHead p {
+  color: var(--muted) !important;
+}
+.supplierHistorySearch input,
+.clientHistorySearch input,
+.supplierHistoryFilters input,
+.clientHistoryFilters input {
+  border-color: var(--line) !important;
+  background: var(--input) !important;
+  color: var(--text) !important;
+}
+.supplierHistorySearch input::placeholder,
+.clientHistorySearch input::placeholder {
+  color: var(--muted);
+}
+.supplierHistoryImproved .supplierHistoryTable th,
+.clientHistoryTable th {
+  color: var(--muted) !important;
+  border-color: var(--line) !important;
+}
+.supplierHistoryImproved .supplierHistoryTable td,
+.supplierHistoryImproved .supplierHistoryTable td b,
+.clientHistoryTable td {
+  color: var(--text) !important;
+  border-color: var(--line) !important;
+}
+.clientHistoryTable td small {
+  color: var(--muted) !important;
+}
+
+/* seletor mensal sempre visível nos históricos */
+.supplierHistoryToolbar,
+.clientHistoryToolbar {
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, .78fr) auto;
+  gap: 9px;
+}
+.historyMonthPicker {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 34px minmax(100px, 1fr) 34px auto;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  overflow: hidden;
+}
+.historyMonthPicker > button {
+  align-self: stretch;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  place-items: center;
+}
+.historyMonthPicker > button svg {
+  width: 15px;
+}
+.historyMonthPicker > b {
+  min-width: 0;
+  color: var(--text);
+  text-align: center;
+  text-transform: capitalize;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.historyMonthPicker .historyAllButton {
+  padding: 0 9px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+}
+.historyFilterButton {
+  border-color: var(--line) !important;
+  background: var(--input) !important;
+  color: var(--text) !important;
+  white-space: nowrap;
+}
+.historyFilterButton.active {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+.supplierHistoryFilters.compact,
+.clientHistoryFilters.compact {
+  grid-template-columns: minmax(180px, 320px) auto;
+  justify-content: start;
+  background: var(--panel) !important;
+  border: 1px solid var(--line);
+}
+.supplierHistoryFilters.compact label span,
+.clientHistoryFilters.compact label span {
+  color: var(--muted) !important;
+}
+.supplierHistoryFilters.compact button,
+.clientHistoryFilters.compact button {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--input);
+  color: var(--text);
+  padding: 0 13px;
+  font-weight: 800;
+}
+
+/* Responsividade dos novos elementos */
+@media (max-width: 1180px) {
+  .supplierHistoryToolbar,
+  .clientHistoryToolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+  .supplierHistoryToolbar > .historyFilterButton,
+  .clientHistoryToolbar > .historyFilterButton {
+    grid-column: span 2;
+  }
+}
+@media (max-width: 780px) {
+  .clientsTopRow {
+    display: grid;
+  }
+  .clientRankingButton {
+    min-height: 48px;
+    width: 100%;
+  }
+  .supplierHistoryToolbar,
+  .clientHistoryToolbar {
+    grid-template-columns: 1fr;
+  }
+  .supplierHistoryToolbar > .historyFilterButton,
+  .clientHistoryToolbar > .historyFilterButton {
+    grid-column: auto;
+  }
+  .historyMonthPicker {
+    grid-template-columns: 38px minmax(100px, 1fr) 38px auto;
+  }
+  .clientRankingList > div {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+  .clientRankingList > div > b {
+    grid-column: 2;
+  }
+  .healthGaugeOnly {
+    min-height: 230px;
+  }
+}
+@media (max-width: 560px) {
+  .supplierHistoryFilters.compact,
+  .clientHistoryFilters.compact {
+    grid-template-columns: 1fr;
+  }
+  .historyMonthPicker {
+    grid-template-columns: 34px minmax(90px, 1fr) 34px;
+  }
+  .historyMonthPicker .historyAllButton {
+    grid-column: 1 / -1;
+    min-height: 30px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .healthGaugeOnly {
+    min-height: 210px;
+  }
+}
+
+
+/* =========================================================
+   DAF — alinhamento de gráficos + filtros e rankings
+   ========================================================= */
+
+/* Linha inferior da Visão Geral: quatro cards com a mesma proporção */
+.dashboardLowerGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+}
+.dashboardLowerGrid > .panel {
+  min-width: 0;
+  height: 100%;
+  min-height: 500px;
+  padding: 16px;
+  border-radius: 16px;
+}
+
+/* Os três gráficos de donut passam a seguir a mesma estrutura visual */
+.dashboardLowerGrid .orderOriginSummary,
+.dashboardLowerGrid .categories,
+.dashboardLowerGrid .modernPaymentChart.compact {
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+.dashboardLowerGrid .modernPaymentChart.compact > div:first-child {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+.dashboardLowerGrid .orderOriginSummary > h2,
+.dashboardLowerGrid .categories > h2,
+.dashboardLowerGrid .modernPaymentChart.compact > div:first-child > h2 {
+  min-height: 26px;
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  font-size: 15px;
+  line-height: 1.25;
+}
+.dashboardLowerGrid .orderOriginSummary > p,
+.dashboardLowerGrid .categories > p,
+.dashboardLowerGrid .modernPaymentChart.compact > div:first-child > p {
+  min-height: 38px;
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 10px !important;
+  line-height: 1.4;
+}
+.dashboardLowerGrid .orderOriginSummary .interactiveDonut,
+.dashboardLowerGrid .categories .interactiveDonut,
+.dashboardLowerGrid .modernPaymentChart.compact .interactiveDonut {
+  flex: 0 0 166px;
+  min-height: 166px;
+  height: 166px;
+  width: 100%;
+  margin: 4px 0 7px;
+  display: grid;
+  place-items: center;
+}
+.dashboardLowerGrid .orderOriginSummary .interactiveDonut svg,
+.dashboardLowerGrid .categories .interactiveDonut svg,
+.dashboardLowerGrid .modernPaymentChart.compact .interactiveDonut svg,
+.dashboardLowerGrid .sideInteractiveDonut svg,
+.dashboardLowerGrid .paymentInteractiveDonut svg {
+  width: 128px !important;
+  height: 128px !important;
+}
+.dashboardLowerGrid .orderOriginLegend,
+.dashboardLowerGrid .categoryPercentLegend,
+.dashboardLowerGrid .paymentLegend {
+  margin-top: 0;
+  display: grid;
+  gap: 7px;
+  align-content: start;
+}
+.dashboardLowerGrid .orderOriginLegend p,
+.dashboardLowerGrid .categoryPercentLegend > div,
+.dashboardLowerGrid .paymentLegend > div {
+  min-height: 48px;
+  margin: 0;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  box-sizing: border-box;
+}
+
+/* Ranking ocupa exatamente a mesma altura externa e respeita o mesmo cabeçalho */
+.dashboardLowerGrid .leadRankingPanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+}
+.dashboardLowerGrid .leadRankingHead {
+  min-height: 69px;
+  margin: 0;
+}
+.dashboardLowerGrid .leadRankingHead h2 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.25;
+}
+.dashboardLowerGrid .leadRankingHead p {
+  margin: 5px 0 0;
+  min-height: 28px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.dashboardLowerGrid .leadRankingList {
+  margin-top: 14px;
+  align-content: start;
+}
+.dashboardLowerGrid .leadRankingReset {
+  margin-top: auto;
+}
+
+/* Ranking de grupos: botões no lugar do select */
+.groupRankingMetric,
+.groupRankingMetric select {
+  display: none !important;
+}
+.groupRankingMetricButtons {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 7px;
+}
+.groupRankingMetricButtons button {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.groupRankingMetricButtons button:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+.groupRankingMetricButtons button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 5px 14px rgb(91 110 245 / 18%);
+}
+
+/* Clientes: pesquisa e filtro de grupo na mesma linha */
+.clientsToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  max-width: 760px;
+  margin-top: 16px;
+}
+.clientsToolbar .clientSearch {
+  max-width: none;
+  width: 100%;
+  margin-top: 0;
+  display: block;
+}
+.clientGroupFilter {
+  position: relative;
+}
+.clientGroupFilter > button {
+  min-height: 46px;
+  min-width: 160px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.clientGroupFilter > button svg {
+  width: 16px;
+  height: 16px;
+}
+.clientGroupFilter > button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.clientGroupFilterPopover {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 210px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 46px rgb(0 0 0 / 24%);
+  display: grid;
+  gap: 5px;
+}
+.clientGroupFilterPopover > strong {
+  padding: 4px 7px 6px;
+  color: var(--muted);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.clientGroupFilterPopover button {
+  min-height: 36px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-weight: 800;
+}
+.clientGroupFilterPopover button:hover,
+.clientGroupFilterPopover button.selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.clientGroupFilterPopover button.clear {
+  margin-top: 3px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 8px 8px;
+  color: var(--muted);
+}
+
+/* Fornecedores: ranking seguindo o mesmo padrão visual dos clientes */
+.suppliersTopRow {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+}
+.suppliersTopRow > .cards {
+  flex: 1 1 auto;
+}
+.supplierRankingButton {
+  flex: 0 0 auto;
+  min-width: 220px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-weight: 900;
+  box-shadow: var(--soft-shadow);
+}
+.supplierRankingButton svg {
+  width: 18px;
+  color: var(--accent);
+}
+.supplierRankingDialog {
+  width: min(760px, calc(100vw - 28px));
+  max-height: calc(100vh - 36px);
+}
+.supplierRankingDialog header {
+  align-items: flex-start;
+}
+.supplierRankingDialog header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.supplierRankingList {
+  display: grid;
+  gap: 8px;
+  max-height: min(66vh, 620px);
+  overflow: auto;
+  padding-right: 3px;
+}
+.supplierRankingList > div {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+.supplierRankingPosition {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+}
+.supplierRankingList > div:first-child .supplierRankingPosition {
+  border-color: #d7a62570;
+  background: #d7a62516;
+  color: #d7a625;
+}
+.supplierRankingList strong,
+.supplierRankingList small {
+  display: block;
+}
+.supplierRankingList strong {
+  color: var(--text);
+  font-size: 12px;
+}
+.supplierRankingList small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.supplierRankingList > div > b {
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1380px) {
+  .dashboardLowerGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboardLowerGrid > .panel,
+  .dashboardLowerGrid .leadRankingPanel {
+    min-height: 500px;
+  }
+}
+@media (max-width: 780px) {
+  .dashboardLowerGrid {
+    grid-template-columns: 1fr;
+  }
+  .dashboardLowerGrid > .panel,
+  .dashboardLowerGrid .leadRankingPanel {
+    min-height: auto;
+  }
+  .clientsToolbar {
+    grid-template-columns: 1fr;
+    max-width: none;
+  }
+  .clientGroupFilter > button {
+    width: 100%;
+  }
+  .clientGroupFilterPopover {
+    left: 0;
+    right: auto;
+    width: min(100%, 260px);
+  }
+  .suppliersTopRow {
+    display: grid;
+  }
+  .supplierRankingButton {
+    width: 100%;
+    min-height: 48px;
+  }
+  .supplierRankingList > div {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+  .supplierRankingList > div > b {
+    grid-column: 2;
+  }
+}
+@media (max-width: 460px) {
+  .groupRankingMetricButtons {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* =========================================================
+   DAF — proporção final da linha de gráficos
+   ========================================================= */
+
+.dashboardLowerGrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.dashboardLowerGrid .dashboardMetricPanel {
+  min-width: 0;
+  height: 570px;
+  min-height: 570px;
+  padding: 18px;
+  display: grid !important;
+  grid-template-rows: 78px 190px minmax(0, 1fr);
+  align-content: stretch;
+  overflow: hidden;
+}
+
+/* Cabeçalho idêntico nos três gráficos de donut */
+.dashboardLowerGrid .dashboardMiniHeader {
+  min-height: 78px;
+  height: 78px;
+  margin: 0;
+  display: block;
+  overflow: hidden;
+}
+.dashboardLowerGrid .dashboardMiniHeader h2 {
+  margin: 0;
+  min-height: 24px;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.2;
+}
+.dashboardLowerGrid .dashboardMiniHeader p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+/* Todos os donuts ocupam exatamente o mesmo espaço e diâmetro */
+.dashboardLowerGrid .dashboardMiniVisual {
+  width: 100%;
+  height: 190px;
+  min-height: 190px;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+}
+.dashboardLowerGrid .dashboardMiniVisual .interactiveSvgDonut,
+.dashboardLowerGrid .dashboardMiniVisual .sideInteractiveDonut,
+.dashboardLowerGrid .dashboardMiniVisual .paymentInteractiveDonut {
+  width: 164px !important;
+  height: 164px !important;
+  min-width: 164px !important;
+  min-height: 164px !important;
+  margin: 0 !important;
+  display: grid !important;
+  place-items: center;
+  align-content: center;
+}
+.dashboardLowerGrid .dashboardMiniVisual .interactiveSvgDonut svg,
+.dashboardLowerGrid .dashboardMiniVisual .sideInteractiveDonut svg,
+.dashboardLowerGrid .dashboardMiniVisual .paymentInteractiveDonut svg {
+  width: 164px !important;
+  height: 164px !important;
+  min-width: 164px !important;
+  min-height: 164px !important;
+  display: block;
+}
+.dashboardLowerGrid .interactiveDonutCenterTop {
+  font-size: 6.4px;
+}
+.dashboardLowerGrid .interactiveDonutCenterBottom {
+  font-size: 8.8px;
+}
+
+/* Legendas começam na mesma coordenada e usam as mesmas dimensões */
+.dashboardLowerGrid .dashboardMiniLegend {
+  width: 100%;
+  min-height: 0;
+  margin: 0 !important;
+  padding: 0;
+  display: grid;
+  grid-auto-rows: 56px;
+  align-content: start;
+  gap: 9px;
+}
+.dashboardLowerGrid .dashboardMiniLegend > p,
+.dashboardLowerGrid .dashboardMiniLegend > div {
+  min-height: 56px !important;
+  height: 56px;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding-top: 9px !important;
+  padding-bottom: 9px !important;
+}
+.dashboardLowerGrid .orderOriginText strong,
+.dashboardLowerGrid .categoryPercentText strong,
+.dashboardLowerGrid .paymentLegend span {
+  font-size: 11.5px !important;
+}
+.dashboardLowerGrid .orderOriginText small,
+.dashboardLowerGrid .categoryPercentText small,
+.dashboardLowerGrid .paymentLegend small {
+  font-size: 9px !important;
+}
+.dashboardLowerGrid .orderOriginLegend p > b,
+.dashboardLowerGrid .categorySoldMl,
+.dashboardLowerGrid .paymentLegend b {
+  font-size: 11.5px !important;
+}
+
+/* Ranking de grupos: ocupa toda a área útil do card */
+.dashboardLowerGrid .leadRankingPanel {
+  grid-template-rows: 78px minmax(0, 1fr) 28px !important;
+  height: 570px;
+  min-height: 570px;
+}
+.dashboardLowerGrid .leadRankingHead {
+  min-height: 78px;
+  height: 78px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 118px;
+  align-items: start;
+  gap: 10px;
+  overflow: visible;
+}
+.dashboardLowerGrid .leadRankingHead > div {
+  min-width: 0;
+}
+.dashboardLowerGrid .leadRankingHead h2 {
+  margin: 0;
+  font-size: 16px !important;
+  line-height: 1.2;
+}
+.dashboardLowerGrid .leadRankingHead p {
+  margin: 7px 0 0;
+  min-height: 0;
+  font-size: 10.5px !important;
+  line-height: 1.4;
+}
+.dashboardLowerGrid .leadRankingHead > button {
+  width: 118px;
+  min-height: 42px;
+  padding: 5px 8px;
+  font-size: 8.5px;
+  line-height: 1.25;
+}
+
+.dashboardLowerGrid .leadRankingBody {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 50px minmax(0, 1fr);
+  gap: 12px;
+}
+.dashboardLowerGrid .groupRankingMetricButtons {
+  height: 42px;
+  margin: 0;
+  align-self: start;
+  gap: 7px;
+}
+.dashboardLowerGrid .groupRankingMetricButtons button {
+  min-height: 42px;
+  height: 42px;
+  padding: 0 8px;
+  border-radius: 10px;
+  font-size: 10.5px;
+  line-height: 1;
+}
+
+.dashboardLowerGrid .leadRankingList {
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  display: grid;
+  grid-auto-rows: minmax(64px, 1fr);
+  align-content: stretch;
+  gap: 9px;
+}
+.dashboardLowerGrid .leadRankingList > div {
+  min-height: 64px;
+  padding: 8px 0;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+.dashboardLowerGrid .leadRankPosition {
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  font-size: 11px;
+}
+.dashboardLowerGrid .leadRankContent > span {
+  gap: 10px;
+}
+.dashboardLowerGrid .leadRankContent > span strong {
+  font-size: 12.5px;
+  line-height: 1.2;
+}
+.dashboardLowerGrid .leadRankContent > span b {
+  font-size: 11px;
+  line-height: 1.2;
+}
+.dashboardLowerGrid .leadRankContent > i {
+  height: 7px;
+  margin-top: 7px;
+}
+.dashboardLowerGrid .leadRankContent > small {
+  margin-top: 6px;
+  font-size: 9px;
+  line-height: 1.25;
+}
+.dashboardLowerGrid .leadRankingReset {
+  margin: 0;
+  padding: 7px 0 0;
+  align-self: end;
+  font-size: 8.5px;
+  line-height: 1.2;
+}
+
+/* Card de contagem + ranking ficam realmente lado a lado */
+.clientsTopRow,
+.suppliersTopRow {
+  display: flex;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 12px;
+}
+.clientsTopRow > .cards,
+.suppliersTopRow > .cards {
+  flex: 0 0 320px;
+  width: 320px;
+  grid-template-columns: 1fr;
+}
+.clientsTopRow > .cards > div,
+.suppliersTopRow > .cards > div {
+  min-height: 112px;
+  height: 112px;
+  box-sizing: border-box;
+}
+.clientRankingButton,
+.supplierRankingButton {
+  flex: 0 0 auto;
+  min-height: 112px;
+  height: 112px;
+  align-self: stretch;
+}
+.clientRankingButton {
+  min-width: 220px;
+}
+.supplierRankingButton {
+  min-width: 240px;
+}
+
+@media (max-width: 1500px) {
+  .dashboardLowerGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboardLowerGrid .dashboardMetricPanel,
+  .dashboardLowerGrid .leadRankingPanel {
+    height: 570px;
+    min-height: 570px;
+  }
+}
+
+@media (max-width: 780px) {
+  .dashboardLowerGrid {
+    grid-template-columns: 1fr;
+  }
+  .dashboardLowerGrid .dashboardMetricPanel,
+  .dashboardLowerGrid .leadRankingPanel {
+    height: auto;
+    min-height: 530px;
+  }
+  .clientsTopRow,
+  .suppliersTopRow {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .clientsTopRow > .cards,
+  .suppliersTopRow > .cards,
+  .clientRankingButton,
+  .supplierRankingButton {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 92px;
+  }
+}

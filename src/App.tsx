@@ -27,10 +27,28 @@ import {
   ChevronLeft,
   ChevronRight,
   SlidersHorizontal,
+  Sun,
+  Moon,
+  TrendingUp,
+  TrendingDown,
+  Sparkles,
+  PackageOpen,
+  BarChart3,
+  CalendarDays,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
+import {
+  CatalogAdminPreview,
+  PublicCatalog,
+  catalogItemsFromProducts,
+  enrichCatalogItemsWithImages,
+  catalogSnapshotPayload,
+  DEFAULT_CATALOG_SETTINGS,
+  normalizeCatalogSettings,
+  type CatalogSettings,
+} from "./Catalog";
 
 type P = {
   id: number;
@@ -58,6 +76,10 @@ type S = {
     unit?: string;
   }[];
 };
+type LeadSource = "Grupo 1" | "Grupo 2" | "Grupo 3" | "TikTok" | "Shopee";
+const LEAD_SOURCES: LeadSource[] = ["Grupo 1", "Grupo 2", "Grupo 3", "TikTok", "Shopee"];
+const MANUAL_LEAD_SOURCES: LeadSource[] = ["Grupo 1", "Grupo 2", "Grupo 3"];
+
 type C = {
   id: number;
   name: string;
@@ -68,6 +90,7 @@ type C = {
   district?: string;
   city?: string;
   state?: string;
+  leadSource?: LeadSource;
   date: string;
   addresses: {
     label: string;
@@ -162,6 +185,7 @@ type D = {
   orderSequenceVersion?: number;
   supplyInventoryVersion?: number;
   marketplacePayoutDays?: { "TikTok Shop": number; Shopee: number };
+  catalogSettings: CatalogSettings;
 };
 type Modal = { type: string; id?: number } | null;
 
@@ -176,6 +200,7 @@ const blank: D = {
   supplierDates: {},
   brands: [],
   marketplacePayoutDays: { "TikTok Shop": 9, Shopee: 7 },
+  catalogSettings: { ...DEFAULT_CATALOG_SETTINGS },
 };
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -348,6 +373,7 @@ const nav = [
   ["prepare", "Pedidos para preparar", ClipboardCheck],
   ["shipping", "Envios", Truck],
   ["stock", "Estoque", Box],
+  ["catalog", "Catálogo", PackageOpen],
   ["purchases", "Compras", ShoppingCart],
   ["clients", "Clientes", Users],
   ["suppliers", "Fornecedores", Building2],
@@ -355,7 +381,22 @@ const nav = [
   ["finance", "Financeiro", Wallet],
 ] as const;
 
+function isPublicCatalogRoute() {
+  if (typeof window === "undefined") return false;
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  const catalogHost = String(import.meta.env.VITE_CATALOG_HOST || "")
+    .trim()
+    .toLowerCase();
+  const currentHost = window.location.hostname.toLowerCase();
+  return (
+    path === "/catalogo" ||
+    path.startsWith("/catalogo/") ||
+    Boolean(catalogHost && currentHost === catalogHost)
+  );
+}
+
 export default function App() {
+  const publicCatalogRoute = isPublicCatalogRoute();
   const [session, setSession] = useState<Session | null>(null),
     [authLoading, setAuthLoading] = useState(true);
   useEffect(() => {
@@ -368,6 +409,7 @@ export default function App() {
     } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
     return () => subscription.unsubscribe();
   }, []);
+  if (publicCatalogRoute) return <PublicCatalog />;
   if (!isSupabaseConfigured) return <SetupRequired />;
   if (authLoading)
     return (
@@ -389,10 +431,23 @@ function System({ session }: { session: Session }) {
   const saveQueue = useRef<Promise<void>>(Promise.resolve());
   const saveVersion = useRef(0);
   const [page, setPage] = useState("dashboard"),
+    [theme, setTheme] = useState<"dark" | "light">(() => {
+      if (typeof window === "undefined") return "dark";
+      const stored = window.localStorage.getItem("daf-theme");
+      if (stored === "light" || stored === "dark") return stored;
+      return window.matchMedia?.("(prefers-color-scheme: light)").matches
+        ? "light"
+        : "dark";
+    }),
     [modal, setModal] = useState<Modal>(null),
     [history, setHistory] = useState(0),
     [supplierHistory, setSupplierHistory] = useState(""),
     [toast, setToast] = useState("");
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("daf-theme", theme);
+  }, [theme]);
+
   function notify(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2600);
@@ -441,6 +496,30 @@ function System({ session }: { session: Session }) {
           const { error } = await supabase
             .from("app_state")
             .upsert({ user_id: session.user.id, data });
+
+          if (!error) {
+            // Snapshot público: somente dados seguros do estoque.
+            // Falhas aqui não interrompem o salvamento administrativo.
+            const catalogItems = await enrichCatalogItemsWithImages(
+              catalogItemsFromProducts(data.products),
+            );
+            await supabase
+              .from("public_catalogs")
+              .upsert(
+                {
+                  user_id: session.user.id,
+                  slug: "daf-splits",
+                  name: "DAF Splits",
+                  published: true,
+                  items: catalogSnapshotPayload(
+                    catalogItems,
+                    data.catalogSettings,
+                  ),
+                },
+                { onConflict: "user_id" },
+              );
+          }
+
           if (version === saveVersion.current) {
             setSync(error ? "error" : "saved");
           }
@@ -552,7 +631,7 @@ const action =
   return (
     <div className="shell">
       <aside>
-        <img src={LOGO} alt="DAF Splits" />
+        <img className="sidebarLogo" src={LOGO} alt="DAF Splits" />
         <nav>
           {nav.map(([id, label, Icon]) => (
             <button
@@ -617,6 +696,18 @@ const action =
             <h1>{nav.find((n) => n[0] === page)?.[1]}</h1>
           </div>
           <div className="headerActions">
+            <button
+              type="button"
+              className="themeToggle"
+              onClick={() =>
+                setTheme((current) => (current === "dark" ? "light" : "dark"))
+              }
+              title={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
+              aria-label={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
+            >
+              {theme === "dark" ? <Sun /> : <Moon />}
+              <span>{theme === "dark" ? "Claro" : "Escuro"}</span>
+            </button>
             {page === "dashboard" || page === "finance" ? (
               <button
                 className="secondary reportButton"
@@ -645,6 +736,16 @@ const action =
                 onClick={() => setModal({ type: "stockReport" })}
               >
                 <ReceiptText /> Relatório
+              </button>
+            ) : null}
+            {page === "catalog" ? (
+              <button
+                className="secondary catalogPublicButton"
+                onClick={() =>
+                  window.open("/catalogo", "_blank", "noopener,noreferrer")
+                }
+              >
+                <PackageOpen /> Abrir catálogo público
               </button>
             ) : null}
             {action ? (
@@ -689,6 +790,17 @@ const action =
               editSupply={(id) => setModal({ type: "supplyEdit", id })}
               edit={(id) => setModal({ type: "product", id })}
               notify={notify}
+            />
+          ) : page === "catalog" ? (
+            <CatalogAdminPreview
+              products={data.products}
+              settings={data.catalogSettings}
+              onSettingsChange={(catalogSettings) =>
+                setData((current) => ({
+                  ...current,
+                  catalogSettings: normalizeCatalogSettings(catalogSettings),
+                }))
+              }
             />
           ) : page === "purchases" ? (
             <Purchases
@@ -859,6 +971,9 @@ function normalizeData(stored: any): D {
     ...client,
     phone: formatClientPhone(client.phone),
     cpf: formatCpf(client.cpf),
+    leadSource: LEAD_SOURCES.includes(client.leadSource as LeadSource)
+      ? client.leadSource
+      : undefined,
   }));
   const rawSales = (merged.sales || []) as V[];
   const ids = rawSales.map((sale) => sale.id).sort((a, b) => a - b);
@@ -878,7 +993,15 @@ function normalizeData(stored: any): D {
     return {
       ...s,
       id: needsSequentialIds ? sequentialIds.get(s.id) || s.id : s.id,
-      clientId: marketplaceSale ? 0 : s.clientId,
+      clientId:
+        s.clientId ||
+        (marketplaceSale
+          ? normalizedClients.find(
+              (client: C) =>
+                client.name.trim().toLowerCase() ===
+                String(s.customerName || "").trim().toLowerCase(),
+            )?.id || 0
+          : 0),
       customerName:
         s.customerName || (marketplaceSale ? linkedCustomer?.name : undefined),
       payment: marketplaceSale ? "À prazo" : s.payment,
@@ -945,6 +1068,7 @@ function normalizeData(stored: any): D {
       "TikTok Shop": Number(merged.marketplacePayoutDays?.["TikTok Shop"] || 9),
       Shopee: Number(merged.marketplacePayoutDays?.Shopee || 7),
     },
+    catalogSettings: normalizeCatalogSettings(merged.catalogSettings),
     purchases,
     supplies: normalizedSupplies,
     clients: normalizedClients,
@@ -1184,291 +1308,971 @@ function InteractiveDonutChart({
   );
 }
 
-function Dash({ d }: { d: D }) {
-  const [selectedDay, setSelectedDay] = useState<number | null>(null);
-  const now = new Date(),
-    monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
-    monthSales = d.sales.filter((sale) => sale.date.startsWith(monthKey)),
-    activeSales = monthSales.filter(
-      (sale) =>
-        sale.status !== "cancelled" &&
-        !isNoCost(sale) &&
-        !isHistoricalSale(sale),
-    ),
-    days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate(),
-    day = now.getDate();
-  const monthTotals = activeSales.reduce(
-    (acc, sale) => ({
-      gross: acc.gross + sale.total,
-      paid: acc.paid + Math.min(sale.total, Math.max(0, sale.paid)),
-    }),
-    { gross: 0, paid: 0 },
-  );
-  const estimatedProfit = activeSales.reduce((sum, sale) => {
-    const perfumeCost = sale.items.reduce(
-      (cost, item) =>
-        cost +
-        item.ml *
-          (item.unitCost ??
-            d.products.find((product) => product.id === item.productId)?.cost ??
-            0),
-      0,
-    );
-    const expenses =
-      Number(sale.expenses || 0) +
-      Number(sale.marketplaceFee || 0) +
-      Number(sale.shippingCost || 0) +
-      packaging(sale, d.supplies).total;
-    return sum + sale.total - perfumeCost - expenses;
-  }, 0);
-  const estimatedMargin =
-    monthTotals.gross > 0 ? (estimatedProfit / monthTotals.gross) * 100 : 0;
+type PeriodMetrics = {
+  sales: V[];
+  gross: number;
+  paid: number;
+  profit: number;
+  margin: number;
+  orders: number;
+  ticket: number;
+  bottles: number;
+  apcs: number;
+  ml: number;
+  uniqueClients: number;
+  perfumeCost: number;
+  operatingExpenses: number;
+  marketplaceGross: number;
+};
 
-  const daily = Array.from({ length: days }, (_, i) =>
-    activeSales
-      .filter((s) => new Date(s.date + "T12:00").getDate() === i + 1)
-      .reduce((n, s) => n + Math.max(0, s.paid), 0),
+function shiftMonthKey(monthKey: string, delta: number) {
+  const date = new Date(monthKey + "-01T12:00:00");
+  date.setMonth(date.getMonth() + delta);
+  return (
+    String(date.getFullYear()) +
+    "-" +
+    String(date.getMonth() + 1).padStart(2, "0")
   );
-  const avg = daily.slice(0, day).reduce((n, v) => n + v, 0) / Math.max(1, day),
-    max = Math.max(avg, ...daily, 1);
-  const displayedDailyTotal = daily.reduce(
-    (sum, value, index) => sum + (index >= day ? avg : value),
+}
+function monthDays(monthKey: string) {
+  const parts = monthKey.split("-").map(Number);
+  return new Date(parts[0], parts[1], 0).getDate();
+}
+function periodMonthLabel(monthKey: string) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(monthKey + "-01T12:00:00"));
+}
+function periodCutoffDay(monthKey: string) {
+  const currentMonth = today().slice(0, 7);
+  return monthKey === currentMonth
+    ? Math.min(new Date().getDate(), monthDays(monthKey))
+    : monthDays(monthKey);
+}
+function saleCostBreakdown(sale: V, d: D) {
+  const perfumeCost = sale.items.reduce(
+    (sum, item) =>
+      sum +
+      item.ml *
+        (item.unitCost ??
+          d.products.find((product) => product.id === item.productId)?.cost ??
+          0),
     0,
   );
-  const categories = ["Nicho", "Árabe", "Designer"].map((category) => ({
-    category,
-    value: activeSales.reduce(
-      (sum, s) =>
-        sum +
-        s.items
-        .filter(
-          (x) =>
-            d.products.find((p) => p.id === x.productId)?.category === category,
-        )
-        .reduce((n, x) => n + x.ml, 0),
-      0,
+  const operatingExpenses =
+    Number(sale.expenses || 0) +
+    Number(sale.marketplaceFee || 0) +
+    Number(sale.shippingCost || 0) +
+    packaging(sale, d.supplies).total;
+  return { perfumeCost, operatingExpenses };
+}
+function dateInRange(value: string, start: string, end: string) {
+  return Boolean(value) && value >= start && value <= end;
+}
+function dateKey(date: Date) {
+  const local = new Date(date);
+  local.setMinutes(local.getMinutes() - local.getTimezoneOffset());
+  return local.toISOString().slice(0, 10);
+}
+function shiftDateKey(value: string, delta: number) {
+  const date = new Date(value + "T12:00:00");
+  date.setDate(date.getDate() + delta);
+  return dateKey(date);
+}
+function previousEquivalentRange(start: string, end: string) {
+  const startDate = new Date(start + "T12:00:00");
+  const endDate = new Date(end + "T12:00:00");
+  const span = Math.max(
+    1,
+    Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1,
+  );
+  const previousEnd = shiftDateKey(start, -1);
+  const previousStart = shiftDateKey(previousEnd, -(span - 1));
+  return [previousStart, previousEnd] as const;
+}
+function dateKeysBetween(start: string, end: string) {
+  const keys: string[] = [];
+  let cursor = start;
+  let guard = 0;
+  while (cursor <= end && guard < 370) {
+    keys.push(cursor);
+    cursor = shiftDateKey(cursor, 1);
+    guard += 1;
+  }
+  return keys;
+}
+function rangeLabel(start: string, end: string) {
+  return start === end ? dateBR(start) : `${dateBR(start)} a ${dateBR(end)}`;
+}
+function rangeMetrics(d: D, start: string, end: string): PeriodMetrics {
+  const sales = d.sales.filter((sale) => {
+    if (
+      sale.status === "cancelled" ||
+      isNoCost(sale) ||
+      isHistoricalSale(sale) ||
+      !dateInRange(sale.date, start, end)
+    )
+      return false;
+    return true;
+  });
+  let perfumeCost = 0;
+  let operatingExpenses = 0;
+  let profit = 0;
+  sales.forEach((sale) => {
+    const costs = saleCostBreakdown(sale, d);
+    perfumeCost += costs.perfumeCost;
+    operatingExpenses += costs.operatingExpenses;
+    profit += sale.total - costs.perfumeCost - costs.operatingExpenses;
+  });
+  const gross = sales.reduce((sum, sale) => sum + Math.max(0, sale.total), 0);
+  const paid = sales.reduce(
+    (sum, sale) =>
+      sum + Math.min(Math.max(0, sale.total), Math.max(0, sale.paid)),
+    0,
+  );
+  const bottles = sales.reduce(
+    (sum, sale) => sum + sale.items.filter((item) => !item.isApc).length,
+    0,
+  );
+  const apcs = sales.reduce(
+    (sum, sale) => sum + sale.items.filter((item) => Boolean(item.isApc)).length,
+    0,
+  );
+  const ml = sales.reduce(
+    (sum, sale) =>
+      sum + sale.items.reduce((itemSum, item) => itemSum + Math.max(0, item.ml), 0),
+    0,
+  );
+  const customers = new Set(
+    sales.map((sale) =>
+      sale.clientId
+        ? "client:" + sale.clientId
+        : "name:" + String(sale.customerName || "").trim().toLowerCase(),
     ),
-  }));
-  const catTotal = categories.reduce((n, x) => n + x.value, 0);
-  const summarySales = monthSales.filter((sale) => !isHistoricalSale(sale));
-  const directOrders = summarySales.filter(
+  );
+  const marketplaceGross = sales
+    .filter(isMarketplaceSale)
+    .reduce((sum, sale) => sum + Math.max(0, sale.total), 0);
+  return {
+    sales,
+    gross,
+    paid,
+    profit,
+    margin: gross ? (profit / gross) * 100 : 0,
+    orders: sales.length,
+    ticket: gross / (sales.length || 1),
+    bottles,
+    apcs,
+    ml,
+    uniqueClients: customers.size,
+    perfumeCost,
+    operatingExpenses,
+    marketplaceGross,
+  };
+}
+function periodMetrics(
+  d: D,
+  monthKey: string,
+  cutoffDay = periodCutoffDay(monthKey),
+): PeriodMetrics {
+  return rangeMetrics(
+    d,
+    monthKey + "-01",
+    monthKey + "-" + String(cutoffDay).padStart(2, "0"),
+  );
+}
+function metricDelta(current: number, previous: number) {
+  if (!previous) return current ? null : 0;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+function ComparisonBadge({
+  value,
+  label,
+}: {
+  value: number | null;
+  label: string;
+}) {
+  if (value === null)
+    return (
+      <small className="metricDelta neutral">
+        <Sparkles /> Sem base anterior
+      </small>
+    );
+  const positive = value >= 0;
+  return (
+    <small className={"metricDelta " + (positive ? "positive" : "negative")}>
+      {positive ? <TrendingUp /> : <TrendingDown />}
+      {Math.abs(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+      <span>{label}</span>
+    </small>
+  );
+}
+
+function PeriodSelector({
+  monthKey,
+  setMonthKey,
+  customStart,
+  customEnd,
+  setCustomStart,
+  setCustomEnd,
+  onPeriodChange,
+}: {
+  monthKey: string;
+  setMonthKey: (value: string) => void;
+  customStart: string;
+  customEnd: string;
+  setCustomStart: (value: string) => void;
+  setCustomEnd: (value: string) => void;
+  onPeriodChange?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draftStart, setDraftStart] = useState("");
+  const [draftEnd, setDraftEnd] = useState("");
+  const hasCustom = Boolean(customStart);
+  const defaultStart = monthKey + "-01";
+  const defaultEnd =
+    monthKey === today().slice(0, 7)
+      ? monthKey + "-" + String(periodCutoffDay(monthKey)).padStart(2, "0")
+      : monthKey + "-" + String(monthDays(monthKey)).padStart(2, "0");
+
+  function changeMonth(delta: number) {
+    const next = shiftMonthKey(monthKey, delta);
+    setMonthKey(next);
+    setCustomStart("");
+    setCustomEnd("");
+    setDraftStart("");
+    setDraftEnd("");
+    setOpen(false);
+    onPeriodChange?.();
+  }
+  function toggleCalendar() {
+    setOpen((current) => {
+      const next = !current;
+      if (next) {
+        setDraftStart(customStart || defaultStart);
+        setDraftEnd(customEnd || (customStart ? customStart : defaultEnd));
+      }
+      return next;
+    });
+  }
+
+  return (
+    <div className="periodSelectorWrap">
+      <div className="monthPicker workspaceMonthPicker">
+        <button type="button" onClick={() => changeMonth(-1)} aria-label="Mês anterior">
+          <ChevronLeft />
+        </button>
+        <b>{periodMonthLabel(monthKey)}</b>
+        <button type="button" onClick={() => changeMonth(1)} aria-label="Próximo mês">
+          <ChevronRight />
+        </button>
+      </div>
+      <button
+        type="button"
+        className={"calendarFilterButton" + (hasCustom ? " active" : "")}
+        onClick={toggleCalendar}
+        title="Filtrar por data ou período"
+        aria-label="Filtrar por data ou período"
+      >
+        <CalendarDays />
+      </button>
+      {open ? (
+        <div className="dateRangePopover">
+          <strong>Filtrar por data ou período</strong>
+          <label>
+            <span>Data inicial</span>
+            <input
+              type="date"
+              value={draftStart}
+              onChange={(event) => {
+                const value = event.target.value;
+                setDraftStart(value);
+                if (draftEnd && value > draftEnd) setDraftEnd(value);
+              }}
+            />
+          </label>
+          <label>
+            <span>Data final</span>
+            <input
+              type="date"
+              min={draftStart || undefined}
+              value={draftEnd}
+              onChange={(event) => setDraftEnd(event.target.value)}
+            />
+          </label>
+          <small>
+            O mês selecionado já aparece preenchido. Para consultar um único dia,
+            escolha a mesma data no início e no fim.
+          </small>
+          <div className="dateRangeActions">
+            <button
+              type="button"
+              onClick={() => {
+                setCustomStart("");
+                setCustomEnd("");
+                setDraftStart(defaultStart);
+                setDraftEnd(defaultEnd);
+                setOpen(false);
+                onPeriodChange?.();
+              }}
+            >
+              Limpar
+            </button>
+            <button
+              type="button"
+              className="primary"
+              disabled={!draftStart}
+              onClick={() => {
+                const safeEnd =
+                  draftEnd && draftEnd >= draftStart ? draftEnd : draftStart;
+                setCustomStart(draftStart);
+                setCustomEnd(safeEnd);
+                setOpen(false);
+                onPeriodChange?.();
+              }}
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function HealthGauge({
+  gross,
+  previousGross,
+  paid,
+  perfumeCost,
+  suppliesCost,
+  freightCost,
+  marketplaceFees,
+  otherExpenses,
+  purchases,
+}: {
+  gross: number;
+  previousGross: number;
+  paid: number;
+  perfumeCost: number;
+  suppliesCost: number;
+  freightCost: number;
+  marketplaceFees: number;
+  otherExpenses: number;
+  purchases: number;
+}) {
+  const operatingCosts =
+    perfumeCost + suppliesCost + freightCost + marketplaceFees + otherExpenses;
+  const operatingResult = gross - operatingCosts;
+  const margin = gross ? (operatingResult / gross) * 100 : 0;
+  const cashGeneration =
+    paid - purchases - freightCost - marketplaceFees - otherExpenses;
+  const cashRatio = gross ? (cashGeneration / gross) * 100 : -100;
+  const receivedRatio = gross ? (paid / gross) * 100 : 0;
+  const expenseRatio = gross
+    ? ((operatingCosts + purchases) / gross) * 100
+    : 100;
+
+  const revenueRatio =
+    previousGross > 0 ? gross / previousGross : gross > 0 ? 1.1 : 0;
+  const revenueScore =
+    revenueRatio >= 1.1
+      ? 100
+      : revenueRatio >= 0.95
+        ? 85
+        : revenueRatio >= 0.8
+          ? 65
+          : revenueRatio >= 0.65
+            ? 45
+            : revenueRatio >= 0.5
+              ? 25
+              : 0;
+  const marginScore =
+    margin >= 25
+      ? 100
+      : margin >= 18
+        ? 80
+        : margin >= 10
+          ? 60
+          : margin >= 5
+            ? 40
+            : margin >= 0
+              ? 20
+              : 0;
+  const cashScore =
+    cashRatio >= 15
+      ? 100
+      : cashRatio >= 5
+        ? 70
+        : cashRatio >= 0
+          ? 50
+          : cashRatio >= -10
+            ? 25
+            : 0;
+  const receivedScore =
+    receivedRatio >= 90
+      ? 100
+      : receivedRatio >= 75
+        ? 75
+        : receivedRatio >= 60
+          ? 50
+          : receivedRatio >= 40
+            ? 25
+            : 0;
+  const efficiencyScore =
+    expenseRatio <= 45
+      ? 100
+      : expenseRatio <= 60
+        ? 75
+        : expenseRatio <= 75
+          ? 50
+          : expenseRatio <= 90
+            ? 25
+            : 0;
+
+  let score = gross
+    ? Math.round(
+        revenueScore * 0.45 +
+          marginScore * 0.2 +
+          cashScore * 0.15 +
+          receivedScore * 0.1 +
+          efficiencyScore * 0.1,
+      )
+    : 0;
+
+  // Travas de realidade: um mês muito abaixo não pode ficar "verde"
+  // só porque poucas vendas tiveram margem elevada.
+  if (previousGross > 0) {
+    if (revenueRatio < 0.5) score = Math.min(score, 39);
+    else if (revenueRatio < 0.6) score = Math.min(score, 49);
+    else if (revenueRatio < 0.7) score = Math.min(score, 59);
+  }
+  if (operatingResult < 0) score = Math.min(score, 45);
+  if (cashGeneration < 0) score = Math.min(score, 49);
+
+  const status =
+    !gross ? "Sem dados" : score <= 39 ? "Crítico" : score <= 69 ? "Moderado" : "Saudável";
+  const needleRotation = Math.max(0, Math.min(180, score * 1.8));
+
+  return (
+    <div className="panel companyHealthPanel">
+      <div className="panelHeading healthPanelHeading">
+        <div>
+          <span className="eyebrow">Saúde da empresa</span>
+          <h2>Indicador do período</h2>
+          <p>Desempenho, rentabilidade e caixa com comparação ao período anterior.</p>
+        </div>
+      </div>
+
+      <div className="healthGaugeOnly" aria-label={`Saúde da empresa: ${score} de 100, ${status}`}>
+        <svg className="healthGaugeSvg" viewBox="0 0 320 190" role="img">
+          <path
+            className="healthGaugeTrack"
+            d="M 40 160 A 120 120 0 0 1 280 160"
+            pathLength="100"
+          />
+          <path
+            className="healthGaugeArc critical"
+            d="M 40 160 A 120 120 0 0 1 280 160"
+            pathLength="100"
+            strokeDasharray="40 60"
+          />
+          <path
+            className="healthGaugeArc moderate"
+            d="M 40 160 A 120 120 0 0 1 280 160"
+            pathLength="100"
+            strokeDasharray="30 70"
+            strokeDashoffset="-40"
+          />
+          <path
+            className="healthGaugeArc healthy"
+            d="M 40 160 A 120 120 0 0 1 280 160"
+            pathLength="100"
+            strokeDasharray="30 70"
+            strokeDashoffset="-70"
+          />
+          <g
+            className="healthGaugeNeedle"
+            style={{ transform: `rotate(${needleRotation}deg)` }}
+          >
+            <line x1="160" y1="160" x2="57" y2="160" />
+          </g>
+          <circle className="healthGaugeHub" cx="160" cy="160" r="8" />
+          <text className="healthGaugeLabel left" x="42" y="184">CRÍTICO</text>
+          <text className="healthGaugeLabel middle" x="160" y="184">MODERADO</text>
+          <text className="healthGaugeLabel right" x="278" y="184">SAUDÁVEL</text>
+        </svg>
+        <div className="healthGaugeScore">
+          <b>{score}</b>
+          <span>{status}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderSummaryChart({ sales }: { sales: V[] }) {
+  const directOrders = sales.filter(
     (sale) => sale.status !== "cancelled" && !isMarketplaceSale(sale),
   ).length;
-  const tiktokOrders = summarySales.filter(
-    (sale) =>
-      sale.status !== "cancelled" && sale.marketplace === "TikTok Shop",
+  const tiktokOrders = sales.filter(
+    (sale) => sale.status !== "cancelled" && sale.marketplace === "TikTok Shop",
   ).length;
-  const shopeeOrders = summarySales.filter(
-    (sale) =>
-      sale.status !== "cancelled" && sale.marketplace === "Shopee",
+  const shopeeOrders = sales.filter(
+    (sale) => sale.status !== "cancelled" && sale.marketplace === "Shopee",
   ).length;
-  const cancelledOrders = summarySales.filter(
-    (sale) => sale.status === "cancelled",
-  ).length;
-  const summaryCount =
-    directOrders + tiktokOrders + shopeeOrders + cancelledOrders;
-  const summaryPct = (value: number) =>
-    summaryCount ? Math.round((value / summaryCount) * 100) : 0;
-  const directEnd = summaryCount ? (directOrders / summaryCount) * 360 : 0;
-  const tiktokEnd =
-    summaryCount
-      ? ((directOrders + tiktokOrders) / summaryCount) * 360
-      : 0;
-  const shopeeEnd =
-    summaryCount
-      ? ((directOrders + tiktokOrders + shopeeOrders) / summaryCount) * 360
-      : 0;
-  const summaryItems = [
+  const cancelledOrders = sales.filter((sale) => sale.status === "cancelled").length;
+  const total = directOrders + tiktokOrders + shopeeOrders + cancelledOrders;
+  const pct = (value: number) => (total ? Math.round((value / total) * 100) : 0);
+  const segments = [
     { label: "Venda direta", value: directOrders, color: "#22a66f" },
     { label: "TikTok Shop", value: tiktokOrders, color: "#5DC9D6" },
     { label: "Shopee", value: shopeeOrders, color: "#EE4D2D" },
     { label: "Cancelados", value: cancelledOrders, color: "#05070a" },
   ];
   return (
-    <>
-      <div className="cards dashboardCards">
+    <div className="panel dashboardMetricPanel orderOriginSummary">
+      <div className="dashboardMiniHeader">
+        <h2>Resumo dos pedidos</h2>
+        <p>Distribuição dos pedidos no período.</p>
+      </div>
+
+      <div className="dashboardMiniVisual">
+        <InteractiveDonutChart
+          segments={segments}
+          centerTop="Total"
+          centerBottom={`${total} pedidos`}
+          className="sideInteractiveDonut"
+          infoPrefix="Origem"
+        />
+      </div>
+
+      <div className="dashboardMiniLegend orderOriginLegend">
+        <p className="direct">
+          <span className="orderOriginText"><strong>Venda direta</strong><small>{pct(directOrders)}%</small></span>
+          <b>{directOrders} pedido{directOrders === 1 ? "" : "s"}</b>
+        </p>
+        <p className="tiktok">
+          <span className="orderOriginText"><strong>TikTok Shop</strong><small>{pct(tiktokOrders)}%</small></span>
+          <b>{tiktokOrders} pedido{tiktokOrders === 1 ? "" : "s"}</b>
+        </p>
+        <p className="shopee">
+          <span className="orderOriginText"><strong>Shopee</strong><small>{pct(shopeeOrders)}%</small></span>
+          <b>{shopeeOrders} pedido{shopeeOrders === 1 ? "" : "s"}</b>
+        </p>
+        <p className="cancelled">
+          <span className="orderOriginText"><strong>Cancelados</strong><small>{pct(cancelledOrders)}%</small></span>
+          <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function CategoryChart({ d, sales }: { d: D; sales: V[] }) {
+  const categories = ["Nicho", "Árabe", "Designer"].map((category) => ({
+    category,
+    value: sales.reduce(
+      (sum, sale) =>
+        sum +
+        sale.items
+          .filter(
+            (item) =>
+              d.products.find((product) => product.id === item.productId)?.category ===
+              category,
+          )
+          .reduce((itemSum, item) => itemSum + item.ml, 0),
+      0,
+    ),
+  }));
+  const total = categories.reduce((sum, item) => sum + item.value, 0);
+  return (
+    <div className="panel dashboardMetricPanel categories">
+      <div className="dashboardMiniHeader">
+        <h2>Vendas por categoria</h2>
+        <p>Distribuição dos mls vendidos no período.</p>
+      </div>
+
+      <div className="dashboardMiniVisual">
+        <InteractiveDonutChart
+          segments={categories.map((item) => ({
+            label: item.category,
+            value: item.value,
+            color:
+              item.category === "Nicho"
+                ? "#e0b43c"
+                : item.category === "Árabe"
+                  ? "#8b5cf6"
+                  : "#2f80ed",
+          }))}
+          centerTop="Total vendido"
+          centerBottom={`${total.toLocaleString("pt-BR")}mls`}
+          className="sideInteractiveDonut"
+          infoPrefix="Categoria"
+        />
+      </div>
+
+      <div className="dashboardMiniLegend categoryLegend categoryPercentLegend">
+        {categories.map((item) => {
+          const percentage = total ? Math.round((item.value / total) * 100) : 0;
+          return (
+            <div
+              key={item.category}
+              className={item.category
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")}
+            >
+              <span className="categoryPercentText">
+                <strong>{item.category}</strong>
+                <small>{percentage}%</small>
+              </span>
+              <b className="categorySoldMl">
+                {item.value.toLocaleString("pt-BR")} ml vendidos
+              </b>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LeadRanking({ d, start, end }: { d: D; start: string; end: string }) {
+  const [includeMarketplaces, setIncludeMarketplaces] = useState(false);
+  const [metric, setMetric] = useState<"revenue" | "orders" | "ticket">("revenue");
+
+  const sourceOfSale = (sale: V): LeadSource | undefined => {
+    if (sale.marketplace === "TikTok Shop") return "TikTok";
+    if (sale.marketplace === "Shopee") return "Shopee";
+    return d.clients.find((client) => client.id === sale.clientId)?.leadSource;
+  };
+
+  const sales = d.sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      dateInRange(sale.date, start, end),
+  );
+
+  const sources: LeadSource[] = includeMarketplaces
+    ? ["Grupo 1", "Grupo 2", "Grupo 3", "TikTok", "Shopee"]
+    : ["Grupo 1", "Grupo 2", "Grupo 3"];
+
+  const ranking = sources
+    .map((source, index) => {
+      const sourceSales = sales.filter((sale) => sourceOfSale(sale) === source);
+      const revenue = sourceSales.reduce(
+        (sum, sale) => sum + Math.max(0, Number(sale.total || 0)),
+        0,
+      );
+      const orders = sourceSales.length;
+      const ticket = orders ? revenue / orders : 0;
+      const value =
+        metric === "revenue" ? revenue : metric === "orders" ? orders : ticket;
+      return { source, revenue, orders, ticket, value, index };
+    })
+    .sort((a, b) => b.value - a.value || b.revenue - a.revenue || a.index - b.index);
+
+  const max = Math.max(1, ...ranking.map((item) => item.value));
+  const metricLabel =
+    metric === "revenue"
+      ? "Faturamento"
+      : metric === "orders"
+        ? "Pedidos"
+        : "Ticket médio";
+  const formatMetric = (item: (typeof ranking)[number]) =>
+    metric === "revenue"
+      ? brl(item.revenue)
+      : metric === "orders"
+        ? `${item.orders} pedido${item.orders === 1 ? "" : "s"}`
+        : brl(item.ticket);
+
+  return (
+    <div className="panel dashboardMetricPanel leadRankingPanel">
+      <div className="dashboardMiniHeader leadRankingHead">
         <div>
-          <span>Faturamento mensal</span>
-          <b>{brl(monthTotals.gross)}</b>
+          <h2>Ranking de grupos</h2>
+          <p>Performance comercial por origem no período.</p>
         </div>
-        <div className="splitCard">
-          <div>
-            <span>Total recebido</span>
-            <b>{brl(monthTotals.paid)}</b>
-          </div>
-          <div>
-            <span>A receber</span>
-            <b>{brl(Math.max(0, monthTotals.gross - monthTotals.paid))}</b>
-          </div>
+        <button
+          type="button"
+          className={includeMarketplaces ? "active" : ""}
+          onClick={() => setIncludeMarketplaces((value) => !value)}
+        >
+          {includeMarketplaces ? "Ocultar marketplaces" : "Incluir TikTok/Shopee"}
+        </button>
+      </div>
+
+      <div className="leadRankingBody">
+        <div className="groupRankingMetricButtons" role="group" aria-label="Classificar ranking de grupos">
+          <button
+            type="button"
+            className={metric === "revenue" ? "active" : ""}
+            onClick={() => setMetric("revenue")}
+          >
+            Faturamento
+          </button>
+          <button
+            type="button"
+            className={metric === "orders" ? "active" : ""}
+            onClick={() => setMetric("orders")}
+          >
+            Pedidos
+          </button>
+          <button
+            type="button"
+            className={metric === "ticket" ? "active" : ""}
+            onClick={() => setMetric("ticket")}
+          >
+            Ticket médio
+          </button>
         </div>
-        <div className="splitCard">
-          <div>
-            <span>Lucro estimado</span>
-            <b>{brl(estimatedProfit)}</b>
-          </div>
-          <div>
-            <span className="estimatedMarginLabel">Margem estimada</span>
-            <b>{estimatedMargin.toLocaleString("pt-BR", {
-              maximumFractionDigits: 1,
-              minimumFractionDigits: 1,
-            })}%</b>
-          </div>
-        </div>
-        <div className="splitCard">
-          <div>
-            <span>Ticket médio</span>
-            <b>{brl(monthTotals.gross / (activeSales.length || 1))}</b>
-          </div>
-          <div>
-            <span>Pedidos no mês</span>
-            <b>{activeSales.length}</b>
-          </div>
+
+        <div className="leadRankingList">
+          {ranking.map((item, index) => (
+            <div key={item.source}>
+              <span className="leadRankPosition">{index + 1}º</span>
+              <div className="leadRankContent">
+                <span>
+                  <strong>{item.source}</strong>
+                  <b>{formatMetric(item)}</b>
+                </span>
+                <i>
+                  <em style={{ width: `${item.value ? Math.max(5, (item.value / max) * 100) : 0}%` }} />
+                </i>
+                <small>
+                  {brl(item.revenue)} · {item.orders} pedido{item.orders === 1 ? "" : "s"} ·
+                  ticket {brl(item.ticket)}
+                </small>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
-      <div className="grid">
-        <div className="dashboardMain">
-          <div className="panel chart">
-            <h2>Faturamento consolidado + tendência</h2>
-            <p>Passe o mouse ou toque em uma barra para ver o valor</p>
-            <div className="stats">
-              Média diária <b>{brl(avg)}</b> · Projeção mensal{" "}
-              <b>{brl(avg * days)}</b>
-            </div>
-            <div
-              className={"bars" + (selectedDay !== null ? " hasSelection" : "")}
-            >
-              {daily.map((value, i) => {
-                const n = i >= day ? avg : value;
-                const percentage = displayedDailyTotal
-                  ? Math.round((n / displayedDailyTotal) * 100)
-                  : 0;
-                return (
-                  <button
-                    key={i}
-                    className={selectedDay === i ? "selected" : ""}
-                    aria-pressed={selectedDay === i}
-                    aria-label={`Dia ${i + 1}: ${brl(n)} · ${percentage}% do gráfico`}
-                    onPointerEnter={(event) => {
-                      if (event.pointerType === "mouse") setSelectedDay(i);
-                    }}
-                    onPointerLeave={(event) => {
-                      if (event.pointerType === "mouse") setSelectedDay(null);
-                    }}
-                    onClick={() => {
-                      const desktopHover = window.matchMedia(
-                        "(hover: hover) and (pointer: fine)",
-                      ).matches;
-                      if (desktopHover) return;
-                      setSelectedDay((current) => (current === i ? null : i));
-                    }}
-                  >
-                    <span>
-                      {brl(n)}
-                      <small>{percentage}%</small>
-                    </span>
-                    <i
-                      className={i >= day ? "future" : ""}
-                      style={{ height: Math.max(4, (n / max) * 100) + "%" }}
-                    />
-                    <small>{i + 1}</small>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <PaymentBreakdown d={d} />
+      <small className="leadRankingReset">
+        Critério atual: {metricLabel}. O ranking acompanha o período selecionado.
+      </small>
+    </div>
+  );
+}
+
+function Dash({ d }: { d: D }) {
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [monthKey, setMonthKey] = useState(today().slice(0, 7));
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const currentMonth = today().slice(0, 7);
+  const cutoff = periodCutoffDay(monthKey);
+  const defaultStart = monthKey + "-01";
+  const defaultEnd = monthKey + "-" + String(cutoff).padStart(2, "0");
+  const customRange = Boolean(customStart);
+  const rangeStart = customStart || defaultStart;
+  const rangeEnd =
+    customStart && customEnd && customEnd >= customStart
+      ? customEnd
+      : customStart || defaultEnd;
+  const metrics = rangeMetrics(d, rangeStart, rangeEnd);
+  const activeSales = metrics.sales;
+  const periodSales = d.sales.filter(
+    (sale) => !isHistoricalSale(sale) && dateInRange(sale.date, rangeStart, rangeEnd),
+  );
+  const [previousStart, previousEnd] = customRange
+    ? previousEquivalentRange(rangeStart, rangeEnd)
+    : (() => {
+        const previousMonth = shiftMonthKey(monthKey, -1);
+        return [
+          previousMonth + "-01",
+          previousMonth +
+            "-" +
+            String(Math.min(cutoff, monthDays(previousMonth))).padStart(2, "0"),
+        ] as const;
+      })();
+  const previousMetrics = rangeMetrics(d, previousStart, previousEnd);
+  const comparisonLabel = customRange
+    ? "vs. período anterior"
+    : "vs. " +
+      periodMonthLabel(shiftMonthKey(monthKey, -1)).replace(/^./, (letter) =>
+        letter.toUpperCase(),
+      );
+
+  const daysInMonth = monthDays(monthKey);
+  const chartKeys = customRange
+    ? dateKeysBetween(rangeStart, rangeEnd)
+    : Array.from(
+        { length: daysInMonth },
+        (_, index) => monthKey + "-" + String(index + 1).padStart(2, "0"),
+      );
+  const daily = chartKeys.map((key) =>
+    activeSales
+      .filter((sale) => sale.date === key)
+      .reduce((sum, sale) => sum + Math.max(0, sale.total), 0),
+  );
+  const actualDays = customRange ? Math.max(1, chartKeys.length) : Math.max(1, cutoff);
+  const avg = metrics.gross / actualDays;
+  const displayValues = daily.map((value, index) =>
+    !customRange && monthKey === currentMonth && index >= cutoff ? avg : value,
+  );
+  const displayedTotal = displayValues.reduce((sum, value) => sum + value, 0);
+  const max = Math.max(avg, ...displayValues, 1);
+  const projection =
+    !customRange && monthKey === currentMonth ? avg * daysInMonth : metrics.gross;
+
+  const suppliesCost = activeSales.reduce(
+    (sum, sale) => sum + packaging(sale, d.supplies).total,
+    0,
+  );
+  const freightCost = activeSales.reduce(
+    (sum, sale) => sum + Math.max(0, Number(sale.shippingCost || 0)),
+    0,
+  );
+  const marketplaceFees = activeSales.reduce(
+    (sum, sale) => sum + Math.max(0, Number(sale.marketplaceFee || 0)),
+    0,
+  );
+  const otherExpenses = activeSales.reduce(
+    (sum, sale) => sum + Math.max(0, Number(sale.expenses || 0)),
+    0,
+  );
+  const purchases = d.purchases
+    .filter((purchase) => dateInRange(purchase.date, rangeStart, rangeEnd))
+    .reduce((sum, purchase) => sum + Math.max(0, Number(purchase.total || 0)), 0);
+
+  return (
+    <>
+      <div className="workspaceToolbar dashboardMonthToolbar">
+        <div>
+          <span className="eyebrow">Visão executiva</span>
+          <h2>
+            {customRange
+              ? "Período personalizado"
+              : periodMonthLabel(monthKey).replace(/^./, (letter) =>
+                  letter.toUpperCase(),
+                )}
+          </h2>
+          <p>Período: {rangeLabel(rangeStart, rangeEnd)}</p>
         </div>
-        <div className="sidecharts">
-          <div className="panel orderOriginSummary">
-            <h2>Resumo dos pedidos</h2>
-            <p className="chartExplanation chartExplanationTop">
-              Distribuição dos pedidos do mês por origem.
-            </p>
-            <InteractiveDonutChart
-              segments={summaryItems}
-              centerTop="Total"
-              centerBottom={`${summaryCount} pedidos`}
-              className="sideInteractiveDonut"
-              infoPrefix="Origem"
-            />
-            <div className="orderOriginLegend">
-              <p className="direct">
-                <span className="orderOriginText">
-                  <strong>Venda direta</strong>
-                  <small>{summaryPct(directOrders)}%</small>
-                </span>
-                <b>{directOrders} pedido{directOrders === 1 ? "" : "s"}</b>
-              </p>
-              <p className="tiktok">
-                <span className="orderOriginText">
-                  <strong>TikTok Shop</strong>
-                  <small>{summaryPct(tiktokOrders)}%</small>
-                </span>
-                <b>{tiktokOrders} pedido{tiktokOrders === 1 ? "" : "s"}</b>
-              </p>
-              <p className="shopee">
-                <span className="orderOriginText">
-                  <strong>Shopee</strong>
-                  <small>{summaryPct(shopeeOrders)}%</small>
-                </span>
-                <b>{shopeeOrders} pedido{shopeeOrders === 1 ? "" : "s"}</b>
-              </p>
-              <p className="cancelled">
-                <span className="orderOriginText">
-                  <strong>Cancelados</strong>
-                  <small>{summaryPct(cancelledOrders)}%</small>
-                </span>
-                <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
-              </p>
-            </div>
+        <PeriodSelector
+          monthKey={monthKey}
+          setMonthKey={setMonthKey}
+          customStart={customStart}
+          customEnd={customEnd}
+          setCustomStart={setCustomStart}
+          setCustomEnd={setCustomEnd}
+          onPeriodChange={() => setSelectedDay(null)}
+        />
+      </div>
+
+      <div className="executiveMetricGrid">
+        <div className="metricCard metricBlue">
+          <span>Faturamento</span>
+          <b>{brl(metrics.gross)}</b>
+          <small>{activeSales.length} pedido(s) no período</small>
+          <ComparisonBadge value={metricDelta(metrics.gross, previousMetrics.gross)} label={comparisonLabel} />
+        </div>
+        <div className="metricCard metricViolet">
+          <span>Pedidos</span>
+          <b>{activeSales.length}</b>
+          <small>{metrics.uniqueClients} cliente(s) únicos</small>
+          <ComparisonBadge value={metricDelta(activeSales.length, previousMetrics.orders)} label={comparisonLabel} />
+        </div>
+        <div className="metricCard metricGreen">
+          <span>Lucro estimado</span>
+          <b>{brl(metrics.profit)}</b>
+          <small>Margem de {metrics.margin.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</small>
+          <ComparisonBadge value={metricDelta(metrics.profit, previousMetrics.profit)} label={comparisonLabel} />
+        </div>
+        <div className="metricCard metricCyan">
+          <span>Ticket médio</span>
+          <b>{brl(metrics.ticket)}</b>
+          <small>Valor médio por pedido</small>
+          <ComparisonBadge value={metricDelta(metrics.ticket, previousMetrics.ticket)} label={comparisonLabel} />
+        </div>
+        <div className="metricCard metricOrange">
+          <span>Frascos vendidos</span>
+          <b>{metrics.bottles}</b>
+          <small>{metrics.apcs} APC(s) vendidos à parte</small>
+        </div>
+        <div className="metricCard metricPink">
+          <span>Volume vendido</span>
+          <b>{metrics.ml.toLocaleString("pt-BR")} ml</b>
+          <small>{brl(metrics.paid)} já recebidos</small>
+        </div>
+      </div>
+
+      <div className="dashboardTopGrid">
+        <div className="panel chart dashboardRevenueChart">
+          <h2>Faturamento consolidado + tendência</h2>
+          <p>Passe o mouse ou toque em uma barra para ver o valor</p>
+          <div className="stats">
+            Média diária <b>{brl(avg)}</b> · Projeção/total do período <b>{brl(projection)}</b>
           </div>
-          <div className="panel categories">
-            <h2>Vendas por categoria</h2>
-            <p className="chartExplanation chartExplanationTop">
-              Distribuição dos mls vendidos no mês.
-            </p>
-            <InteractiveDonutChart
-              segments={categories.map((item) => ({
-                label: item.category,
-                value: item.value,
-                color:
-                  item.category === "Nicho"
-                    ? "#e0b43c"
-                    : item.category === "Árabe"
-                      ? "#8b5cf6"
-                      : "#2f80ed",
-              }))}
-              centerTop="Total vendido"
-              centerBottom={`${catTotal.toLocaleString("pt-BR")}mls`}
-              className="sideInteractiveDonut"
-              infoPrefix="Categoria"
-            />
-            <div className="categoryLegend categoryPercentLegend">
-              {categories.map((x) => {
-                const percentage = catTotal
-                  ? Math.round((x.value / catTotal) * 100)
-                  : 0;
-                return (
-                  <div
-                    key={x.category}
-                    className={x.category
-                      .toLowerCase()
-                      .normalize("NFD")
-                      .replace(/[\u0300-\u036f]/g, "")}
-                  >
-                    <span className="categoryPercentText">
-                      <strong>{x.category}</strong>
-                      <small>{percentage}%</small>
-                    </span>
-                    <b className="categorySoldMl">
-                      {x.value.toLocaleString("pt-BR")} ml vendidos
-                    </b>
-                  </div>
-                );
-              })}
-            </div>
+          <div
+            className={"bars" + (selectedDay !== null ? " hasSelection" : "")}
+            style={{
+              gridTemplateColumns: `repeat(${Math.max(1, chartKeys.length)}, minmax(0, 1fr))`,
+            }}
+          >
+            {displayValues.map((value, index) => {
+              const percentage = displayedTotal
+                ? Math.round((value / displayedTotal) * 100)
+                : 0;
+              const future =
+                !customRange && monthKey === currentMonth && index >= cutoff;
+              return (
+                <button
+                  key={chartKeys[index]}
+                  className={selectedDay === index ? "selected" : ""}
+                  aria-pressed={selectedDay === index}
+                  aria-label={`${dateBR(chartKeys[index])}: ${brl(value)} · ${percentage}% do gráfico`}
+                  onPointerEnter={(event) => {
+                    if (event.pointerType === "mouse") setSelectedDay(index);
+                  }}
+                  onPointerLeave={(event) => {
+                    if (event.pointerType === "mouse") setSelectedDay(null);
+                  }}
+                  onClick={() => {
+                    const desktopHover = window.matchMedia(
+                      "(hover: hover) and (pointer: fine)",
+                    ).matches;
+                    if (desktopHover) return;
+                    setSelectedDay((current) => (current === index ? null : index));
+                  }}
+                >
+                  <span>
+                    {brl(value)}
+                    <small>{percentage}%</small>
+                  </span>
+                  <i
+                    className={future ? "future" : ""}
+                    style={{ height: Math.max(4, (value / max) * 100) + "%" }}
+                  />
+                  <small>{customRange ? dateBR(chartKeys[index]).slice(0, 5) : index + 1}</small>
+                </button>
+              );
+            })}
           </div>
         </div>
+
+        <HealthGauge
+          gross={metrics.gross}
+          previousGross={previousMetrics.gross}
+          paid={metrics.paid}
+          perfumeCost={metrics.perfumeCost}
+          suppliesCost={suppliesCost}
+          freightCost={freightCost}
+          marketplaceFees={marketplaceFees}
+          otherExpenses={otherExpenses}
+          purchases={purchases}
+        />
+      </div>
+
+      <div className="dashboardLowerGrid">
+        <OrderSummaryChart sales={periodSales} />
+        <PaymentBreakdown d={d} sales={activeSales} compact />
+        <CategoryChart d={d} sales={activeSales} />
+        <LeadRanking d={d} start={rangeStart} end={rangeEnd} />
       </div>
     </>
   );
@@ -5218,9 +6022,48 @@ function Clients({
   notify: (s: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const clients = d.clients.filter((client) =>
+  const [rankingOpen, setRankingOpen] = useState(false);
+  const [groupFilterOpen, setGroupFilterOpen] = useState(false);
+  const [groupFilter, setGroupFilter] = useState<"" | "Grupo 1" | "Grupo 2" | "Grupo 3">("");
+  const groupClients = d.clients.filter(
+    (client) => !groupFilter || client.leadSource === groupFilter,
+  );
+  const clients = groupClients.filter((client) =>
     client.name.toLowerCase().includes(query.trim().toLowerCase()),
   );
+  const clientCountLabel = groupFilter
+    ? `Clientes no ${groupFilter}`
+    : "Clientes cadastrados";
+
+  const clientRanking = d.clients
+    .map((client) => {
+      const sales = d.sales.filter(
+        (sale) =>
+          sale.clientId === client.id &&
+          sale.status !== "cancelled" &&
+          !isNoCost(sale),
+      );
+      const spent = sales.reduce(
+        (sum, sale) => sum + Math.max(0, Number(sale.total || 0)),
+        0,
+      );
+      const orders = sales.length;
+      return {
+        client,
+        spent,
+        orders,
+        ticket: orders ? spent / orders : 0,
+      };
+    })
+    .filter((item) => item.spent > 0 || item.orders > 0)
+    .sort(
+      (a, b) =>
+        b.spent - a.spent ||
+        b.orders - a.orders ||
+        b.ticket - a.ticket ||
+        a.client.name.localeCompare(b.client.name, "pt-BR"),
+    );
+
   function remove(id: number) {
     if (d.sales.some((s) => s.clientId === id)) {
       window.alert(
@@ -5234,15 +6077,68 @@ function Clients({
   }
   return (
     <>
-      <Cards v={[[String(d.clients.length), "Clientes cadastrados"]]} />
-      <div className="clientSearch">
-        <Search />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Pesquisar cliente pelo nome"
-          aria-label="Pesquisar cliente pelo nome"
-        />
+      <div className="clientsTopRow">
+        <Cards v={[[String(groupClients.length), clientCountLabel]]} />
+        <button
+          type="button"
+          className="clientRankingButton"
+          onClick={() => setRankingOpen(true)}
+        >
+          <BarChart3 />
+          Ranking dos clientes
+        </button>
+      </div>
+
+      <div className="clientsToolbar">
+        <label className="clientSearch">
+          <Search />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Pesquisar cliente pelo nome"
+            aria-label="Pesquisar cliente pelo nome"
+          />
+        </label>
+
+        <div className="clientGroupFilter">
+          <button
+            type="button"
+            className={groupFilter ? "active" : ""}
+            onClick={() => setGroupFilterOpen((open) => !open)}
+          >
+            <SlidersHorizontal />
+            {groupFilter ? groupFilter : "Filtrar por grupo"}
+          </button>
+
+          {groupFilterOpen ? (
+            <div className="clientGroupFilterPopover">
+              <strong>Filtrar por grupo</strong>
+              {(["Grupo 1", "Grupo 2", "Grupo 3"] as const).map((group) => (
+                <button
+                  type="button"
+                  key={group}
+                  className={groupFilter === group ? "selected" : ""}
+                  onClick={() => {
+                    setGroupFilter(group);
+                    setGroupFilterOpen(false);
+                  }}
+                >
+                  {group}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="clear"
+                onClick={() => {
+                  setGroupFilter("");
+                  setGroupFilterOpen(false);
+                }}
+              >
+                Mostrar todos
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
       <div className="clients">
         {clients.map((c) => (
@@ -5255,8 +6151,11 @@ function Clients({
             </i>
             <h3>{c.name}</h3>
             <p>
-              {c.phone} · CEP {c.cep}
+              {c.phone || "Sem telefone"} · {c.cep ? `CEP ${c.cep}` : "CEP não informado"}
             </p>
+            <span className={"leadSourceBadge " + (c.leadSource ? "filled" : "empty")}>
+              {c.leadSource || "Origem do lead não definida"}
+            </span>
             <div className="clientActions">
               <button onClick={() => history(c.id)}>Ver histórico</button>
               <button onClick={() => edit(c.id)}>
@@ -5273,6 +6172,49 @@ function Clients({
       </div>
       {!clients.length ? (
         <p className="empty">Nenhum cliente encontrado.</p>
+      ) : null}
+
+      {rankingOpen ? (
+        <div className="overlay">
+          <div className="systemDialog clientRankingDialog">
+            <header>
+              <div>
+                <small>RELACIONAMENTO COM CLIENTES</small>
+                <h2>Ranking dos clientes</h2>
+                <p>
+                  Ordenado principalmente pelo valor total gasto. Número de pedidos é
+                  usado como desempate.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRankingOpen(false)}
+                aria-label="Fechar ranking dos clientes"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="clientRankingList">
+              {clientRanking.map((item, index) => (
+                <div key={item.client.id}>
+                  <span className="clientRankingPosition">{index + 1}º</span>
+                  <div>
+                    <strong>{item.client.name}</strong>
+                    <small>
+                      {item.orders} pedido{item.orders === 1 ? "" : "s"} · ticket médio{" "}
+                      {brl(item.ticket)}
+                    </small>
+                  </div>
+                  <b>{brl(item.spent)}</b>
+                </div>
+              ))}
+              {!clientRanking.length ? (
+                <p className="empty">Ainda não há compras suficientes para montar o ranking.</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
       ) : null}
     </>
   );
@@ -5291,6 +6233,31 @@ function Suppliers({
   notify: (message: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [rankingOpen, setRankingOpen] = useState(false);
+
+  const supplierRanking = d.suppliers
+    .map((name) => {
+      const purchases = d.purchases.filter(
+        (purchase) => purchase.supplier === name,
+      );
+      const spent = purchases.reduce(
+        (sum, purchase) => sum + Math.max(0, Number(purchase.total || 0)),
+        0,
+      );
+      return {
+        name,
+        spent,
+        purchases: purchases.length,
+      };
+    })
+    .filter((item) => item.spent > 0 || item.purchases > 0)
+    .sort(
+      (a, b) =>
+        b.spent - a.spent ||
+        b.purchases - a.purchases ||
+        a.name.localeCompare(b.name, "pt-BR"),
+    );
+
   const suppliers = d.suppliers
     .map((name, index) => ({ name, index }))
     .filter(({ name }) =>
@@ -5322,7 +6289,17 @@ function Suppliers({
   }
   return (
     <>
-      <Cards v={[[String(d.suppliers.length), "Fornecedores cadastrados"]]} />
+      <div className="suppliersTopRow">
+        <Cards v={[[String(d.suppliers.length), "Fornecedores cadastrados"]]} />
+        <button
+          type="button"
+          className="supplierRankingButton"
+          onClick={() => setRankingOpen(true)}
+        >
+          <BarChart3 />
+          Ranking dos fornecedores
+        </button>
+      </div>
       <div className="clientSearch">
         <Search />
         <input
@@ -5369,6 +6346,45 @@ function Suppliers({
       {!suppliers.length ? (
         <p className="empty">Nenhum fornecedor encontrado.</p>
       ) : null}
+
+      {rankingOpen ? (
+        <div className="overlay">
+          <div className="systemDialog supplierRankingDialog">
+            <header>
+              <div>
+                <small>ANÁLISE DE COMPRAS</small>
+                <h2>Ranking dos fornecedores</h2>
+                <p>Ordenado pelo valor total gasto em cada fornecedor.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRankingOpen(false)}
+                aria-label="Fechar ranking dos fornecedores"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="supplierRankingList">
+              {supplierRanking.map((item, index) => (
+                <div key={item.name}>
+                  <span className="supplierRankingPosition">{index + 1}º</span>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <small>
+                      {item.purchases} compra{item.purchases === 1 ? "" : "s"} registrada{item.purchases === 1 ? "" : "s"}
+                    </small>
+                  </div>
+                  <b>{brl(item.spent)}</b>
+                </div>
+              ))}
+              {!supplierRanking.length ? (
+                <p className="empty">Ainda não há compras para montar o ranking.</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -5384,7 +6400,12 @@ function SupplierHistory({
 }) {
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [month, setMonth] = useState("");
+  const [month, setMonth] = useState(() => {
+    const latest = d.purchases
+      .filter((purchase) => purchase.supplier === name)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    return latest?.date?.slice(0, 7) || today().slice(0, 7);
+  });
   const [purchaseDay, setPurchaseDay] = useState("");
   const purchases = d.purchases
     .filter((purchase) => purchase.supplier === name)
@@ -5495,33 +6516,45 @@ function SupplierHistory({
                 aria-label="Pesquisar produto no histórico do fornecedor"
               />
             </label>
+            <div className="historyMonthPicker" aria-label="Mês do histórico do fornecedor">
+              <button
+                type="button"
+                onClick={() => setMonth((current) => shiftMonthKey(current || today().slice(0, 7), -1))}
+                aria-label="Mês anterior"
+              >
+                <ChevronLeft />
+              </button>
+              <b>{month ? periodMonthLabel(month) : "Todo o histórico"}</b>
+              <button
+                type="button"
+                onClick={() => setMonth((current) => shiftMonthKey(current || today().slice(0, 7), 1))}
+                aria-label="Próximo mês"
+              >
+                <ChevronRight />
+              </button>
+              <button
+                type="button"
+                className="historyAllButton"
+                onClick={() => {
+                  setMonth("");
+                  setPurchaseDay("");
+                }}
+              >
+                Todos
+              </button>
+            </div>
             <button
               type="button"
-              className={
-                showFilters || month || purchaseDay
-                  ? "historyFilterButton active"
-                  : "historyFilterButton"
-              }
+              className={showFilters || purchaseDay ? "historyFilterButton active" : "historyFilterButton"}
               onClick={() => setShowFilters((visible) => !visible)}
             >
-              <SlidersHorizontal />
-              Filtrar por data
+              <CalendarDays />
+              Data específica
             </button>
           </div>
 
           {showFilters ? (
-            <div className="supplierHistoryFilters">
-              <label>
-                <span>Mês</span>
-                <input
-                  type="month"
-                  value={month}
-                  onChange={(event) => {
-                    setMonth(event.target.value);
-                    if (event.target.value) setPurchaseDay("");
-                  }}
-                />
-              </label>
+            <div className="supplierHistoryFilters compact">
               <label>
                 <span>Data específica</span>
                 <input
@@ -5536,11 +6569,11 @@ function SupplierHistory({
               <button
                 type="button"
                 onClick={() => {
-                  setMonth("");
                   setPurchaseDay("");
+                  if (!month) setMonth(today().slice(0, 7));
                 }}
               >
-                Limpar filtro
+                Limpar data
               </button>
             </div>
           ) : null}
@@ -5587,7 +6620,16 @@ function SupplierHistory({
   );
 }
 
-function PaymentBreakdown({ d }: { d: D }) {
+function PaymentBreakdown({
+  d,
+  sales,
+  compact = false,
+}: {
+  d: D;
+  sales?: V[];
+  compact?: boolean;
+}) {
+  const sourceSales = sales || d.sales;
   const payments = [
     { name: "Pix", color: "#22a66f", matches: (sale: V) => !isMarketplaceSale(sale) && ((isInstallmentSale(sale) && isInstallmentSettled(sale)) || (!isInstallmentSale(sale) && sale.payment === "Pix")) },
     { name: "Cartão de Crédito", color: "#2f80ed", matches: (sale: V) => !isMarketplaceSale(sale) && !isInstallmentSale(sale) && sale.payment === "Cartão de Crédito" },
@@ -5595,7 +6637,7 @@ function PaymentBreakdown({ d }: { d: D }) {
     { name: "Marketplace", color: "#8b5cf6", matches: (sale: V) => isMarketplaceSale(sale) },
   ].map((x) => ({
     ...x,
-    value: d.sales
+    value: sourceSales
       .filter(
         (s) =>
           s.status !== "cancelled" &&
@@ -5617,10 +6659,18 @@ function PaymentBreakdown({ d }: { d: D }) {
         .join(",")})`
     : "#303b4c";
   return (
-    <div className="panel financeChart">
-      <div>
+    <div
+      className={
+        "panel dashboardMetricPanel financeChart modernPaymentChart" +
+        (compact ? " compact" : "")
+      }
+    >
+      <div className="dashboardMiniHeader">
         <h2>Vendas por forma de pagamento</h2>
-        <p>Distribuição do faturamento recebido por forma e origem do pagamento.</p>
+        <p>Distribuição do faturamento do período selecionado.</p>
+      </div>
+
+      <div className="dashboardMiniVisual">
         <InteractiveDonutChart
           segments={payments.map((item) => ({
             label: item.name,
@@ -5633,7 +6683,8 @@ function PaymentBreakdown({ d }: { d: D }) {
           infoPrefix="Forma de pagamento"
         />
       </div>
-      <div className="paymentLegend">
+
+      <div className="dashboardMiniLegend paymentLegend">
         {payments.map((x) => (
           <div key={x.name}>
             <i style={{ background: x.color }} />
@@ -5652,7 +6703,7 @@ function PaymentBreakdown({ d }: { d: D }) {
 }
 function Finance({
   d,
-  totals,
+  totals: _totals,
   set,
   notify,
 }: {
@@ -5661,51 +6712,150 @@ function Finance({
   set: any;
   notify: (message: string) => void;
 }) {
-  const balanceCosts = d.sales
+  const [month, setMonth] = useState(today().slice(0, 7));
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const cutoff = periodCutoffDay(month);
+  const defaultStart = month + "-01";
+  const defaultEnd = month + "-" + String(cutoff).padStart(2, "0");
+  const customRange = Boolean(customStart);
+  const rangeStart = customStart || defaultStart;
+  const rangeEnd =
+    customStart && customEnd && customEnd >= customStart
+      ? customEnd
+      : customStart || defaultEnd;
+  const metrics = rangeMetrics(d, rangeStart, rangeEnd);
+  const [previousStart, previousEnd] = customRange
+    ? previousEquivalentRange(rangeStart, rangeEnd)
+    : (() => {
+        const previousMonth = shiftMonthKey(month, -1);
+        return [
+          previousMonth + "-01",
+          previousMonth +
+            "-" +
+            String(Math.min(cutoff, monthDays(previousMonth))).padStart(2, "0"),
+        ] as const;
+      })();
+  const previous = rangeMetrics(d, previousStart, previousEnd);
+  const comparisonLabel = customRange
+    ? "vs. período anterior"
+    : "vs. " +
+      periodMonthLabel(shiftMonthKey(month, -1)).replace(/^./, (letter) =>
+        letter.toUpperCase(),
+      );
+  const purchases = d.purchases.filter((purchase) =>
+    dateInRange(purchase.date, rangeStart, rangeEnd),
+  );
+  const purchaseExpenses = purchases.reduce(
+    (sum, purchase) => sum + Math.max(0, Number(purchase.total || 0)),
+    0,
+  );
+  const salesCosts = metrics.perfumeCost + metrics.operatingExpenses;
+  const cashGeneration = metrics.paid - salesCosts - purchaseExpenses;
+  const receivable = Math.max(0, metrics.gross - metrics.paid);
+  const inventoryCost = d.products.reduce(
+    (sum, product) => sum + Math.max(0, product.stock) * product.cost,
+    0,
+  );
+  const marketplacePendingValue = metrics.sales
     .filter(
       (sale) =>
         sale.status !== "cancelled" &&
-        !isNoCost(sale) &&
-        !isHistoricalSale(sale),
+        isMarketplaceSale(sale) &&
+        marketplacePending(sale),
     )
-    .reduce(
-      (sum, sale) =>
-        sum +
-        sale.items.reduce(
-          (itemSum, item) =>
-            itemSum +
-            item.ml *
-              (item.unitCost ??
-                d.products.find((product) => product.id === item.productId)?.cost ??
-                0),
-          0,
-        ) +
-        Number(sale.expenses || 0) +
-        Number(sale.marketplaceFee || 0) +
-        Number(sale.shippingCost || 0) +
-        packaging(sale, d.supplies).total,
-      0,
-    );
-  const purchaseExpenses = d.purchases.reduce(
-    (sum, purchase) => sum + Number(purchase.total || 0),
-    0,
-  );
-  const balance = totals.gross - balanceCosts - purchaseExpenses;
+    .reduce((sum, sale) => sum + amountDue(sale), 0);
+
   return (
-    <>
-      <Cards
-        v={[
-          [brl(totals.gross), "Faturamento"],
-          [brl(totals.paid), "Total vendido"],
-          [brl(totals.gross - totals.paid), "A receber"],
-          [brl(balance), "Saldo"],
-        ]}
-      />
-      <PaymentBreakdown d={d} />
-      <ProfitControl d={d} set={set} notify={notify} />
-      <InventoryProjection d={d} />
-      <MarketplaceForecast d={d} set={set} notify={notify} />
-    </>
+    <div className="financeWorkspace">
+      <div className="workspaceToolbar financeMonthToolbar">
+        <div>
+          <span className="eyebrow">Centro financeiro</span>
+          <h2>
+            {customRange
+              ? "Período personalizado"
+              : periodMonthLabel(month).replace(/^./, (letter) =>
+                  letter.toUpperCase(),
+                )}
+          </h2>
+          <p>Período: {rangeLabel(rangeStart, rangeEnd)}</p>
+        </div>
+        <PeriodSelector
+          monthKey={month}
+          setMonthKey={setMonth}
+          customStart={customStart}
+          customEnd={customEnd}
+          setCustomStart={setCustomStart}
+          setCustomEnd={setCustomEnd}
+        />
+      </div>
+
+      <div className="financeMetricGrid">
+        <div className="metricCard metricBlue">
+          <span>Faturamento</span>
+          <b>{brl(metrics.gross)}</b>
+          <small>{metrics.orders} pedido(s)</small>
+          <ComparisonBadge value={metricDelta(metrics.gross, previous.gross)} label={comparisonLabel} />
+        </div>
+        <div className="metricCard metricGreen">
+          <span>Total recebido</span>
+          <b>{brl(metrics.paid)}</b>
+          <small>{metrics.gross ? Math.round((metrics.paid / metrics.gross) * 100) : 0}% realizado</small>
+        </div>
+        <div className="metricCard metricOrange">
+          <span>A receber</span>
+          <b>{brl(receivable)}</b>
+          <small>Vendas e repasses ainda abertos</small>
+        </div>
+        <div className="metricCard metricCyan">
+          <span>Lucro estimado</span>
+          <b>{brl(metrics.profit)}</b>
+          <small>Margem {metrics.margin.toFixed(1).replace(".", ",")}%</small>
+          <ComparisonBadge value={metricDelta(metrics.profit, previous.profit)} label={comparisonLabel} />
+        </div>
+        <div className="metricCard metricViolet">
+          <span>Compras no período</span>
+          <b>{brl(purchaseExpenses)}</b>
+          <small>{purchases.length} lançamento(s)</small>
+        </div>
+        <div className={"metricCard " + (cashGeneration >= 0 ? "metricGreen" : "metricRed")}>
+          <span>Geração de caixa</span>
+          <b>{brl(cashGeneration)}</b>
+          <small>Recebido − custos − compras</small>
+        </div>
+      </div>
+
+      <div className="financePrimaryGrid">
+        <PaymentBreakdown d={d} sales={metrics.sales} compact />
+        <div className="panel financeStatement">
+          <div className="panelHeading">
+            <div>
+              <span className="eyebrow">DRE gerencial</span>
+              <h2>Resultado do período</h2>
+              <p>Leitura simplificada do resultado operacional.</p>
+            </div>
+            <BarChart3 />
+          </div>
+          <div className="statementRows">
+            <div><span>Receita bruta</span><b>{brl(metrics.gross)}</b></div>
+            <div><span>(−) Custo dos perfumes</span><b>{brl(metrics.perfumeCost)}</b></div>
+            <div><span>(−) Taxas, fretes e insumos</span><b>{brl(metrics.operatingExpenses)}</b></div>
+            <div className="statementTotal"><span>Lucro estimado</span><b>{brl(metrics.profit)}</b></div>
+          </div>
+          <div className="financeHealthGrid">
+            <div><span>Margem</span><b>{metrics.margin.toFixed(1).replace(".", ",")}%</b></div>
+            <div><span>Estoque a custo</span><b>{brl(inventoryCost)}</b></div>
+            <div><span>Marketplace pendente</span><b>{brl(marketplacePendingValue)}</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="financeSecondaryGrid single">
+        <InventoryProjection d={d} />
+      </div>
+
+      <ProfitControl d={d} sales={metrics.sales} set={set} notify={notify} />
+    </div>
   );
 }
 
@@ -5848,16 +6998,18 @@ function MarketplaceForecast({
 
 function ProfitControl({
   d,
+  sales: providedSales,
   set,
   notify,
 }: {
   d: D;
+  sales?: V[];
   set: any;
   notify: (message: string) => void;
 }) {
   const [showOrders, setShowOrders] = useState(false);
   const [editingSale, setEditingSale] = useState<V | null>(null);
-  const sales = d.sales.filter(
+  const sales = (providedSales || d.sales).filter(
     (sale) => sale.status !== "cancelled" && !isHistoricalSale(sale),
   );
   const rows = sales.map((sale) => {
@@ -5889,11 +7041,15 @@ function ProfitControl({
   return (
     <>
     <div className="panel profitControl">
-      <h2>Margem e despesas por pedido</h2>
-      <p>
-        Calculado pelo preço vendido, custo por ml do perfume e despesas
-        lançadas.
-      </p>
+      <div className="panelHeading">
+        <div>
+          <span className="eyebrow">Rentabilidade</span>
+          <h2>Margem e despesas por pedido</h2>
+          <p>
+            Preço vendido, custo por ml e despesas do período selecionado.
+          </p>
+        </div>
+      </div>
       <Cards
         v={[
           [brl(perfumeCost), "Custo dos perfumes"],
@@ -6363,6 +7519,7 @@ function Form({
     district: existingClient?.district || "",
     city: existingClient?.city || "",
     state: existingClient?.state || "",
+    leadSource: existingClient?.leadSource || "",
     label: existingClient?.addresses[0]?.label || "Principal",
   });
   const [clientLookupMessage, setClientLookupMessage] = useState("");
@@ -6406,6 +7563,7 @@ function Form({
       district: found.district || "",
       city: found.city || "",
       state: found.state || "",
+      leadSource: found.leadSource || "",
       label: found.addresses[0]?.label || "Principal",
     });
     setClientLookupMessage(`Cliente encontrado: ${found.name}`);
@@ -6760,18 +7918,49 @@ function Form({
         };
       }
       const typedClientName = isMarketplace
-      ? ""
-      : String(f.clientName || "").trim();
-    const matchedClient = isMarketplace
-      ? undefined
-      : x.clients.find(
-          (client) =>
-            client.name.trim().toLowerCase() ===
-            typedClientName.toLowerCase(),
-        );
-    let clientId = isMarketplace ? 0 : matchedClient?.id || 0,
-      clients = x.clients;
-    if (newClient && !isMarketplace) {
+        ? String(f.marketplaceCustomer || "").trim()
+        : String(f.clientName || "").trim();
+      const matchedClient = x.clients.find(
+        (client) =>
+          client.name.trim().toLowerCase() === typedClientName.toLowerCase(),
+      );
+      let clientId = matchedClient?.id || 0,
+        clients = x.clients;
+
+      if (isMarketplace && typedClientName) {
+        const marketplaceLeadSource: LeadSource =
+          String(f.marketplace) === "Shopee" ? "Shopee" : "TikTok";
+        if (matchedClient) {
+          if (!matchedClient.leadSource) {
+            clients = clients.map((client) =>
+              client.id === matchedClient.id
+                ? { ...client, leadSource: marketplaceLeadSource }
+                : client,
+            );
+          }
+        } else {
+          clientId = Date.now();
+          clients = [
+            ...clients,
+            {
+              id: clientId,
+              name: typedClientName,
+              phone: "",
+              cpf: "",
+              cep: "",
+              number: "",
+              district: "",
+              city: "",
+              state: "",
+              leadSource: marketplaceLeadSource,
+              date: String(f.date),
+              addresses: [],
+            },
+          ];
+        }
+      }
+
+      if (newClient && !isMarketplace) {
         clientId = Date.now();
         const address = String(f.newAddress || "");
         clients = [
@@ -6786,6 +7975,9 @@ function Form({
             district: String(f.newDistrict || ""),
             city: String(f.newCity || ""),
             state: String(f.newState || ""),
+            leadSource: MANUAL_LEAD_SOURCES.includes(String(f.newLeadSource) as LeadSource)
+              ? (String(f.newLeadSource) as LeadSource)
+              : undefined,
             date: String(f.date),
             addresses: address ? [{
               label: "Principal",
@@ -6823,7 +8015,7 @@ function Form({
         date: String(f.date),
         clientId,
         customerName: isMarketplace
-        ? String(f.marketplaceCustomer || "").trim()
+        ? typedClientName
         : newClient || matchedClient
           ? undefined
           : typedClientName || undefined,
@@ -6957,6 +8149,11 @@ function Form({
                   <Field n="newNumber" l="Número (opcional)" required={false} />
                   <Field n="newCep" l="CEP (opcional)" required={false} />
                 </div>
+                <Select
+                  n="newLeadSource"
+                  l="Origem do lead / Grupo"
+                  o={MANUAL_LEAD_SOURCES.map((source) => [source, source])}
+                />
               </>
             ) : (
               <Select n="clientId" l="Cliente" o={d.clients.map((client) => [client.id, client.name])} />
@@ -7043,6 +8240,11 @@ function Form({
                       <label><span>Cidade (opcional)</span><input name="newCity" value={clientDraft.city} onChange={(e) => setClientDraft((c) => ({ ...c, city: e.target.value }))} /></label>
                       <label><span>Estado (opcional)</span><select name="newState" value={clientDraft.state} onChange={(e) => setClientDraft((c) => ({ ...c, state: e.target.value }))}><option value="">Selecione...</option>{BRAZIL_STATES.map((state) => <option key={state}>{state}</option>)}</select></label>
                     </div>
+                    <Select
+                      n="newLeadSource"
+                      l="Origem do lead / Grupo"
+                      o={MANUAL_LEAD_SOURCES.map((source) => [source, source])}
+                    />
                     {clientLookupMessage ? <small className="cepStatus">{clientLookupMessage}</small> : null}
                   </>
                 ) : (
@@ -7564,6 +8766,30 @@ function Form({
                 <input name="state" value={clientDraft.state} onChange={(event) => setClientDraft((current) => ({ ...current, state: event.target.value }))} />
               </label>
             </div>
+            <label>
+              <span>Origem do lead / Grupo</span>
+              <select
+                name="leadSource"
+                value={clientDraft.leadSource}
+                onChange={(event) =>
+                  setClientDraft((current) => ({
+                    ...current,
+                    leadSource: event.target.value,
+                  }))
+                }
+                required
+              >
+                <option value="" disabled>Selecione...</option>
+                <option value="Grupo 1">Grupo 1</option>
+                <option value="Grupo 2">Grupo 2</option>
+                <option value="Grupo 3">Grupo 3</option>
+                <option value="TikTok" disabled={clientDraft.leadSource !== "TikTok"}>TikTok (automático)</option>
+                <option value="Shopee" disabled={clientDraft.leadSource !== "Shopee"}>Shopee (automático)</option>
+              </select>
+              <small className="fieldHint">
+                TikTok e Shopee são preenchidos automaticamente pelas vendas de marketplace.
+              </small>
+            </label>
             {clientLookupMessage ? <p className="lookupMessage">{clientLookupMessage}</p> : null}
             {Array.from({ length: Math.max(0, addressCount - 1) }, (_, offset) => {
               const i = offset + 1;
@@ -7721,6 +8947,9 @@ const mkC = (f: any, n: number, id = Date.now()): C => ({
   district: String(f.district || ""),
   city: String(f.city || ""),
   state: String(f.state || ""),
+  leadSource: LEAD_SOURCES.includes(String(f.leadSource) as LeadSource)
+    ? (String(f.leadSource) as LeadSource)
+    : undefined,
   date: String(f.date),
   addresses: Array.from({ length: n }, (_, i) => ({
     label: String(f["label" + i] || ""),
@@ -8010,7 +9239,12 @@ function History({ id, d, close }: { id: number; d: D; close: () => void }) {
   const c = d.clients.find((client) => client.id === id);
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [month, setMonth] = useState("");
+  const [month, setMonth] = useState(() => {
+    const latest = d.sales
+      .filter((sale) => sale.clientId === id)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+    return latest?.date?.slice(0, 7) || today().slice(0, 7);
+  });
   const [saleDay, setSaleDay] = useState("");
   const customerSales = d.sales
     .filter((sale) => sale.clientId === id)
@@ -8138,33 +9372,45 @@ const apcCount = completedSales.reduce(
                 aria-label="Pesquisar perfume no histórico do cliente"
               />
             </label>
+            <div className="historyMonthPicker" aria-label="Mês do histórico do cliente">
+              <button
+                type="button"
+                onClick={() => setMonth((current) => shiftMonthKey(current || today().slice(0, 7), -1))}
+                aria-label="Mês anterior"
+              >
+                <ChevronLeft />
+              </button>
+              <b>{month ? periodMonthLabel(month) : "Todo o histórico"}</b>
+              <button
+                type="button"
+                onClick={() => setMonth((current) => shiftMonthKey(current || today().slice(0, 7), 1))}
+                aria-label="Próximo mês"
+              >
+                <ChevronRight />
+              </button>
+              <button
+                type="button"
+                className="historyAllButton"
+                onClick={() => {
+                  setMonth("");
+                  setSaleDay("");
+                }}
+              >
+                Todos
+              </button>
+            </div>
             <button
               type="button"
-              className={
-                showFilters || month || saleDay
-                  ? "historyFilterButton active"
-                  : "historyFilterButton"
-              }
+              className={showFilters || saleDay ? "historyFilterButton active" : "historyFilterButton"}
               onClick={() => setShowFilters((visible) => !visible)}
             >
-              <SlidersHorizontal />
-              Filtrar por data
+              <CalendarDays />
+              Data específica
             </button>
           </div>
 
           {showFilters ? (
-            <div className="clientHistoryFilters">
-              <label>
-                <span>Mês</span>
-                <input
-                  type="month"
-                  value={month}
-                  onChange={(event) => {
-                    setMonth(event.target.value);
-                    if (event.target.value) setSaleDay("");
-                  }}
-                />
-              </label>
+            <div className="clientHistoryFilters compact">
               <label>
                 <span>Data específica</span>
                 <input
@@ -8179,11 +9425,11 @@ const apcCount = completedSales.reduce(
               <button
                 type="button"
                 onClick={() => {
-                  setMonth("");
                   setSaleDay("");
+                  if (!month) setMonth(today().slice(0, 7));
                 }}
               >
-                Limpar filtro
+                Limpar data
               </button>
             </div>
           ) : null}
