@@ -6336,3 +6336,493 @@ aside nav button .navAlertGroup {
     right: -1px;
   }
 }
+
+
+/* =========================================================
+   DAF — refinamento de saúde, rankings e históricos
+   ========================================================= */
+
+/* Logo livre no menu lateral */
+aside > img.sidebarLogo {
+  width: 176px;
+  height: auto;
+  max-height: 74px;
+  object-fit: contain;
+  object-position: center;
+  margin: 2px auto 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+aside nav {
+  width: 100%;
+}
+
+/* O gráfico de faturamento deve caber inteiro até em meses de 31 dias */
+.dashboardRevenueChart .bars {
+  width: 100%;
+  overflow: visible;
+  scrollbar-width: none;
+  display: grid;
+  align-items: end;
+  gap: clamp(1px, .23vw, 4px);
+}
+.dashboardRevenueChart .bars::-webkit-scrollbar {
+  display: none;
+}
+.dashboardRevenueChart .bars > button {
+  min-width: 0;
+  width: 100%;
+}
+.dashboardRevenueChart .bars i {
+  width: min(70%, 16px);
+  min-width: 3px;
+}
+.dashboardRevenueChart .bars small {
+  font-size: clamp(6px, .48vw, 9px);
+}
+
+/* Velocímetro — versão SVG alinhada e sem cards auxiliares */
+.companyHealthPanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.healthPanelHeading {
+  flex: 0 0 auto;
+}
+.healthGaugeOnly {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 250px;
+  display: grid;
+  place-items: center;
+  padding: 6px 0 0;
+}
+.healthGaugeSvg {
+  width: min(100%, 390px);
+  height: auto;
+  overflow: visible;
+}
+.healthGaugeTrack,
+.healthGaugeArc {
+  fill: none;
+  stroke-width: 28;
+  stroke-linecap: butt;
+}
+.healthGaugeTrack {
+  stroke: var(--line);
+  opacity: .55;
+}
+.healthGaugeArc.critical {
+  stroke: #e34b57;
+}
+.healthGaugeArc.moderate {
+  stroke: #e7ad2f;
+}
+.healthGaugeArc.healthy {
+  stroke: #2fac7a;
+}
+.healthGaugeNeedle {
+  transform-origin: 160px 160px;
+  transition: transform .5s cubic-bezier(.2,.8,.2,1);
+}
+.healthGaugeNeedle line {
+  stroke: var(--text);
+  stroke-width: 4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 2px 2px rgb(0 0 0 / 18%));
+}
+.healthGaugeHub {
+  fill: var(--text);
+  stroke: var(--panel);
+  stroke-width: 4;
+}
+.healthGaugeLabel {
+  fill: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .045em;
+}
+.healthGaugeLabel.left {
+  text-anchor: start;
+}
+.healthGaugeLabel.middle {
+  text-anchor: middle;
+}
+.healthGaugeLabel.right {
+  text-anchor: end;
+}
+.healthGaugeScore {
+  position: absolute;
+  left: 50%;
+  top: 57%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  line-height: 1;
+  pointer-events: none;
+}
+.healthGaugeScore b {
+  font-size: clamp(32px, 3vw, 48px);
+  letter-spacing: -.06em;
+}
+.healthGaugeScore span {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+/* antiga listagem detalhada fica fora do velocímetro */
+.companyHealthPanel .healthBreakdown,
+.companyHealthPanel .gaugeWrap,
+.companyHealthPanel .gaugeDial {
+  display: none !important;
+}
+
+/* Ranking dos grupos */
+.groupRankingMetric {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr);
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+}
+.groupRankingMetric > span {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+.groupRankingMetric select {
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0 8px;
+  font-size: 9px;
+  font-weight: 800;
+}
+.leadRankContent > small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 7px;
+  line-height: 1.25;
+}
+
+/* Clientes — botão e ranking */
+.clientsTopRow {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+}
+.clientsTopRow > .cards {
+  flex: 1 1 auto;
+}
+.clientRankingButton {
+  flex: 0 0 auto;
+  min-width: 190px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  font-weight: 900;
+  box-shadow: var(--soft-shadow);
+}
+.clientRankingButton svg {
+  width: 18px;
+  color: var(--accent);
+}
+.clientRankingDialog {
+  width: min(760px, calc(100vw - 28px));
+  max-height: calc(100vh - 36px);
+}
+.clientRankingDialog header {
+  align-items: flex-start;
+}
+.clientRankingDialog header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.clientRankingList {
+  display: grid;
+  gap: 8px;
+  max-height: min(66vh, 620px);
+  overflow: auto;
+  padding-right: 3px;
+}
+.clientRankingList > div {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 62px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+.clientRankingPosition {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+}
+.clientRankingList > div:first-child .clientRankingPosition {
+  border-color: #d7a62570;
+  background: #d7a62516;
+  color: #d7a625;
+}
+.clientRankingList strong,
+.clientRankingList small {
+  display: block;
+}
+.clientRankingList strong {
+  color: var(--text);
+  font-size: 12px;
+}
+.clientRankingList small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.clientRankingList > div > b {
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* Histórico de fornecedor e cliente: contraste correto no tema ativo */
+.supplierHistoryImproved,
+.clientHistory {
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line);
+}
+.supplierHistoryHeader,
+.clientHistoryHeader {
+  border-color: var(--line) !important;
+}
+.supplierHistoryHeader > div > small,
+.clientHistoryHeader > div > small {
+  color: var(--accent);
+}
+.supplierHistoryTitle h2,
+.clientHistoryTitle h2 {
+  color: var(--text) !important;
+}
+.supplierHistoryTitle span,
+.clientHistoryTitle span,
+.clientHistoryContact {
+  color: var(--muted) !important;
+}
+.supplierHistoryStats > div,
+.clientHistoryStats > div {
+  border-color: var(--line) !important;
+  background: var(--panel-2) !important;
+}
+.supplierHistoryStats span,
+.clientHistoryStats span {
+  color: var(--muted) !important;
+}
+.supplierHistoryStats b,
+.clientHistoryStats b {
+  color: var(--text) !important;
+}
+.supplierHistoryContent,
+.clientHistorySales {
+  border-color: var(--line) !important;
+  background: var(--panel-2) !important;
+}
+.supplierHistoryContentHead h3,
+.clientHistorySalesHead h3 {
+  color: var(--text) !important;
+}
+.supplierHistoryContentHead p,
+.clientHistorySalesHead p {
+  color: var(--muted) !important;
+}
+.supplierHistorySearch input,
+.clientHistorySearch input,
+.supplierHistoryFilters input,
+.clientHistoryFilters input {
+  border-color: var(--line) !important;
+  background: var(--input) !important;
+  color: var(--text) !important;
+}
+.supplierHistorySearch input::placeholder,
+.clientHistorySearch input::placeholder {
+  color: var(--muted);
+}
+.supplierHistoryImproved .supplierHistoryTable th,
+.clientHistoryTable th {
+  color: var(--muted) !important;
+  border-color: var(--line) !important;
+}
+.supplierHistoryImproved .supplierHistoryTable td,
+.supplierHistoryImproved .supplierHistoryTable td b,
+.clientHistoryTable td {
+  color: var(--text) !important;
+  border-color: var(--line) !important;
+}
+.clientHistoryTable td small {
+  color: var(--muted) !important;
+}
+
+/* seletor mensal sempre visível nos históricos */
+.supplierHistoryToolbar,
+.clientHistoryToolbar {
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, .78fr) auto;
+  gap: 9px;
+}
+.historyMonthPicker {
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 34px minmax(100px, 1fr) 34px auto;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  overflow: hidden;
+}
+.historyMonthPicker > button {
+  align-self: stretch;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  place-items: center;
+}
+.historyMonthPicker > button svg {
+  width: 15px;
+}
+.historyMonthPicker > b {
+  min-width: 0;
+  color: var(--text);
+  text-align: center;
+  text-transform: capitalize;
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.historyMonthPicker .historyAllButton {
+  padding: 0 9px;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+}
+.historyFilterButton {
+  border-color: var(--line) !important;
+  background: var(--input) !important;
+  color: var(--text) !important;
+  white-space: nowrap;
+}
+.historyFilterButton.active {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+}
+.supplierHistoryFilters.compact,
+.clientHistoryFilters.compact {
+  grid-template-columns: minmax(180px, 320px) auto;
+  justify-content: start;
+  background: var(--panel) !important;
+  border: 1px solid var(--line);
+}
+.supplierHistoryFilters.compact label span,
+.clientHistoryFilters.compact label span {
+  color: var(--muted) !important;
+}
+.supplierHistoryFilters.compact button,
+.clientHistoryFilters.compact button {
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--input);
+  color: var(--text);
+  padding: 0 13px;
+  font-weight: 800;
+}
+
+/* Responsividade dos novos elementos */
+@media (max-width: 1180px) {
+  .supplierHistoryToolbar,
+  .clientHistoryToolbar {
+    grid-template-columns: 1fr 1fr;
+  }
+  .supplierHistoryToolbar > .historyFilterButton,
+  .clientHistoryToolbar > .historyFilterButton {
+    grid-column: span 2;
+  }
+}
+@media (max-width: 780px) {
+  .clientsTopRow {
+    display: grid;
+  }
+  .clientRankingButton {
+    min-height: 48px;
+    width: 100%;
+  }
+  .supplierHistoryToolbar,
+  .clientHistoryToolbar {
+    grid-template-columns: 1fr;
+  }
+  .supplierHistoryToolbar > .historyFilterButton,
+  .clientHistoryToolbar > .historyFilterButton {
+    grid-column: auto;
+  }
+  .historyMonthPicker {
+    grid-template-columns: 38px minmax(100px, 1fr) 38px auto;
+  }
+  .clientRankingList > div {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+  .clientRankingList > div > b {
+    grid-column: 2;
+  }
+  .healthGaugeOnly {
+    min-height: 230px;
+  }
+}
+@media (max-width: 560px) {
+  .supplierHistoryFilters.compact,
+  .clientHistoryFilters.compact {
+    grid-template-columns: 1fr;
+  }
+  .historyMonthPicker {
+    grid-template-columns: 34px minmax(90px, 1fr) 34px;
+  }
+  .historyMonthPicker .historyAllButton {
+    grid-column: 1 / -1;
+    min-height: 30px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .healthGaugeOnly {
+    min-height: 210px;
+  }
+}
