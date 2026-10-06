@@ -5777,3 +5777,562 @@ tbody tr:hover {
     --muted: #526071;
   }
 }
+
+
+/* =========================================================
+   DAF — período personalizado, origem de leads e saúde
+   ========================================================= */
+
+/* Sidebar: mais respiro e alinhamento consistente */
+aside nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0 10px;
+}
+aside nav button {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 13px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  line-height: 1.2;
+  text-align: left;
+}
+aside nav button > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+aside nav button .navAlertGroup {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+/* Seletor de período */
+.periodSelectorWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.periodSelectorWrap .workspaceMonthPicker {
+  flex: 1 1 270px;
+}
+.calendarFilterButton {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: .18s ease;
+}
+.calendarFilterButton:hover,
+.calendarFilterButton.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.calendarFilterButton svg {
+  width: 18px;
+  height: 18px;
+}
+.dateRangePopover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 9px);
+  right: 0;
+  width: min(340px, calc(100vw - 40px));
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 22px 56px rgb(0 0 0 / 24%);
+  display: grid;
+  gap: 10px;
+}
+.dateRangePopover > strong {
+  font-size: 12px;
+}
+.dateRangePopover label {
+  display: grid;
+  gap: 5px;
+}
+.dateRangePopover label span,
+.dateRangePopover > small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.dateRangePopover input {
+  min-height: 40px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--input);
+  color: var(--text);
+  padding: 0 10px;
+}
+.dateRangeActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 2px;
+}
+.dateRangeActions button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+}
+.dateRangeActions .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.dateRangeActions button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+/* Nova composição da Visão Geral */
+.dashboardTopGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(360px, .82fr);
+  gap: 14px;
+  align-items: stretch;
+}
+.dashboardTopGrid > *,
+.dashboardLowerGrid > * {
+  min-width: 0;
+}
+.dashboardRevenueChart {
+  min-height: 100%;
+}
+.dashboardRevenueChart .bars {
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: thin;
+}
+.dashboardRevenueChart .bars > button {
+  min-width: 12px;
+}
+.dashboardLowerGrid {
+  display: grid;
+  grid-template-columns:
+    minmax(220px, .88fr)
+    minmax(245px, 1.06fr)
+    minmax(220px, .92fr)
+    minmax(240px, 1.05fr);
+  gap: 12px;
+  align-items: stretch;
+}
+.dashboardLowerGrid .panel {
+  padding: 13px;
+  height: 100%;
+}
+.dashboardLowerGrid .panel > h2,
+.dashboardLowerGrid .leadRankingHead h2 {
+  font-size: 14px;
+}
+.dashboardLowerGrid .panel > p,
+.dashboardLowerGrid .leadRankingHead p {
+  font-size: 9px;
+  line-height: 1.35;
+}
+.dashboardLowerGrid .sideInteractiveDonut svg,
+.dashboardLowerGrid .paymentInteractiveDonut svg {
+  width: 106px !important;
+  height: 106px !important;
+}
+.dashboardLowerGrid .interactiveDonut {
+  margin-top: 5px;
+}
+.dashboardLowerGrid .interactiveDonutInfo {
+  min-height: 28px;
+  padding: 5px 7px;
+}
+.dashboardLowerGrid .orderOriginLegend,
+.dashboardLowerGrid .categoryPercentLegend,
+.dashboardLowerGrid .paymentLegend {
+  gap: 5px;
+}
+.dashboardLowerGrid .orderOriginLegend p,
+.dashboardLowerGrid .categoryPercentLegend > div,
+.dashboardLowerGrid .paymentLegend > div {
+  min-height: 34px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+.dashboardLowerGrid .modernPaymentChart.compact {
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 4px;
+  padding: 13px;
+}
+.dashboardLowerGrid .modernPaymentChart.compact .paymentInteractiveDonut {
+  margin-top: 5px;
+}
+.dashboardLowerGrid .paymentLegend > div {
+  min-height: 34px;
+}
+.dashboardLowerGrid .paymentLegend b,
+.dashboardLowerGrid .paymentLegend span,
+.dashboardLowerGrid .orderOriginLegend p > b,
+.dashboardLowerGrid .categoryPercentLegend .categorySoldMl {
+  font-size: 9px;
+}
+.dashboardLowerGrid .paymentLegend small,
+.dashboardLowerGrid .orderOriginLegend small,
+.dashboardLowerGrid .categoryPercentLegend small {
+  font-size: 7.5px;
+}
+
+/* Velocímetro de saúde */
+.companyHealthPanel {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 9px;
+  overflow: hidden;
+}
+.gaugeWrap {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+.gaugeDial {
+  width: min(300px, 96%);
+  aspect-ratio: 2 / 1.08;
+  position: relative;
+  overflow: hidden;
+}
+.gaugeDial::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 999px 999px 0 0;
+  background: conic-gradient(
+    from 270deg at 50% 100%,
+    #df4a56 0deg 60deg,
+    #e2ad35 60deg 120deg,
+    #2fa974 120deg 180deg,
+    transparent 180deg 360deg
+  );
+}
+.gaugeDial::after {
+  content: "";
+  position: absolute;
+  left: 15%;
+  right: 15%;
+  bottom: 0;
+  height: 70%;
+  border-radius: 999px 999px 0 0;
+  background: var(--panel);
+}
+.gaugeNeedle {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 2px;
+  width: 3px;
+  height: 72%;
+  border-radius: 999px;
+  background: var(--text);
+  transform-origin: 50% 100%;
+  transition: transform .5s ease;
+  box-shadow: 0 0 8px rgb(0 0 0 / 20%);
+}
+.gaugeNeedle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 15px;
+  height: 15px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: var(--text);
+  border: 4px solid var(--panel);
+}
+.gaugeCenter {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: 4px;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  line-height: 1;
+}
+.gaugeCenter b {
+  font-size: 26px;
+  letter-spacing: -.05em;
+}
+.gaugeCenter span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.gaugeDial > small {
+  position: absolute;
+  z-index: 4;
+  bottom: 8px;
+  font-size: 7px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.gaugeLeft { left: 2%; }
+.gaugeMiddle { left: 50%; transform: translateX(-50%); }
+.gaugeRight { right: 2%; }
+.healthBreakdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  align-content: end;
+}
+.healthBreakdown > div {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.healthBreakdown span,
+.healthBreakdown b {
+  display: block;
+}
+.healthBreakdown span {
+  color: var(--muted);
+  font-size: 7.5px;
+}
+.healthBreakdown b {
+  margin-top: 3px;
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.healthBreakdown .healthResult {
+  grid-column: span 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  background: var(--accent-soft);
+}
+.healthBreakdown .healthResult b {
+  margin-top: 0;
+}
+.healthBreakdown .healthResult.positive b { color: var(--success); }
+.healthBreakdown .healthResult.negative b { color: var(--danger); }
+
+/* Ranking mensal de leads */
+.leadRankingPanel {
+  display: flex;
+  flex-direction: column;
+}
+.leadRankingHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.leadRankingHead h2 {
+  margin: 0;
+}
+.leadRankingHead p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+.leadRankingHead button {
+  min-height: 30px;
+  max-width: 116px;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 7.5px;
+  line-height: 1.15;
+  font-weight: 900;
+  cursor: pointer;
+}
+.leadRankingHead button.active,
+.leadRankingHead button:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.leadRankingList {
+  display: grid;
+  gap: 7px;
+  margin-top: 13px;
+}
+.leadRankingList > div {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+}
+.leadRankPosition {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 900;
+}
+.leadRankingList > div:first-child .leadRankPosition {
+  background: #e0b43c20;
+  border-color: #e0b43c55;
+  color: #d3a11f;
+}
+.leadRankContent {
+  min-width: 0;
+}
+.leadRankContent > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 7px;
+  font-size: 9px;
+}
+.leadRankContent > span b {
+  color: var(--muted);
+  font-size: 8px;
+  white-space: nowrap;
+}
+.leadRankContent > i {
+  height: 5px;
+  margin-top: 5px;
+  display: block;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--line);
+}
+.leadRankContent > i > em {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--success));
+  transition: width .25s ease;
+}
+.leadRankingReset {
+  margin-top: auto;
+  padding-top: 10px;
+  color: var(--muted);
+  font-size: 7.5px;
+}
+
+/* Origem no cadastro/listagem de clientes */
+.leadSourceBadge {
+  width: fit-content;
+  margin-top: 3px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 900;
+}
+.leadSourceBadge.filled {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+}
+.leadSourceBadge.empty {
+  color: var(--muted);
+  background: var(--panel-2);
+}
+.fieldHint {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+/* Forecast de marketplace removido: projeção de estoque ocupa a largura */
+.financeSecondaryGrid.single {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 1380px) {
+  .dashboardTopGrid {
+    grid-template-columns: minmax(0, 1.45fr) minmax(330px, .8fr);
+  }
+  .dashboardLowerGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 980px) {
+  .dashboardTopGrid {
+    grid-template-columns: 1fr;
+  }
+  .companyHealthPanel {
+    min-height: 440px;
+  }
+}
+@media (max-width: 720px) {
+  aside nav {
+    gap: 6px;
+  }
+  .periodSelectorWrap {
+    width: 100%;
+  }
+  .periodSelectorWrap .workspaceMonthPicker {
+    min-width: 0;
+    width: auto;
+  }
+  .dateRangePopover {
+    right: 0;
+  }
+  .dashboardLowerGrid {
+    grid-template-columns: 1fr;
+  }
+  .healthBreakdown {
+    grid-template-columns: 1fr;
+  }
+  .healthBreakdown .healthResult {
+    grid-column: auto;
+  }
+  .dashboardRevenueChart .bars > button {
+    min-width: 18px;
+  }
+}
+@media (max-width: 470px) {
+  .periodSelectorWrap {
+    align-items: stretch;
+  }
+  .calendarFilterButton {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+  .dateRangePopover {
+    width: calc(100vw - 28px);
+    right: -1px;
+  }
+}
