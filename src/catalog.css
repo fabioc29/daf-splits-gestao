@@ -354,8 +354,8 @@
   height: 100%;
   display: block;
   border-radius: inherit;
-  background: #0fc6b7;
-  box-shadow: 0 0 12px rgb(15 198 183 / 20%);
+  background: var(--catalog-gold);
+  box-shadow: 0 0 12px rgb(215 170 54 / 20%);
 }
 
 .catalogWhatsappButton {
@@ -363,8 +363,8 @@
   min-height: 50px;
   margin-top: 22px;
   border-radius: 13px;
-  background: #0fbdae;
-  color: #07110f;
+  background: var(--catalog-gold);
+  color: #100d06;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -414,7 +414,7 @@
 }
 
 .catalogApcBanner.yes {
-  background: #0fbdae;
+  background: #2fa974;
   color: #07110f;
 }
 
