@@ -4843,3 +4843,937 @@ input[type="number"]::-webkit-outer-spin-button {
     gap: 6px;
   }
 }
+
+
+/* =========================================================
+   DAF UI 2026 — visual system, light/dark and compact dashboards
+   ========================================================= */
+:root,
+:root[data-theme="dark"] {
+  --bg: #090d14;
+  --panel: #111722;
+  --panel-2: #161e2b;
+  --panel-3: #1b2534;
+  --line: #263142;
+  --line-strong: #354256;
+  --text: #f4f7fb;
+  --muted: #8c98aa;
+  --gold: #7186ff;
+  --accent: #7186ff;
+  --accent-strong: #5b6ef5;
+  --accent-soft: #7186ff1f;
+  --success: #32bf8a;
+  --success-soft: #32bf8a18;
+  --warning: #f2b84b;
+  --danger: #ef6670;
+  --danger-soft: #ef667018;
+  --cyan: #54c7d4;
+  --sidebar: #070a10;
+  --input: #0d131d;
+  --hover: #182232;
+  --shadow: 0 12px 34px rgb(0 0 0 / 24%);
+  --soft-shadow: 0 5px 18px rgb(0 0 0 / 13%);
+}
+:root[data-theme="light"] {
+  --bg: #f2f5f9;
+  --panel: #ffffff;
+  --panel-2: #f7f9fc;
+  --panel-3: #eef2f7;
+  --line: #dde3ec;
+  --line-strong: #cbd4e1;
+  --text: #172033;
+  --muted: #6e7a8c;
+  --gold: #5b6ef5;
+  --accent: #5b6ef5;
+  --accent-strong: #4859db;
+  --accent-soft: #5b6ef515;
+  --success: #168a65;
+  --success-soft: #168a6512;
+  --warning: #b87c18;
+  --danger: #cf4654;
+  --danger-soft: #cf465412;
+  --cyan: #168da0;
+  --sidebar: #ffffff;
+  --input: #f8fafc;
+  --hover: #edf1f7;
+  --shadow: 0 12px 34px rgb(37 54 82 / 10%);
+  --soft-shadow: 0 5px 18px rgb(37 54 82 / 8%);
+}
+html {
+  background: var(--bg);
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  transition: background-color .2s ease, color .2s ease;
+}
+.shell {
+  background: var(--bg);
+}
+aside {
+  width: 236px;
+  padding: 20px 14px;
+  background: var(--sidebar);
+  color: var(--text);
+  border-right: 1px solid var(--line);
+  box-shadow: 8px 0 30px rgb(0 0 0 / 7%);
+}
+aside > img {
+  width: 156px;
+  height: 64px;
+  margin: 0 10px 18px;
+  border: 1px solid var(--line);
+  background: #050505;
+}
+aside nav {
+  gap: 4px;
+}
+aside nav button {
+  min-height: 42px;
+  border-radius: 10px;
+  color: var(--muted);
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 750;
+}
+aside nav button.on,
+aside nav button:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+  box-shadow: inset 3px 0 var(--accent);
+}
+aside nav button.on svg {
+  color: var(--accent);
+}
+aside > footer {
+  border-color: var(--line);
+  color: var(--text);
+}
+aside > footer small {
+  color: var(--muted);
+}
+main {
+  margin-left: 236px;
+  width: calc(100% - 236px);
+}
+main > header {
+  height: 80px;
+  padding: 14px 24px;
+  background: rgb(17 23 34 / 88%);
+  border-color: var(--line);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 22px rgb(0 0 0 / 8%);
+}
+:root[data-theme="light"] main > header {
+  background: rgb(255 255 255 / 90%);
+}
+main > header h1 {
+  font-size: 23px;
+  letter-spacing: -.03em;
+}
+main > header small,
+.eyebrow {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.content {
+  padding: 20px 24px 28px;
+  gap: 14px;
+}
+.panel,
+.cards > div,
+.products > div,
+.clients > div {
+  background: var(--panel);
+  border-color: var(--line);
+  border-radius: 16px;
+  box-shadow: var(--soft-shadow);
+}
+.panel {
+  padding: 17px;
+}
+.panel h2 {
+  font-size: 16px;
+  letter-spacing: -.02em;
+}
+.panel > p,
+.panelHeading p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.panelHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.panelHeading h2 {
+  margin: 2px 0 0;
+}
+.panelHeading p {
+  margin: 5px 0 0;
+}
+.panelHeading > svg {
+  width: 22px;
+  height: 22px;
+  color: var(--accent);
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+}
+.primary {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 6px 16px rgb(91 110 245 / 18%);
+}
+.primary:hover {
+  background: var(--accent-strong);
+}
+.secondary,
+.iconButton,
+.filterButton,
+.overdueFilter {
+  border-color: var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+}
+.secondary:hover,
+.iconButton:hover,
+.filterButton:hover,
+.overdueFilter:hover {
+  border-color: var(--line-strong);
+  background: var(--hover);
+}
+.themeToggle {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+}
+.themeToggle svg {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+.themeToggle span {
+  font-size: 11px;
+}
+.monthPicker,
+.salesSearch input,
+.salesFilters,
+.salesFilters input,
+.salesFilters select,
+.clientSearch input,
+.purchaseSearch input,
+.stockSearch input,
+.shippingSearch input,
+.segmented,
+.receivableTabs,
+.shipping details,
+.prepare > div,
+.forecastList > div {
+  background: var(--panel-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+.monthPicker button,
+.filterButton,
+.salesFilters > button,
+.overdueFilter {
+  color: var(--text);
+}
+.monthPicker {
+  border-radius: 12px;
+}
+.segmented button {
+  background: transparent;
+  color: var(--muted);
+  border-color: transparent;
+}
+.segmented button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+input,
+select,
+textarea {
+  accent-color: var(--accent);
+}
+.overlay {
+  background: rgb(3 7 14 / 72%);
+  backdrop-filter: blur(7px);
+}
+.overlay > form,
+.overlay > .systemDialog,
+.overlay > .history,
+.overlay .systemDialog,
+.costEditor {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--line);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 28%);
+}
+.overlay input,
+.overlay select,
+.overlay textarea,
+.brandManagerSearch input,
+.brandCreateDialog > label > input,
+.brandManagerRow input,
+.brandProductsList > div,
+.brandProductsSummary > div,
+.simplifiedPrepareList > div,
+.quickQuoteCard {
+  background: var(--input);
+  color: var(--text);
+  border-color: var(--line);
+}
+.brandProductsList b,
+.brandProductsSummary b,
+.costEditorSection h3,
+.costEditorSummary b,
+.saleSupplies > strong,
+.installmentSummary b {
+  color: var(--text);
+}
+.brandProductsList small,
+.brandProductsSummary span,
+.saleSupplyList > div > small {
+  color: var(--muted);
+}
+table {
+  margin-top: 10px;
+}
+th,
+td {
+  border-color: var(--line);
+}
+th {
+  color: var(--muted);
+  letter-spacing: .04em;
+}
+tbody tr {
+  transition: background-color .14s ease;
+}
+tbody tr:hover {
+  background: var(--accent-soft);
+}
+
+/* Executive toolbar */
+.workspaceToolbar {
+  min-height: 66px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background:
+    linear-gradient(120deg, var(--panel), var(--panel-2));
+  box-shadow: var(--soft-shadow);
+  padding: 13px 15px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.workspaceToolbar h2 {
+  margin: 2px 0 0;
+  font-size: 18px;
+  text-transform: capitalize;
+}
+.workspaceToolbar p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.workspaceMonthPicker {
+  width: min(330px, 100%);
+  background: var(--input);
+  text-transform: capitalize;
+}
+
+/* KPI cards */
+.executiveMetricGrid,
+.financeMetricGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 11px;
+}
+.metricCard {
+  min-width: 0;
+  min-height: 122px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--soft-shadow);
+}
+.metricCard::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--metric-accent, var(--accent));
+}
+.metricCard::after {
+  content: "";
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  right: -42px;
+  top: -48px;
+  border-radius: 50%;
+  background: var(--metric-soft, var(--accent-soft));
+}
+.metricCard > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.metricCard > b {
+  margin-top: 7px;
+  font-size: clamp(17px, 1.35vw, 23px);
+  line-height: 1.05;
+  letter-spacing: -.035em;
+  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+}
+.metricCard > small:not(.metricDelta) {
+  color: var(--muted);
+  font-size: 9px;
+  margin-top: 5px;
+  line-height: 1.3;
+}
+.metricBlue { --metric-accent: #5b8def; --metric-soft: #5b8def18; }
+.metricViolet { --metric-accent: #9b7cff; --metric-soft: #9b7cff18; }
+.metricGreen { --metric-accent: #32bf8a; --metric-soft: #32bf8a18; }
+.metricCyan { --metric-accent: #54c7d4; --metric-soft: #54c7d418; }
+.metricOrange { --metric-accent: #f2b84b; --metric-soft: #f2b84b18; }
+.metricPink { --metric-accent: #e878a7; --metric-soft: #e878a718; }
+.metricRed { --metric-accent: #ef6670; --metric-soft: #ef667018; }
+.metricDelta {
+  margin-top: auto;
+  padding-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8.5px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.metricDelta svg {
+  width: 12px;
+  height: 12px;
+}
+.metricDelta span {
+  color: var(--muted);
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.metricDelta.positive { color: var(--success); }
+.metricDelta.negative { color: var(--danger); }
+.metricDelta.neutral { color: var(--muted); }
+
+/* Dashboard compact layout */
+.dashboardMonthToolbar {
+  margin-bottom: 0;
+}
+.grid {
+  grid-template-columns: minmax(0, 1.65fr) minmax(290px, .72fr);
+  gap: 14px;
+}
+.dashboardMain,
+.sidecharts {
+  gap: 14px;
+}
+.dashboardMain .panel,
+.sidecharts .panel {
+  min-width: 0;
+}
+.chart {
+  min-height: 0;
+}
+.chart > h2 {
+  margin-bottom: 0;
+}
+.chart > p {
+  margin: 5px 0 0;
+}
+.stats {
+  margin: 10px 0 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  padding: 6px 9px;
+  color: var(--muted);
+}
+.stats b {
+  color: var(--text);
+}
+.bars {
+  height: 220px;
+  gap: 4px;
+  padding-top: 39px;
+  border-color: var(--line);
+}
+.bars button > span {
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: var(--soft-shadow);
+}
+.bars button > span small {
+  color: inherit;
+  opacity: .7;
+}
+.bars i {
+  max-width: 18px;
+  background: linear-gradient(180deg, #7d8fff, #5b6ef5);
+}
+.bars i.future {
+  background: var(--line-strong);
+}
+.bars.hasSelection button:not(.selected) i {
+  opacity: .22;
+}
+.bars button.selected i {
+  transform: scaleX(1.45);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 18px rgb(91 110 245 / 26%);
+}
+.sidecharts .panel {
+  padding: 14px;
+}
+.sideInteractiveDonut svg {
+  width: 112px !important;
+  height: 112px !important;
+}
+.sidecharts .interactiveDonutInfo {
+  margin-top: 6px;
+}
+.orderOriginLegend,
+.categoryPercentLegend {
+  gap: 6px;
+}
+.orderOriginLegend p,
+.categoryPercentLegend > div {
+  padding: 7px 9px 7px 25px;
+  border-radius: 9px;
+  background: var(--panel-2) !important;
+  border-color: var(--line) !important;
+}
+.categoryPercentLegend > div {
+  padding-left: 9px;
+}
+.orderOriginLegend p > b,
+.categoryPercentLegend .categorySoldMl {
+  font-size: 10px;
+}
+.chartExplanationTop,
+.sidecharts .panel > p {
+  font-size: 10px !important;
+}
+.interactiveDonutHole {
+  fill: var(--panel);
+}
+.interactiveDonutEmpty {
+  stroke: var(--line-strong);
+}
+.interactiveDonutInfo {
+  background: var(--panel-2);
+  border-color: var(--line);
+  box-shadow: none;
+}
+
+/* Payment chart */
+.modernPaymentChart {
+  min-width: 0;
+}
+.modernPaymentChart.compact {
+  display: grid;
+  grid-template-columns: minmax(150px, .78fr) minmax(190px, 1.22fr);
+  align-items: center;
+  gap: 10px;
+  padding: 15px;
+}
+.modernPaymentChart.compact .paymentInteractiveDonut svg,
+.dashboardMain .paymentInteractiveDonut svg,
+.financePrimaryGrid .paymentInteractiveDonut svg {
+  width: 145px !important;
+  height: 145px !important;
+}
+.modernPaymentChart.compact .paymentInteractiveDonut {
+  margin: 8px auto 0;
+}
+.paymentLegend {
+  gap: 6px;
+}
+.paymentLegend > div {
+  min-height: 42px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2) !important;
+}
+.paymentLegend > div:hover {
+  background: var(--panel-2) !important;
+}
+.paymentLegend b {
+  font-size: 10px;
+}
+.paymentLegend span {
+  font-size: 10px;
+}
+.paymentLegend small {
+  font-size: 8px;
+}
+
+/* Finance compact workspace */
+.financeWorkspace {
+  display: grid;
+  gap: 13px;
+}
+.financePrimaryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, .95fr);
+  gap: 13px;
+}
+.financeSecondaryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr);
+  gap: 13px;
+}
+.financePrimaryGrid > *,
+.financeSecondaryGrid > * {
+  min-width: 0;
+}
+.financeStatement {
+  display: grid;
+  gap: 11px;
+}
+.statementRows {
+  display: grid;
+  gap: 3px;
+}
+.statementRows > div {
+  min-height: 34px;
+  padding: 7px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.statementRows > div:nth-child(odd) {
+  background: var(--panel-2);
+}
+.statementRows b {
+  color: var(--text);
+  font-size: 11px;
+}
+.statementRows .statementTotal {
+  margin-top: 5px;
+  background: var(--success-soft);
+  color: var(--text);
+  border: 1px solid rgb(50 191 138 / 20%);
+}
+.statementRows .statementTotal b {
+  color: var(--success);
+  font-size: 14px;
+}
+.financeHealthGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.financeHealthGrid > div {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+}
+.financeHealthGrid span,
+.financeHealthGrid b {
+  display: block;
+}
+.financeHealthGrid span {
+  color: var(--muted);
+  font-size: 8px;
+}
+.financeHealthGrid b {
+  margin-top: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.financeSecondaryGrid .inventoryProjection {
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+.financeSecondaryGrid .inventoryProjection > div {
+  padding: 8px 0;
+}
+.financeSecondaryGrid .inventoryProjection > div + div {
+  border-left: 0;
+  border-top: 1px solid var(--line);
+}
+.financeSecondaryGrid .inventoryProjection b {
+  font-size: 17px;
+  margin: 3px 0;
+}
+.financeSecondaryGrid .inventoryProjection span,
+.financeSecondaryGrid .inventoryProjection small {
+  font-size: 9px;
+}
+.financeSecondaryGrid .marketplaceForecast {
+  gap: 10px;
+}
+.financeSecondaryGrid .forecastHead p {
+  margin: 4px 0 0;
+  font-size: 9px;
+}
+.financeSecondaryGrid .forecastList {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  max-height: 150px;
+  overflow: auto;
+}
+.financeSecondaryGrid .forecastList > div {
+  padding: 9px;
+  background: var(--panel-2);
+}
+.financeSecondaryGrid .forecastList b {
+  font-size: 14px;
+  margin: 3px 0;
+}
+.financeSecondaryGrid .forecastList span,
+.financeSecondaryGrid .forecastList small {
+  font-size: 8px;
+}
+.profitControl {
+  gap: 11px;
+}
+.profitControl > .cards {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.profitControl > .cards > div {
+  background: var(--panel-2);
+  border-color: var(--line);
+  padding: 11px;
+}
+.profitControl > .cards span {
+  font-size: 9px;
+}
+.profitControl > .cards b {
+  margin-top: 4px;
+  font-size: 16px;
+}
+.marginTrack {
+  height: 7px;
+  background: var(--line);
+}
+.marginTrack i {
+  background: linear-gradient(90deg, var(--accent), var(--success));
+}
+
+/* Whole-system surface refresh */
+.products,
+.clients {
+  gap: 11px;
+}
+.products > div,
+.clients > div {
+  padding: 15px;
+}
+.products > div > i,
+.clients > div > i {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.prepare,
+.shipping {
+  gap: 9px;
+}
+.prepare > div,
+.shipping details {
+  border-radius: 12px;
+  padding: 12px;
+}
+.apcButton {
+  background: var(--input);
+  color: var(--muted);
+  border-color: var(--line);
+}
+.apcButton.active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.installmentSummary,
+.costEditorSummary span {
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.costEditorSection,
+.shippingCostBox {
+  border-color: var(--line);
+}
+.clientHistoryStats > div,
+.supplierHistoryStats > div {
+  background: var(--panel-2);
+  border-color: var(--line);
+}
+.sync {
+  color: var(--muted);
+}
+.navAlert {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+/* Light-mode cleanup for legacy hard-coded surfaces */
+:root[data-theme="light"] .marketplaceButton,
+:root[data-theme="light"] .segmented button,
+:root[data-theme="light"] .preparationStatus select,
+:root[data-theme="light"] .shipping details,
+:root[data-theme="light"] .prepare > div,
+:root[data-theme="light"] .forecastList > div,
+:root[data-theme="light"] .orderOriginLegend p,
+:root[data-theme="light"] .categoryPercentLegend > div,
+:root[data-theme="light"] .paymentLegend > div,
+:root[data-theme="light"] .profitControl > .cards > div {
+  background: var(--panel-2);
+  color: var(--text);
+}
+:root[data-theme="light"] .preparationStatus select {
+  border-color: var(--line-strong);
+}
+:root[data-theme="light"] .primary {
+  color: #fff;
+}
+:root[data-theme="light"] .interactiveDonutHole {
+  fill: var(--panel);
+}
+
+/* Responsive */
+@media (max-width: 1500px) {
+  .executiveMetricGrid,
+  .financeMetricGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1180px) {
+  .grid,
+  .financePrimaryGrid,
+  .financeSecondaryGrid {
+    grid-template-columns: 1fr;
+  }
+  .sidecharts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboardMain .financeChart {
+    grid-template-columns: minmax(150px, .75fr) minmax(220px, 1.25fr);
+  }
+}
+@media (max-width: 900px) {
+  .executiveMetricGrid,
+  .financeMetricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspaceToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .workspaceMonthPicker {
+    width: 100%;
+  }
+  .sidecharts {
+    grid-template-columns: 1fr;
+  }
+  .headerActions .themeToggle span {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  aside {
+    width: auto;
+  }
+  main {
+    margin-left: 0;
+    width: 100%;
+  }
+  main > header {
+    height: 72px;
+  }
+  .content {
+    padding: 14px;
+  }
+  .executiveMetricGrid,
+  .financeMetricGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .metricCard {
+    min-height: 112px;
+    padding: 12px;
+  }
+  .metricCard > b {
+    font-size: 18px;
+  }
+  .modernPaymentChart.compact,
+  .dashboardMain .financeChart {
+    grid-template-columns: 1fr;
+  }
+  .financeHealthGrid {
+    grid-template-columns: 1fr;
+  }
+  .financeSecondaryGrid .forecastList {
+    grid-template-columns: 1fr;
+    max-height: none;
+  }
+}
+@media (max-width: 470px) {
+  .executiveMetricGrid,
+  .financeMetricGrid {
+    grid-template-columns: 1fr;
+  }
+  .themeToggle {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+  .workspaceToolbar {
+    padding: 12px;
+  }
+}
+
+/* Preserve clean print output */
+@media print {
+  :root,
+  :root[data-theme="dark"],
+  :root[data-theme="light"] {
+    --bg: #fff;
+    --panel: #fff;
+    --panel-2: #fff;
+    --line: #d8dde5;
+    --text: #111827;
+    --muted: #526071;
+  }
+}
