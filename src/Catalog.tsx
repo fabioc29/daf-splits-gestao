@@ -597,16 +597,32 @@ function CatalogViewer({
       <footer className="catalogFooter">
         <div className="catalogTrustBar">
           {[
-            [ShieldCheck, "Perfumes originais", "Seleção de fragrâncias autênticas."],
-            [Droplets, "Fracionamento cuidadoso", "Precisão em cada decant."],
-            [Package, "Envio para todo o Brasil", "Pedidos preparados com cuidado."],
-            [MessageCircle, "Atendimento pelo WhatsApp", "Fale diretamente com a DAF."],
-          ].map(([Icon, title, text]) => (
-            <div key={String(title)}>
+            {
+              icon: ShieldCheck,
+              title: "Perfumes originais",
+              text: "Seleção de fragrâncias autênticas.",
+            },
+            {
+              icon: Droplets,
+              title: "Fracionamento cuidadoso",
+              text: "Precisão em cada decant.",
+            },
+            {
+              icon: Package,
+              title: "Envio para todo o Brasil",
+              text: "Pedidos preparados com cuidado.",
+            },
+            {
+              icon: MessageCircle,
+              title: "Atendimento pelo WhatsApp",
+              text: "Fale diretamente com a DAF.",
+            },
+          ].map(({ icon: Icon, title, text }) => (
+            <div key={title}>
               <i><Icon /></i>
               <span>
-                <strong>{String(title)}</strong>
-                <small>{String(text)}</small>
+                <strong>{title}</strong>
+                <small>{text}</small>
               </span>
             </div>
           ))}
