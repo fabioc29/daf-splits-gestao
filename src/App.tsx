@@ -249,6 +249,17 @@ type SystemPalette = {
   healthCritical: string;
   healthModerate: string;
   healthHealthy: string;
+  paymentPix: string;
+  paymentCard: string;
+  paymentInstallment: string;
+  paymentMarketplace: string;
+  orderDirect: string;
+  orderTiktok: string;
+  orderShopee: string;
+  orderCancelled: string;
+  categoryNiche: string;
+  categoryArabic: string;
+  categoryDesigner: string;
 };
 
 const DARK_SYSTEM_PALETTE: SystemPalette = {
@@ -273,6 +284,17 @@ const DARK_SYSTEM_PALETTE: SystemPalette = {
   healthCritical: "#e34b57",
   healthModerate: "#e7ad2f",
   healthHealthy: "#2fac7a",
+  paymentPix: "#22a66f",
+  paymentCard: "#2f80ed",
+  paymentInstallment: "#e0b43c",
+  paymentMarketplace: "#8b5cf6",
+  orderDirect: "#22a66f",
+  orderTiktok: "#5dc9d6",
+  orderShopee: "#ee4d2d",
+  orderCancelled: "#05070a",
+  categoryNiche: "#e0b43c",
+  categoryArabic: "#8b5cf6",
+  categoryDesigner: "#2f80ed",
 };
 
 const LIGHT_SYSTEM_PALETTE: SystemPalette = {
@@ -297,6 +319,17 @@ const LIGHT_SYSTEM_PALETTE: SystemPalette = {
   healthCritical: "#d64b57",
   healthModerate: "#d79a1f",
   healthHealthy: "#198b63",
+  paymentPix: "#168a65",
+  paymentCard: "#2878d9",
+  paymentInstallment: "#c38b23",
+  paymentMarketplace: "#7650d6",
+  orderDirect: "#168a65",
+  orderTiktok: "#2aa7b8",
+  orderShopee: "#df4a31",
+  orderCancelled: "#7b8492",
+  categoryNiche: "#c38b23",
+  categoryArabic: "#7650d6",
+  categoryDesigner: "#2878d9",
 };
 
 type LocalUiSettings = {
@@ -782,6 +815,17 @@ function System({ session }: { session: Session }) {
       "--health-critical": palette.healthCritical,
       "--health-moderate": palette.healthModerate,
       "--health-healthy": palette.healthHealthy,
+      "--chart-payment-pix": palette.paymentPix,
+      "--chart-payment-card": palette.paymentCard,
+      "--chart-payment-installment": palette.paymentInstallment,
+      "--chart-payment-marketplace": palette.paymentMarketplace,
+      "--chart-order-direct": palette.orderDirect,
+      "--chart-order-tiktok": palette.orderTiktok,
+      "--chart-order-shopee": palette.orderShopee,
+      "--chart-order-cancelled": palette.orderCancelled,
+      "--chart-category-niche": palette.categoryNiche,
+      "--chart-category-arabic": palette.categoryArabic,
+      "--chart-category-designer": palette.categoryDesigner,
       "--accent-soft": `color-mix(in srgb, ${palette.accent} 16%, transparent)`,
       "--success-soft": `color-mix(in srgb, ${palette.success} 10%, transparent)`,
       "--danger-soft": `color-mix(in srgb, ${palette.danger} 10%, transparent)`,
@@ -1706,6 +1750,17 @@ function SettingsPage({
     ["healthCritical", "Saúde — crítico"],
     ["healthModerate", "Saúde — moderado"],
     ["healthHealthy", "Saúde — saudável"],
+    ["paymentPix", "Gráfico — Pix"],
+    ["paymentCard", "Gráfico — cartão"],
+    ["paymentInstallment", "Gráfico — à prazo"],
+    ["paymentMarketplace", "Gráfico — marketplace"],
+    ["orderDirect", "Pedidos — venda direta"],
+    ["orderTiktok", "Pedidos — TikTok"],
+    ["orderShopee", "Pedidos — Shopee"],
+    ["orderCancelled", "Pedidos — cancelados"],
+    ["categoryNiche", "Categoria — nicho"],
+    ["categoryArabic", "Categoria — árabe"],
+    ["categoryDesigner", "Categoria — designer"],
   ];
 
   function updatePalette(key: keyof SystemPalette, value: string) {
@@ -2646,10 +2701,10 @@ function OrderSummaryChart({ sales }: { sales: V[] }) {
   const total = directOrders + tiktokOrders + shopeeOrders + cancelledOrders;
   const pct = (value: number) => (total ? Math.round((value / total) * 100) : 0);
   const segments = [
-    { label: "Venda direta", value: directOrders, color: "#22a66f" },
-    { label: "TikTok Shop", value: tiktokOrders, color: "#5DC9D6" },
-    { label: "Shopee", value: shopeeOrders, color: "#EE4D2D" },
-    { label: "Cancelados", value: cancelledOrders, color: "#05070a" },
+    { label: "Venda direta", value: directOrders, color: "var(--chart-order-direct)" },
+    { label: "TikTok Shop", value: tiktokOrders, color: "var(--chart-order-tiktok)" },
+    { label: "Shopee", value: shopeeOrders, color: "var(--chart-order-shopee)" },
+    { label: "Cancelados", value: cancelledOrders, color: "var(--chart-order-cancelled)" },
   ];
   return (
     <div className="panel dashboardMetricPanel orderOriginSummary">
@@ -2721,10 +2776,10 @@ function CategoryChart({ d, sales }: { d: D; sales: V[] }) {
             value: item.value,
             color:
               item.category === "Nicho"
-                ? "#e0b43c"
+                ? "var(--chart-category-niche)"
                 : item.category === "Árabe"
-                  ? "#8b5cf6"
-                  : "#2f80ed",
+                  ? "var(--chart-category-arabic)"
+                  : "var(--chart-category-designer)",
           }))}
           centerTop="Total vendido"
           centerBottom={`${total.toLocaleString("pt-BR")}mls`}
@@ -7758,10 +7813,10 @@ function PaymentBreakdown({
 }) {
   const sourceSales = sales || d.sales;
   const payments = [
-    { name: "Pix", color: "#22a66f", matches: (sale: V) => !isMarketplaceSale(sale) && ((isInstallmentSale(sale) && isInstallmentSettled(sale)) || (!isInstallmentSale(sale) && sale.payment === "Pix")) },
-    { name: "Cartão de Crédito", color: "#2f80ed", matches: (sale: V) => !isMarketplaceSale(sale) && !isInstallmentSale(sale) && sale.payment === "Cartão de Crédito" },
-    { name: "À prazo", color: "#e0b43c", matches: (sale: V) => !isMarketplaceSale(sale) && isInstallmentSale(sale) && !isInstallmentSettled(sale) },
-    { name: "Marketplace", color: "#8b5cf6", matches: (sale: V) => isMarketplaceSale(sale) },
+    { name: "Pix", color: "var(--chart-payment-pix)", matches: (sale: V) => !isMarketplaceSale(sale) && ((isInstallmentSale(sale) && isInstallmentSettled(sale)) || (!isInstallmentSale(sale) && sale.payment === "Pix")) },
+    { name: "Cartão de Crédito", color: "var(--chart-payment-card)", matches: (sale: V) => !isMarketplaceSale(sale) && !isInstallmentSale(sale) && sale.payment === "Cartão de Crédito" },
+    { name: "À prazo", color: "var(--chart-payment-installment)", matches: (sale: V) => !isMarketplaceSale(sale) && isInstallmentSale(sale) && !isInstallmentSettled(sale) },
+    { name: "Marketplace", color: "var(--chart-payment-marketplace)", matches: (sale: V) => isMarketplaceSale(sale) },
   ].map((x) => ({
     ...x,
     value: sourceSales
