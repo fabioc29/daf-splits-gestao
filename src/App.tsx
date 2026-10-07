@@ -5910,11 +5910,8 @@ function Stock({
     `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ml`;
   const filtered = d.products.filter(
     (p) =>
-      (view === "out"
-        ? p.stock <= 0
-        : view === "apc"
-          ? p.apc > 0
-          : p.stock > 0) &&
+      p.stock > 0 &&
+      (!apcOnly || p.apc > 0) &&
       (category === "Todos" || p.category === category) &&
       (brand === "Todas" || p.brand === brand) &&
       `${p.brand} ${p.name}`.toLowerCase().includes(query.toLowerCase()),
