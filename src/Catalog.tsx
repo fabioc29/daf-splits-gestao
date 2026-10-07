@@ -929,6 +929,10 @@ export function CatalogAdminPreview({
 }
 
 export function PublicCatalog() {
+  useEffect(() => {
+    document.title = "Catálogo | DAF Splits";
+  }, []);
+
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [settings, setSettings] = useState<CatalogSettings>(
     DEFAULT_CATALOG_SETTINGS,

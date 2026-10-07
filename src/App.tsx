@@ -86,6 +86,8 @@ type S = {
   min: number;
   attachCost: boolean;
   cost?: number;
+  activeLotQty?: number;
+  activeLotPurchaseId?: number;
   pendingLots?: {
     purchaseId: number;
     qty: number;
@@ -227,47 +229,198 @@ const DEFAULT_MENU_ORDER = [
   "settings",
 ];
 
-type LocalUiSettings = {
+type SystemPalette = {
+  background: string;
+  panel: string;
+  panel2: string;
+  panel3: string;
+  sidebar: string;
+  input: string;
+  hover: string;
+  line: string;
+  lineStrong: string;
+  text: string;
+  muted: string;
   accent: string;
+  accentStrong: string;
   gold: string;
+  success: string;
+  warning: string;
+  danger: string;
+  cyan: string;
+  healthCritical: string;
+  healthModerate: string;
+  healthHealthy: string;
+  paymentPix: string;
+  paymentCard: string;
+  paymentInstallment: string;
+  paymentMarketplace: string;
+  orderDirect: string;
+  orderTiktok: string;
+  orderShopee: string;
+  orderCancelled: string;
+  categoryNiche: string;
+  categoryArabic: string;
+  categoryDesigner: string;
+};
+
+const DARK_SYSTEM_PALETTE: SystemPalette = {
+  background: "#090d14",
+  panel: "#111722",
+  panel2: "#161e2b",
+  panel3: "#1b2534",
+  sidebar: "#070a10",
+  input: "#0d131d",
+  hover: "#182232",
+  line: "#263142",
+  lineStrong: "#354256",
+  text: "#f4f7fb",
+  muted: "#8c98aa",
+  accent: "#7186ff",
+  accentStrong: "#5b6ef5",
+  gold: "#7186ff",
+  success: "#32bf8a",
+  warning: "#f2b84b",
+  danger: "#ef6670",
+  cyan: "#54c7d4",
+  healthCritical: "#e34b57",
+  healthModerate: "#e7ad2f",
+  healthHealthy: "#2fac7a",
+  paymentPix: "#22a66f",
+  paymentCard: "#2f80ed",
+  paymentInstallment: "#e0b43c",
+  paymentMarketplace: "#8b5cf6",
+  orderDirect: "#22a66f",
+  orderTiktok: "#5dc9d6",
+  orderShopee: "#ee4d2d",
+  orderCancelled: "#05070a",
+  categoryNiche: "#e0b43c",
+  categoryArabic: "#8b5cf6",
+  categoryDesigner: "#2f80ed",
+};
+
+const LIGHT_SYSTEM_PALETTE: SystemPalette = {
+  background: "#f2f5f9",
+  panel: "#ffffff",
+  panel2: "#f7f9fc",
+  panel3: "#eef2f7",
+  sidebar: "#ffffff",
+  input: "#f8fafc",
+  hover: "#edf1f7",
+  line: "#dde3ec",
+  lineStrong: "#cbd4e1",
+  text: "#172033",
+  muted: "#6e7a8c",
+  accent: "#5b6ef5",
+  accentStrong: "#4859db",
+  gold: "#5b6ef5",
+  success: "#168a65",
+  warning: "#b87c18",
+  danger: "#cf4654",
+  cyan: "#168da0",
+  healthCritical: "#d64b57",
+  healthModerate: "#d79a1f",
+  healthHealthy: "#198b63",
+  paymentPix: "#168a65",
+  paymentCard: "#2878d9",
+  paymentInstallment: "#c38b23",
+  paymentMarketplace: "#7650d6",
+  orderDirect: "#168a65",
+  orderTiktok: "#2aa7b8",
+  orderShopee: "#df4a31",
+  orderCancelled: "#7b8492",
+  categoryNiche: "#c38b23",
+  categoryArabic: "#7650d6",
+  categoryDesigner: "#2878d9",
+};
+
+type LocalUiSettings = {
   appName: string;
   panelLabel: string;
   menuOrder: string[];
+  menuZoom: number;
+  darkPalette: SystemPalette;
+  lightPalette: SystemPalette;
 };
 
 const DEFAULT_LOCAL_UI_SETTINGS: LocalUiSettings = {
-  accent: "#5b6ef5",
-  gold: "#e0b43c",
   appName: "DAF Splits",
   panelLabel: "PAINEL ADMINISTRATIVO",
   menuOrder: [...DEFAULT_MENU_ORDER],
+  menuZoom: 100,
+  darkPalette: { ...DARK_SYSTEM_PALETTE },
+  lightPalette: { ...LIGHT_SYSTEM_PALETTE },
 };
 
 function readLocalUiSettings(): LocalUiSettings {
-  if (typeof window === "undefined") return { ...DEFAULT_LOCAL_UI_SETTINGS };
+  if (typeof window === "undefined")
+    return {
+      ...DEFAULT_LOCAL_UI_SETTINGS,
+      menuOrder: [...DEFAULT_MENU_ORDER],
+      darkPalette: { ...DARK_SYSTEM_PALETTE },
+      lightPalette: { ...LIGHT_SYSTEM_PALETTE },
+    };
   try {
     const stored = JSON.parse(
       window.localStorage.getItem("daf-ui-settings") || "null",
     );
-    const raw =
-      stored && typeof stored === "object"
-        ? { ...DEFAULT_LOCAL_UI_SETTINGS, ...stored }
-        : { ...DEFAULT_LOCAL_UI_SETTINGS };
-    const storedOrder = Array.isArray(raw.menuOrder)
-      ? raw.menuOrder.filter(
+    const storedOrder = Array.isArray(stored?.menuOrder)
+      ? stored.menuOrder.filter(
           (id: unknown): id is string =>
             typeof id === "string" && DEFAULT_MENU_ORDER.includes(id),
         )
       : [];
+    const legacyAccent =
+      typeof stored?.accent === "string" ? stored.accent : undefined;
+    const legacyGold =
+      typeof stored?.gold === "string" ? stored.gold : undefined;
+    const darkPalette = {
+      ...DARK_SYSTEM_PALETTE,
+      ...(stored?.darkPalette && typeof stored.darkPalette === "object"
+        ? stored.darkPalette
+        : {}),
+      ...(legacyAccent
+        ? { accent: legacyAccent, accentStrong: legacyAccent }
+        : {}),
+      ...(legacyGold ? { gold: legacyGold } : {}),
+    };
+    const lightPalette = {
+      ...LIGHT_SYSTEM_PALETTE,
+      ...(stored?.lightPalette && typeof stored.lightPalette === "object"
+        ? stored.lightPalette
+        : {}),
+      ...(legacyAccent
+        ? { accent: legacyAccent, accentStrong: legacyAccent }
+        : {}),
+      ...(legacyGold ? { gold: legacyGold } : {}),
+    };
     return {
-      ...raw,
+      appName:
+        typeof stored?.appName === "string"
+          ? stored.appName
+          : DEFAULT_LOCAL_UI_SETTINGS.appName,
+      panelLabel:
+        typeof stored?.panelLabel === "string"
+          ? stored.panelLabel
+          : DEFAULT_LOCAL_UI_SETTINGS.panelLabel,
       menuOrder: [
         ...storedOrder,
         ...DEFAULT_MENU_ORDER.filter((id) => !storedOrder.includes(id)),
       ],
+      menuZoom: Math.max(
+        80,
+        Math.min(130, Number(stored?.menuZoom) || 100),
+      ),
+      darkPalette,
+      lightPalette,
     };
   } catch {
-    return { ...DEFAULT_LOCAL_UI_SETTINGS };
+    return {
+      ...DEFAULT_LOCAL_UI_SETTINGS,
+      menuOrder: [...DEFAULT_MENU_ORDER],
+      darkPalette: { ...DARK_SYSTEM_PALETTE },
+      lightPalette: { ...LIGHT_SYSTEM_PALETTE },
+    };
   }
 }
 
@@ -431,9 +584,98 @@ const supplyStockKey = (value: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
+
+type SupplyHealth = {
+  status: "critical" | "moderate" | "healthy";
+  label: "Crítico" | "Moderado" | "Saudável";
+  criticalMax: number;
+  moderateMax: number;
+};
+
+function supplyHealth(supply: S): SupplyHealth | null {
+  const key = supplyStockKey(supply.name);
+  let criticalMax: number | null = null;
+  let moderateMax: number | null = null;
+
+  if (key.includes("frasco")) {
+    criticalMax = 10;
+    moderateMax = 35;
+  } else if (key.includes("caixa")) {
+    criticalMax = 5;
+    moderateMax = 30;
+  } else if (key.includes("cartadeagradecimento")) {
+    criticalMax = 20;
+    moderateMax = 100;
+  } else if (key.includes("cartaodevisita")) {
+    criticalMax = 20;
+    moderateMax = 100;
+  } else if (key.includes("papeldeseda")) {
+    criticalMax = 10;
+    moderateMax = 25;
+  } else if (key.includes("organza")) {
+    criticalMax = 10;
+    moderateMax = 30;
+  } else if (key.includes("sacoladaf") || key.includes("sacolasdaf")) {
+    criticalMax = 10;
+    moderateMax = 25;
+  } else if (key.includes("envelopeapc")) {
+    criticalMax = 5;
+    moderateMax = 15;
+  } else if (key.includes("envelopedecante")) {
+    criticalMax = 20;
+    moderateMax = 100;
+  }
+
+  if (criticalMax === null || moderateMax === null) return null;
+  const stock = Math.max(0, Number(supply.stock) || 0);
+  if (stock <= criticalMax)
+    return { status: "critical", label: "Crítico", criticalMax, moderateMax };
+  if (stock <= moderateMax)
+    return { status: "moderate", label: "Moderado", criticalMax, moderateMax };
+  return { status: "healthy", label: "Saudável", criticalMax, moderateMax };
+}
+
+function supplyDisplayUnit(supply: S) {
+  const unit = String(supply.unit || "").trim();
+  if (/^unidade/i.test(unit) || supplyHealth(supply)) return "Unidades";
+  return unit || "Unidades";
+}
+
+function supplyReplenishmentBaseline(supply: S) {
+  const key = supplyStockKey(supply.name);
+
+  if (key.includes("frasco")) return 100;
+  if (key.includes("caixa")) return 100;
+  if (key.includes("cartadeagradecimento")) return 500;
+  if (key.includes("cartaodevisita")) return 500;
+  if (key.includes("papeldeseda")) return 100;
+  if (key.includes("organza")) return 100;
+  if (key.includes("sacoladaf") || key.includes("sacolasdaf")) return 100;
+  if (key.includes("envelopeapc")) return 50;
+
+  return Math.max(
+    Math.max(0, Number(supply.stock) || 0),
+    Math.max(0, Number(supply.activeLotQty) || 0),
+  );
+}
+
+function supplyReplenishmentProgress(supply: S) {
+  const current = Math.max(0, Number(supply.stock) || 0);
+  const baseline = supplyReplenishmentBaseline(supply);
+  if (baseline <= 0) return 0;
+  return Math.max(0, Math.min(100, (current / baseline) * 100));
+}
+
 function activateNextSupplyLot(supply: S): S {
   let stock = Math.max(0, Number(supply.stock) || 0);
   let cost = Number(supply.cost || 0);
+  let activeLotQty = Math.max(
+    stock,
+    Math.max(0, Number(supply.activeLotQty) || 0),
+  );
+  let activeLotPurchaseId = supply.activeLotPurchaseId
+    ? Number(supply.activeLotPurchaseId)
+    : undefined;
   const pendingLots = [...(supply.pendingLots || [])].map((lot) => ({
     ...lot,
     qty: Math.max(0, Number(lot.qty) || 0),
@@ -444,13 +686,27 @@ function activateNextSupplyLot(supply: S): S {
     if (next.qty <= 0) continue;
     stock = next.qty;
     cost = next.cost;
+    activeLotQty = next.qty;
+    activeLotPurchaseId = next.purchaseId;
   }
-  return { ...supply, stock, cost, pendingLots };
+  return {
+    ...supply,
+    stock,
+    cost,
+    activeLotQty,
+    activeLotPurchaseId,
+    pendingLots,
+  };
 }
 function consumeSupplyStock(supply: S, quantity: number): S {
   let current = activateNextSupplyLot(supply);
   let stock = current.stock;
   let cost = Number(current.cost || 0);
+  let activeLotQty = Math.max(
+    stock,
+    Math.max(0, Number(current.activeLotQty) || 0),
+  );
+  let activeLotPurchaseId = current.activeLotPurchaseId;
   const pendingLots = [...(current.pendingLots || [])];
   let remaining = Math.max(0, quantity);
   while (remaining > 0) {
@@ -459,6 +715,8 @@ function consumeSupplyStock(supply: S, quantity: number): S {
       if (!next) break;
       stock = Math.max(0, Number(next.qty) || 0);
       cost = Math.max(0, Number(next.cost) || 0);
+      activeLotQty = stock;
+      activeLotPurchaseId = next.purchaseId;
       continue;
     }
     const used = Math.min(stock, remaining);
@@ -471,10 +729,19 @@ function consumeSupplyStock(supply: S, quantity: number): S {
       if (next.qty <= 0) continue;
       stock = next.qty;
       cost = next.cost;
+      activeLotQty = next.qty;
+      activeLotPurchaseId = next.purchaseId;
       break;
     }
   }
-  return { ...current, stock, cost, pendingLots };
+  return {
+    ...current,
+    stock,
+    cost,
+    activeLotQty,
+    activeLotPurchaseId,
+    pendingLots,
+  };
 }
 function moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {
   if (isHistoricalSale(sale)) return supplies;
@@ -485,9 +752,16 @@ function moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {
     );
     if (!line) return supply;
     const qty = Math.max(0, Number(line.qty) || 0);
-    return direction === -1
-      ? consumeSupplyStock(supply, qty)
-      : { ...supply, stock: Math.max(0, supply.stock) + qty };
+    if (direction === -1) return consumeSupplyStock(supply, qty);
+    const restoredStock = Math.max(0, supply.stock) + qty;
+    return {
+      ...supply,
+      stock: restoredStock,
+      activeLotQty: Math.max(
+        restoredStock,
+        Math.max(0, Number(supply.activeLotQty) || 0),
+      ),
+    };
   });
 }
 const saleCustomer = (sale: V, data: D) =>
@@ -582,15 +856,54 @@ function System({ session }: { session: Session }) {
     window.localStorage.setItem("daf-theme", theme);
   }, [theme]);
   useEffect(() => {
-    document.documentElement.style.setProperty("--accent", localUi.accent);
-    document.documentElement.style.setProperty("--gold", localUi.gold);
-    document.documentElement.style.setProperty(
-      "--accent-soft",
-      `color-mix(in srgb, ${localUi.accent} 16%, transparent)`,
+    const palette =
+      theme === "dark" ? localUi.darkPalette : localUi.lightPalette;
+    const root = document.documentElement;
+    const variables: Record<string, string> = {
+      "--bg": palette.background,
+      "--panel": palette.panel,
+      "--panel-2": palette.panel2,
+      "--panel-3": palette.panel3,
+      "--sidebar": palette.sidebar,
+      "--input": palette.input,
+      "--hover": palette.hover,
+      "--line": palette.line,
+      "--line-strong": palette.lineStrong,
+      "--text": palette.text,
+      "--muted": palette.muted,
+      "--accent": palette.accent,
+      "--accent-strong": palette.accentStrong,
+      "--gold": palette.gold,
+      "--success": palette.success,
+      "--warning": palette.warning,
+      "--danger": palette.danger,
+      "--cyan": palette.cyan,
+      "--health-critical": palette.healthCritical,
+      "--health-moderate": palette.healthModerate,
+      "--health-healthy": palette.healthHealthy,
+      "--chart-payment-pix": palette.paymentPix,
+      "--chart-payment-card": palette.paymentCard,
+      "--chart-payment-installment": palette.paymentInstallment,
+      "--chart-payment-marketplace": palette.paymentMarketplace,
+      "--chart-order-direct": palette.orderDirect,
+      "--chart-order-tiktok": palette.orderTiktok,
+      "--chart-order-shopee": palette.orderShopee,
+      "--chart-order-cancelled": palette.orderCancelled,
+      "--chart-category-niche": palette.categoryNiche,
+      "--chart-category-arabic": palette.categoryArabic,
+      "--chart-category-designer": palette.categoryDesigner,
+      "--accent-soft": `color-mix(in srgb, ${palette.accent} 16%, transparent)`,
+      "--success-soft": `color-mix(in srgb, ${palette.success} 10%, transparent)`,
+      "--danger-soft": `color-mix(in srgb, ${palette.danger} 10%, transparent)`,
+      "--menu-zoom": String(localUi.menuZoom / 100),
+      "--sidebar-width": `${Math.round(236 * (localUi.menuZoom / 100))}px`,
+    };
+    Object.entries(variables).forEach(([key, value]) =>
+      root.style.setProperty(key, value),
     );
     window.localStorage.setItem("daf-ui-settings", JSON.stringify(localUi));
-    document.title = localUi.appName || DEFAULT_LOCAL_UI_SETTINGS.appName;
-  }, [localUi]);
+    document.title = "Gestão | DAF Splits";
+  }, [localUi, theme]);
   useEffect(() => {
     setMobileNavOpen(false);
   }, [page]);
@@ -1357,15 +1670,44 @@ function normalizeData(stored: any): D {
           : [],
     } as V;
   });
-  let normalizedSupplies = (merged.supplies || []).map((s: S) => ({
-    ...s,
-    attachCost: Boolean(s.attachCost),
-    pendingLots: (s.pendingLots || []).map((lot) => ({
+  let normalizedSupplies = (merged.supplies || []).map((s: S) => {
+    const pendingLots = (s.pendingLots || []).map((lot) => ({
       ...lot,
       qty: Math.max(0, Number(lot.qty) || 0),
       cost: Math.max(0, Number(lot.cost) || 0),
-    })),
-  }));
+    }));
+    const pendingPurchaseIds = new Set(
+      pendingLots.map((lot) => Number(lot.purchaseId)),
+    );
+    const matchingActivePurchase = [...purchases]
+      .filter(
+        (purchase) =>
+          purchase.type === "Suprimento / insumo" &&
+          supplyStockKey(purchase.description) === supplyStockKey(s.name) &&
+          !pendingPurchaseIds.has(Number(purchase.id)),
+      )
+      .sort(
+        (a, b) =>
+          String(b.date || "").localeCompare(String(a.date || "")) ||
+          Number(b.id) - Number(a.id),
+      )[0];
+    const stock = Math.max(0, Number(s.stock) || 0);
+    const inferredLotQty = Math.max(
+      stock,
+      Math.max(0, Number(s.activeLotQty) || 0),
+      Math.max(0, Number(matchingActivePurchase?.qty) || 0),
+    );
+    return {
+      ...s,
+      stock,
+      attachCost: Boolean(s.attachCost),
+      activeLotQty: inferredLotQty,
+      activeLotPurchaseId:
+        Number(s.activeLotPurchaseId) ||
+        (matchingActivePurchase ? Number(matchingActivePurchase.id) : undefined),
+      pendingLots,
+    };
+  });
   if (!merged.supplyInventoryVersion) {
     normalizedSales.forEach((sale) => {
       normalizedSupplies = moveSupplyStock(normalizedSupplies, sale, -1);
@@ -1479,6 +1821,53 @@ function SettingsPage({
     setSettings({ ...settings, [key]: value });
   }
 
+  const paletteKey = theme === "dark" ? "darkPalette" : "lightPalette";
+  const activePalette = settings[paletteKey];
+  const paletteFields: Array<[keyof SystemPalette, string]> = [
+    ["background", "Fundo geral"],
+    ["panel", "Painéis principais"],
+    ["panel2", "Painéis secundários"],
+    ["panel3", "Painéis terciários"],
+    ["sidebar", "Menu lateral"],
+    ["input", "Campos de formulário"],
+    ["hover", "Hover e seleção"],
+    ["line", "Bordas"],
+    ["lineStrong", "Bordas fortes"],
+    ["text", "Texto principal"],
+    ["muted", "Texto secundário"],
+    ["accent", "Cor de destaque"],
+    ["accentStrong", "Destaque forte"],
+    ["gold", "Cor secundária"],
+    ["success", "Sucesso / positivo"],
+    ["warning", "Avisos"],
+    ["danger", "Erro / crítico"],
+    ["cyan", "Ciano / informativos"],
+    ["healthCritical", "Saúde — crítico"],
+    ["healthModerate", "Saúde — moderado"],
+    ["healthHealthy", "Saúde — saudável"],
+    ["paymentPix", "Gráfico — Pix"],
+    ["paymentCard", "Gráfico — cartão"],
+    ["paymentInstallment", "Gráfico — à prazo"],
+    ["paymentMarketplace", "Gráfico — marketplace"],
+    ["orderDirect", "Pedidos — venda direta"],
+    ["orderTiktok", "Pedidos — TikTok"],
+    ["orderShopee", "Pedidos — Shopee"],
+    ["orderCancelled", "Pedidos — cancelados"],
+    ["categoryNiche", "Categoria — nicho"],
+    ["categoryArabic", "Categoria — árabe"],
+    ["categoryDesigner", "Categoria — designer"],
+  ];
+
+  function updatePalette(key: keyof SystemPalette, value: string) {
+    setSettings({
+      ...settings,
+      [paletteKey]: {
+        ...activePalette,
+        [key]: value,
+      },
+    });
+  }
+
   function moveMenu(index: number, direction: -1 | 1) {
     const target = index + direction;
     if (target < 0 || target >= settings.menuOrder.length) return;
@@ -1493,6 +1882,8 @@ function SettingsPage({
     setSettings({
       ...DEFAULT_LOCAL_UI_SETTINGS,
       menuOrder: [...DEFAULT_MENU_ORDER],
+      darkPalette: { ...DARK_SYSTEM_PALETTE },
+      lightPalette: { ...LIGHT_SYSTEM_PALETTE },
     });
     setTheme("dark");
     notify("Configurações locais restauradas para o padrão.");
@@ -1537,37 +1928,60 @@ function SettingsPage({
             </button>
           </div>
 
-          <div className="settingsColorGrid">
-            <label>
-              <span>Cor de destaque</span>
-              <div className="colorSetting">
-                <input
-                  type="color"
-                  value={settings.accent}
-                  onChange={(event) => update("accent", event.target.value)}
-                />
-                <input
-                  value={settings.accent}
-                  onChange={(event) => update("accent", event.target.value)}
-                  maxLength={7}
-                />
-              </div>
-            </label>
-            <label>
-              <span>Cor secundária</span>
-              <div className="colorSetting">
-                <input
-                  type="color"
-                  value={settings.gold}
-                  onChange={(event) => update("gold", event.target.value)}
-                />
-                <input
-                  value={settings.gold}
-                  onChange={(event) => update("gold", event.target.value)}
-                  maxLength={7}
-                />
-              </div>
-            </label>
+          <div className="menuZoomSetting">
+            <div>
+              <b>Zoom do menu</b>
+              <small>
+                Ajusta o tamanho do menu lateral apenas neste navegador.
+              </small>
+            </div>
+            <div className="menuZoomControl">
+              <input
+                type="range"
+                min="80"
+                max="130"
+                step="5"
+                value={settings.menuZoom}
+                onChange={(event) =>
+                  update("menuZoom", Number(event.target.value))
+                }
+              />
+              <b>{settings.menuZoom}%</b>
+            </div>
+          </div>
+
+          <div className="settingsPaletteHead">
+            <div>
+              <b>Paleta do modo {theme === "dark" ? "escuro" : "claro"}</b>
+              <small>
+                Todas as cores abaixo são independentes por modo de interface.
+              </small>
+            </div>
+            <span>{paletteFields.length} cores editáveis</span>
+          </div>
+
+          <div className="settingsColorGrid settingsColorGridFull">
+            {paletteFields.map(([key, label]) => (
+              <label key={key}>
+                <span>{label}</span>
+                <div className="colorSetting">
+                  <input
+                    type="color"
+                    value={activePalette[key]}
+                    onChange={(event) =>
+                      updatePalette(key, event.target.value)
+                    }
+                  />
+                  <input
+                    value={activePalette[key]}
+                    onChange={(event) =>
+                      updatePalette(key, event.target.value)
+                    }
+                    maxLength={7}
+                  />
+                </div>
+              </label>
+            ))}
           </div>
         </div>
 
@@ -2296,8 +2710,20 @@ function HealthGauge({
   if (cashGeneration < 0) score = Math.min(score, 49);
 
   const status =
-    !gross ? "Sem dados" : score <= 39 ? "Crítico" : score <= 69 ? "Moderado" : "Saudável";
-  const needleRotation = Math.max(0, Math.min(180, score * 1.8));
+    !gross
+      ? "Sem dados"
+      : score <= 39
+        ? "Crítico"
+        : score <= 69
+          ? "Moderado"
+          : "Saudável";
+  const needleRotation =
+    score <= 39
+      ? (score / 39) * 60
+      : score <= 69
+        ? 60 + ((score - 40) / 29) * 60
+        : 120 + ((score - 70) / 30) * 60;
+  const safeNeedleRotation = Math.max(0, Math.min(180, needleRotation));
 
   return (
     <div className="panel companyHealthPanel">
@@ -2320,25 +2746,25 @@ function HealthGauge({
             className="healthGaugeArc critical"
             d="M 40 160 A 120 120 0 0 1 280 160"
             pathLength="100"
-            strokeDasharray="40 60"
+            strokeDasharray="33.333 66.667"
           />
           <path
             className="healthGaugeArc moderate"
             d="M 40 160 A 120 120 0 0 1 280 160"
             pathLength="100"
-            strokeDasharray="30 70"
-            strokeDashoffset="-40"
+            strokeDasharray="33.333 66.667"
+            strokeDashoffset="-33.333"
           />
           <path
             className="healthGaugeArc healthy"
             d="M 40 160 A 120 120 0 0 1 280 160"
             pathLength="100"
-            strokeDasharray="30 70"
-            strokeDashoffset="-70"
+            strokeDasharray="33.334 66.666"
+            strokeDashoffset="-66.666"
           />
           <g
             className="healthGaugeNeedle"
-            style={{ transform: `rotate(${needleRotation}deg)` }}
+            style={{ transform: `rotate(${safeNeedleRotation}deg)` }}
           >
             <line x1="160" y1="160" x2="57" y2="160" />
           </g>
@@ -2370,10 +2796,10 @@ function OrderSummaryChart({ sales }: { sales: V[] }) {
   const total = directOrders + tiktokOrders + shopeeOrders + cancelledOrders;
   const pct = (value: number) => (total ? Math.round((value / total) * 100) : 0);
   const segments = [
-    { label: "Venda direta", value: directOrders, color: "#22a66f" },
-    { label: "TikTok Shop", value: tiktokOrders, color: "#5DC9D6" },
-    { label: "Shopee", value: shopeeOrders, color: "#EE4D2D" },
-    { label: "Cancelados", value: cancelledOrders, color: "#05070a" },
+    { label: "Venda direta", value: directOrders, color: "var(--chart-order-direct)" },
+    { label: "TikTok Shop", value: tiktokOrders, color: "var(--chart-order-tiktok)" },
+    { label: "Shopee", value: shopeeOrders, color: "var(--chart-order-shopee)" },
+    { label: "Cancelados", value: cancelledOrders, color: "var(--chart-order-cancelled)" },
   ];
   return (
     <div className="panel dashboardMetricPanel orderOriginSummary">
@@ -2445,10 +2871,10 @@ function CategoryChart({ d, sales }: { d: D; sales: V[] }) {
             value: item.value,
             color:
               item.category === "Nicho"
-                ? "#e0b43c"
+                ? "var(--chart-category-niche)"
                 : item.category === "Árabe"
-                  ? "#8b5cf6"
-                  : "#2f80ed",
+                  ? "var(--chart-category-arabic)"
+                  : "var(--chart-category-designer)",
           }))}
           centerTop="Total vendido"
           centerBottom={`${total.toLocaleString("pt-BR")}mls`}
@@ -2867,25 +3293,58 @@ function Dash({ d, set }: { d: D; set: any }) {
           </button>
         </div>
         <div className="dashboardStockSnapshotGrid">
-          {dashboardSupplies.map((supply) => (
-            <div key={supply.id}>
-              <span>{supply.name}</span>
-              <b>
-                {Math.max(0, supply.stock).toLocaleString("pt-BR", {
-                  maximumFractionDigits: 2,
-                })}{" "}
-                {supply.unit}
-              </b>
-              {(supply.pendingLots || []).length ? (
-                <small>
-                  +{(supply.pendingLots || []).reduce((sum, lot) => sum + lot.qty, 0)}{" "}
-                  {supply.unit} em próximo lote
-                </small>
-              ) : (
-                <small>Estoque atual</small>
-              )}
-            </div>
-          ))}
+          {dashboardSupplies.map((supply) => {
+            const health = supplyHealth(supply);
+            const replenishmentProgress = supplyReplenishmentProgress(supply);
+            return (
+              <div
+                key={supply.id}
+                className={
+                  "dashboardSupplyCard" +
+                  (health ? ` stock-${health.status}` : "")
+                }
+              >
+                <div className="dashboardSupplyNameRow">
+                  <strong>{supply.name}</strong>
+                  {health ? (
+                    <span className={`stockHealthBadge ${health.status}`}>
+                      {health.label}
+                    </span>
+                  ) : null}
+                </div>
+                <b>
+                  {Math.max(0, supply.stock).toLocaleString("pt-BR", {
+                    maximumFractionDigits: 2,
+                  })}{" "}
+                  {supplyDisplayUnit(supply)}
+                </b>
+                {(supply.pendingLots || []).length ? (
+                  <small>
+                    +{(supply.pendingLots || []).reduce((sum, lot) => sum + lot.qty, 0)}{" "}
+                    {supplyDisplayUnit(supply)} em próximo lote
+                  </small>
+                ) : (
+                  <small>
+                    {health
+                      ? `Estoque ${health.label.toLowerCase()} · ${Math.round(
+                          replenishmentProgress,
+                        )}% da referência de reposição`
+                      : "Estoque atual"}
+                  </small>
+                )}
+                {health ? (
+                  <i
+                    className="stockHealthTrack"
+                    aria-label={`${Math.round(
+                      replenishmentProgress,
+                    )}% da referência de reposição disponível`}
+                  >
+                    <em style={{ width: `${replenishmentProgress}%` }} />
+                  </i>
+                ) : null}
+              </div>
+            );
+          })}
           {!dashboardSupplies.length ? (
             <p className="empty">
               Nenhum insumo selecionado. Clique em Editar para escolher os itens.
@@ -6337,20 +6796,6 @@ function Stock({
         </div>
       </div>
       {view !== "supplies" ? (
-        <div className="stockQuickFilters">
-          <button
-            type="button"
-            className={apcOnly ? "active" : ""}
-            onClick={() => setApcOnly((current) => !current)}
-          >
-            <Check />
-            {apcOnly
-              ? "Mostrando apenas APC disponíveis"
-              : `Filtrar APC disponíveis (${d.products.filter((p) => p.apc > 0).length})`}
-          </button>
-        </div>
-      ) : null}
-      {view !== "supplies" ? (
         <>
           <div className="stockSummaryRow">
             <Cards
@@ -6387,18 +6832,32 @@ function Stock({
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              aria-label="Filtrar por categoria"
             >
-              <option>Todos</option>
-              <option>Árabe</option>
-              <option>Nicho</option>
-              <option>Designer</option>
+              <option value="Todos">Categoria</option>
+              <option value="Árabe">Árabe</option>
+              <option value="Nicho">Nicho</option>
+              <option value="Designer">Designer</option>
             </select>
-            <select value={brand} onChange={(e) => setBrand(e.target.value)}>
-              <option>Todas</option>
+            <select
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              aria-label="Filtrar por marca"
+            >
+              <option value="Todas">Marca</option>
               {brands.map((x) => (
                 <option key={x}>{x}</option>
               ))}
             </select>
+            <button
+              type="button"
+              className={"stockApcFilter" + (apcOnly ? " active" : "")}
+              onClick={() => setApcOnly((current) => !current)}
+              aria-pressed={apcOnly}
+            >
+              <Check />
+              {apcOnly ? "Somente APC" : "Filtrar APC"}
+            </button>
           </div>
           <div className="products">
             {filtered.map((p) => (
@@ -7459,10 +7918,10 @@ function PaymentBreakdown({
 }) {
   const sourceSales = sales || d.sales;
   const payments = [
-    { name: "Pix", color: "#22a66f", matches: (sale: V) => !isMarketplaceSale(sale) && ((isInstallmentSale(sale) && isInstallmentSettled(sale)) || (!isInstallmentSale(sale) && sale.payment === "Pix")) },
-    { name: "Cartão de Crédito", color: "#2f80ed", matches: (sale: V) => !isMarketplaceSale(sale) && !isInstallmentSale(sale) && sale.payment === "Cartão de Crédito" },
-    { name: "À prazo", color: "#e0b43c", matches: (sale: V) => !isMarketplaceSale(sale) && isInstallmentSale(sale) && !isInstallmentSettled(sale) },
-    { name: "Marketplace", color: "#8b5cf6", matches: (sale: V) => isMarketplaceSale(sale) },
+    { name: "Pix", color: "var(--chart-payment-pix)", matches: (sale: V) => !isMarketplaceSale(sale) && ((isInstallmentSale(sale) && isInstallmentSettled(sale)) || (!isInstallmentSale(sale) && sale.payment === "Pix")) },
+    { name: "Cartão de Crédito", color: "var(--chart-payment-card)", matches: (sale: V) => !isMarketplaceSale(sale) && !isInstallmentSale(sale) && sale.payment === "Cartão de Crédito" },
+    { name: "À prazo", color: "var(--chart-payment-installment)", matches: (sale: V) => !isMarketplaceSale(sale) && isInstallmentSale(sale) && !isInstallmentSettled(sale) },
+    { name: "Marketplace", color: "var(--chart-payment-marketplace)", matches: (sale: V) => isMarketplaceSale(sale) },
   ].map((x) => ({
     ...x,
     value: sourceSales
@@ -8106,6 +8565,10 @@ function InventoryEdit({
                 unit: String(f.unit),
                 stock,
                 cost,
+                activeLotQty: Math.max(
+                  stock,
+                  Math.max(0, Number(s.activeLotQty) || 0),
+                ),
                 attachCost: f.attachCost === "Sim",
               })
             : s,
@@ -8204,11 +8667,19 @@ function InventoryEdit({
             ? { ...p, stock: p.stock + delta, cost: newCost }
             : p,
         ),
-        supplies: x.supplies.map((s) =>
-          item && purchase.type !== "Perfume" && s.id === item.id
-            ? { ...s, stock: s.stock + delta, cost: newCost }
-            : s,
-        ),
+        supplies: x.supplies.map((s) => {
+          if (!item || purchase.type === "Perfume" || s.id !== item.id) return s;
+          const stock = s.stock + delta;
+          return {
+            ...s,
+            stock,
+            cost: newCost,
+            activeLotQty:
+              s.activeLotPurchaseId === purchase.id
+                ? Math.max(stock, qty)
+                : Math.max(stock, Number(s.activeLotQty) || 0),
+          };
+        }),
       }));
     }
     close();
@@ -8511,6 +8982,7 @@ function Form({
               min: 0,
               attachCost: String(f.attachCost) === "Sim",
               cost: Number(f.total) / (Number(f.stock) || 1),
+              activeLotQty: Math.max(0, Number(f.stock) || 0),
             },
           ],
         };
@@ -8752,6 +9224,8 @@ function Form({
                   unit: String(f.unit || current.unit),
                   attachCost,
                   cost: unitCost,
+                  activeLotQty: qty,
+                  activeLotPurchaseId: purchase.id,
                 };
               })
             : [
@@ -8764,6 +9238,8 @@ function Form({
                   min: 0,
                   attachCost: String(f.attachCost) === "Sim",
                   cost: unitCost,
+                  activeLotQty: qty,
+                  activeLotPurchaseId: purchase.id,
                   pendingLots: [],
                 },
               ];

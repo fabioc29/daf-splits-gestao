@@ -9102,3 +9102,361 @@ aside nav {
     font-size: 9.5px;
   }
 }
+
+
+/* =========================================================
+   DAF — saúde do estoque + paleta completa + zoom do menu
+   ========================================================= */
+
+/* Zoom do menu: somente desktop, salvo localmente via CSS variables */
+@media (min-width: 901px) {
+  aside {
+    width: var(--sidebar-width, 236px) !important;
+  }
+
+  main {
+    margin-left: var(--sidebar-width, 236px) !important;
+    width: calc(100% - var(--sidebar-width, 236px)) !important;
+  }
+
+  aside nav,
+  aside .mobileNavHead,
+  aside > footer {
+    zoom: var(--menu-zoom, 1);
+  }
+}
+
+/* Relatório rápido de insumos */
+.dashboardStockSnapshotGrid > .dashboardSupplyCard {
+  position: relative;
+  overflow: hidden;
+  padding: 13px 14px 12px;
+  border-width: 1px;
+  transition:
+    border-color .16s ease,
+    background .16s ease;
+}
+
+.dashboardSupplyNameRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dashboardSupplyNameRow > strong {
+  min-width: 0;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: 900;
+  letter-spacing: -.01em;
+}
+
+.dashboardStockSnapshotGrid > .dashboardSupplyCard > b {
+  margin-top: 9px;
+  font-size: 18px;
+  line-height: 1.05;
+}
+
+.stockHealthBadge {
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-size: 7px !important;
+  line-height: 1;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+
+.stockHealthBadge.critical {
+  color: var(--health-critical);
+  background: color-mix(in srgb, var(--health-critical) 10%, transparent);
+}
+
+.stockHealthBadge.moderate {
+  color: var(--health-moderate);
+  background: color-mix(in srgb, var(--health-moderate) 10%, transparent);
+}
+
+.stockHealthBadge.healthy {
+  color: var(--health-healthy);
+  background: color-mix(in srgb, var(--health-healthy) 10%, transparent);
+}
+
+.dashboardSupplyCard.stock-critical {
+  border-color: color-mix(in srgb, var(--health-critical) 40%, var(--line));
+}
+
+.dashboardSupplyCard.stock-moderate {
+  border-color: color-mix(in srgb, var(--health-moderate) 38%, var(--line));
+}
+
+.dashboardSupplyCard.stock-healthy {
+  border-color: color-mix(in srgb, var(--health-healthy) 32%, var(--line));
+}
+
+.stockHealthTrack {
+  width: 100%;
+  height: 4px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 74%, transparent);
+  display: block;
+}
+
+.stockHealthTrack > em {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+}
+
+.stock-critical .stockHealthTrack > em {
+  width: 33%;
+  background: var(--health-critical);
+}
+
+.stock-moderate .stockHealthTrack > em {
+  width: 66%;
+  background: var(--health-moderate);
+}
+
+.stock-healthy .stockHealthTrack > em {
+  width: 100%;
+  background: var(--health-healthy);
+}
+
+/* Velocímetro usa as cores configuráveis do sistema */
+.healthGaugeArc.critical {
+  stroke: var(--health-critical) !important;
+}
+
+.healthGaugeArc.moderate {
+  stroke: var(--health-moderate) !important;
+}
+
+.healthGaugeArc.healthy {
+  stroke: var(--health-healthy) !important;
+}
+
+/* Configurações: paleta completa */
+.settingsGrid > .settingsSection:first-child {
+  grid-column: 1 / -1;
+}
+
+.settingsPaletteHead,
+.menuZoomSetting {
+  min-height: 70px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settingsPaletteHead b,
+.settingsPaletteHead small,
+.menuZoomSetting b,
+.menuZoomSetting small {
+  display: block;
+}
+
+.settingsPaletteHead b,
+.menuZoomSetting b {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.settingsPaletteHead small,
+.menuZoomSetting small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.settingsPaletteHead > span {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--input);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  font-size: 8px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.menuZoomControl {
+  min-width: 240px;
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 48px;
+  align-items: center;
+  gap: 10px;
+}
+
+.menuZoomControl input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.menuZoomControl > b {
+  min-height: 36px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--input);
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+}
+
+.settingsColorGridFull {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.settingsColorGridFull > label {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel-2) 72%, transparent);
+}
+
+.settingsColorGridFull .colorSetting {
+  grid-template-columns: 42px minmax(0, 1fr);
+}
+
+.settingsColorGridFull .colorSetting input[type="color"] {
+  width: 42px;
+}
+
+/* Cores de estado de estoque também respeitam a paleta */
+:root {
+  --health-critical: #e34b57;
+  --health-moderate: #e7ad2f;
+  --health-healthy: #2fac7a;
+  --sidebar-width: 236px;
+  --menu-zoom: 1;
+}
+
+@media (max-width: 1180px) {
+  .settingsColorGridFull {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .settingsColorGridFull {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .menuZoomSetting,
+  .settingsPaletteHead {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .menuZoomControl {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .settingsColorGridFull {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboardSupplyNameRow {
+    gap: 7px;
+  }
+
+  .dashboardSupplyNameRow > strong {
+    font-size: 10.5px;
+  }
+}
+
+
+/* =========================================================
+   DAF — filtros do estoque na mesma linha
+   ========================================================= */
+
+.stockFilters {
+  grid-template-columns: minmax(280px, 2fr) minmax(140px, .75fr) minmax(160px, 1fr) auto !important;
+  align-items: stretch;
+}
+
+.stockApcFilter {
+  min-height: 44px;
+  min-width: 138px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.stockApcFilter svg {
+  position: static !important;
+  width: 15px !important;
+  height: 15px;
+  color: currentColor;
+}
+
+.stockApcFilter:hover {
+  border-color: var(--line-strong);
+  background: var(--hover);
+  color: var(--text);
+}
+
+.stockApcFilter.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+@media (max-width: 980px) {
+  .stockFilters {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .stockFilters > label {
+    grid-column: 1 / -1;
+  }
+
+  .stockApcFilter {
+    width: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  .stockFilters {
+    grid-template-columns: 1fr !important;
+  }
+
+  .stockFilters > label {
+    grid-column: auto;
+  }
+
+  .stockApcFilter {
+    width: 100%;
+  }
+}
