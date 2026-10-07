@@ -1682,6 +1682,42 @@ function SettingsPage({
     setSettings({ ...settings, [key]: value });
   }
 
+  const paletteKey = theme === "dark" ? "darkPalette" : "lightPalette";
+  const activePalette = settings[paletteKey];
+  const paletteFields: Array<[keyof SystemPalette, string]> = [
+    ["background", "Fundo geral"],
+    ["panel", "Painéis principais"],
+    ["panel2", "Painéis secundários"],
+    ["panel3", "Painéis terciários"],
+    ["sidebar", "Menu lateral"],
+    ["input", "Campos de formulário"],
+    ["hover", "Hover e seleção"],
+    ["line", "Bordas"],
+    ["lineStrong", "Bordas fortes"],
+    ["text", "Texto principal"],
+    ["muted", "Texto secundário"],
+    ["accent", "Cor de destaque"],
+    ["accentStrong", "Destaque forte"],
+    ["gold", "Cor secundária"],
+    ["success", "Sucesso / positivo"],
+    ["warning", "Avisos"],
+    ["danger", "Erro / crítico"],
+    ["cyan", "Ciano / informativos"],
+    ["healthCritical", "Saúde — crítico"],
+    ["healthModerate", "Saúde — moderado"],
+    ["healthHealthy", "Saúde — saudável"],
+  ];
+
+  function updatePalette(key: keyof SystemPalette, value: string) {
+    setSettings({
+      ...settings,
+      [paletteKey]: {
+        ...activePalette,
+        [key]: value,
+      },
+    });
+  }
+
   function moveMenu(index: number, direction: -1 | 1) {
     const target = index + direction;
     if (target < 0 || target >= settings.menuOrder.length) return;
@@ -1696,6 +1732,8 @@ function SettingsPage({
     setSettings({
       ...DEFAULT_LOCAL_UI_SETTINGS,
       menuOrder: [...DEFAULT_MENU_ORDER],
+      darkPalette: { ...DARK_SYSTEM_PALETTE },
+      lightPalette: { ...LIGHT_SYSTEM_PALETTE },
     });
     setTheme("dark");
     notify("Configurações locais restauradas para o padrão.");
@@ -1740,37 +1778,60 @@ function SettingsPage({
             </button>
           </div>
 
-          <div className="settingsColorGrid">
-            <label>
-              <span>Cor de destaque</span>
-              <div className="colorSetting">
-                <input
-                  type="color"
-                  value={settings.accent}
-                  onChange={(event) => update("accent", event.target.value)}
-                />
-                <input
-                  value={settings.accent}
-                  onChange={(event) => update("accent", event.target.value)}
-                  maxLength={7}
-                />
-              </div>
-            </label>
-            <label>
-              <span>Cor secundária</span>
-              <div className="colorSetting">
-                <input
-                  type="color"
-                  value={settings.gold}
-                  onChange={(event) => update("gold", event.target.value)}
-                />
-                <input
-                  value={settings.gold}
-                  onChange={(event) => update("gold", event.target.value)}
-                  maxLength={7}
-                />
-              </div>
-            </label>
+          <div className="menuZoomSetting">
+            <div>
+              <b>Zoom do menu</b>
+              <small>
+                Ajusta o tamanho do menu lateral apenas neste navegador.
+              </small>
+            </div>
+            <div className="menuZoomControl">
+              <input
+                type="range"
+                min="80"
+                max="130"
+                step="5"
+                value={settings.menuZoom}
+                onChange={(event) =>
+                  update("menuZoom", Number(event.target.value))
+                }
+              />
+              <b>{settings.menuZoom}%</b>
+            </div>
+          </div>
+
+          <div className="settingsPaletteHead">
+            <div>
+              <b>Paleta do modo {theme === "dark" ? "escuro" : "claro"}</b>
+              <small>
+                Todas as cores abaixo são independentes por modo de interface.
+              </small>
+            </div>
+            <span>{paletteFields.length} cores editáveis</span>
+          </div>
+
+          <div className="settingsColorGrid settingsColorGridFull">
+            {paletteFields.map(([key, label]) => (
+              <label key={key}>
+                <span>{label}</span>
+                <div className="colorSetting">
+                  <input
+                    type="color"
+                    value={activePalette[key]}
+                    onChange={(event) =>
+                      updatePalette(key, event.target.value)
+                    }
+                  />
+                  <input
+                    value={activePalette[key]}
+                    onChange={(event) =>
+                      updatePalette(key, event.target.value)
+                    }
+                    maxLength={7}
+                  />
+                </div>
+              </label>
+            ))}
           </div>
         </div>
 
