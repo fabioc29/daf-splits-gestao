@@ -8143,3 +8143,325 @@ aside nav {
     display: none;
   }
 }
+
+
+/* =========================================================
+   DAF — navegação financeira e configurações locais
+   ========================================================= */
+
+.stockSubnav button {
+  position: relative;
+}
+
+.stockSubnav .subnavCount {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--danger);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.financeNavGroup .stockParent .navAlertGroup {
+  margin-left: auto;
+}
+
+.financeNavGroup .stockParent .navAlertGroup + .stockNavChevron {
+  margin-left: 3px;
+}
+
+/* Financeiro: gráfico de pagamento centralizado */
+.financePrimaryGrid .modernPaymentChart.compact {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  align-content: start;
+  gap: 12px;
+  text-align: center;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .dashboardMiniHeader {
+  width: 100%;
+  text-align: center;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .dashboardMiniHeader p {
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .dashboardMiniVisual {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .paymentInteractiveDonut {
+  margin: 4px auto;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .paymentInteractiveDonut svg {
+  width: 176px !important;
+  height: 176px !important;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .paymentLegend {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  text-align: left;
+}
+
+/* Configurações — somente localStorage do navegador */
+.settingsWorkspace {
+  display: grid;
+  gap: 14px;
+}
+
+.settingsIntro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settingsIntro h2,
+.settingsSection h2 {
+  margin: 4px 0 0;
+}
+
+.settingsIntro p,
+.settingsSection .panelHeading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.settingsIntro > svg {
+  width: 34px;
+  height: 34px;
+  padding: 7px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settingsSection {
+  display: grid;
+  gap: 16px;
+}
+
+.settingsSection .panelHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.settingsSection .panelHeading > svg {
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.themeSettingRow {
+  min-height: 70px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.themeSettingRow b,
+.themeSettingRow small {
+  display: block;
+}
+
+.themeSettingRow b {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.themeSettingRow small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.settingsThemeToggle {
+  flex: none;
+}
+
+.settingsColorGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settingsSection > label,
+.settingsColorGrid > label {
+  display: grid;
+  gap: 6px;
+}
+
+.settingsSection label > span,
+.settingsColorGrid label > span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.settingsSection > label > input,
+.colorSetting input[type="text"],
+.colorSetting input:not([type]) {
+  width: 100%;
+  min-height: 43px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  color: var(--text);
+  padding: 0 11px;
+  font: inherit;
+}
+
+.colorSetting {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 7px;
+}
+
+.colorSetting input[type="color"] {
+  width: 48px;
+  height: 43px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+}
+
+.colorSetting input:last-child {
+  width: 100%;
+  min-width: 0;
+  height: 43px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  color: var(--text);
+  padding: 0 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+}
+
+.settingsReset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settingsReset b,
+.settingsReset small {
+  display: block;
+}
+
+.settingsReset b {
+  font-size: 12px;
+}
+
+.settingsReset small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.settingsReset button {
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.settingsReset button svg {
+  width: 16px;
+}
+
+/* Relatório de estoque: botão copiar */
+.stockReportFooter .primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.stockReportFooter .primary svg {
+  width: 16px;
+}
+
+/* A numeração do frasco é identificação, não quantidade */
+.productBottleLine {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.productBottleLine b {
+  font-size: inherit;
+}
+
+@media (max-width: 900px) {
+  .settingsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .financePrimaryGrid .modernPaymentChart.compact .paymentLegend {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .settingsIntro,
+  .themeSettingRow,
+  .settingsReset {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settingsColorGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsThemeToggle,
+  .settingsReset button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .financeNavGroup .stockParent .navAlertGroup {
+    display: none;
+  }
+}
