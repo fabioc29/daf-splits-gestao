@@ -8465,3 +8465,640 @@ aside nav {
     display: none;
   }
 }
+
+
+/* =========================================================
+   DAF — ordem de menus + mobile drawer e responsividade
+   ========================================================= */
+
+/* Logo dentro do novo cabeçalho da navegação */
+.mobileNavHead {
+  display: block;
+}
+
+.mobileNavHead .sidebarLogo {
+  width: 156px;
+  height: 64px;
+  margin: 0 10px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #050505;
+  object-fit: cover;
+}
+
+.mobileNavClose,
+.mobileMenuButton,
+.mobileNavBackdrop {
+  display: none;
+}
+
+/* Numeração do frasco sem destaque visual */
+.productBottleLine,
+.productBottleLine b {
+  color: var(--muted) !important;
+  font-weight: 400 !important;
+}
+
+/* Ordenação de menus nas configurações */
+.settingsMenuOrder {
+  display: grid;
+  gap: 14px;
+}
+
+.settingsMenuOrder .panelHeading p {
+  max-width: 620px;
+}
+
+.settingsMenuOrderList {
+  display: grid;
+  gap: 7px;
+}
+
+.settingsMenuOrderItem {
+  min-height: 54px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  display: grid;
+  grid-template-columns: 34px 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.settingsMenuOrderIndex {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.settingsMenuOrderItem > svg {
+  width: 17px;
+  height: 17px;
+  color: var(--accent);
+}
+
+.settingsMenuOrderItem > b {
+  min-width: 0;
+  color: var(--text);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settingsMenuOrderItem > div {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.settingsMenuOrderItem button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+}
+
+.settingsMenuOrderItem button:disabled {
+  opacity: .28;
+  cursor: not-allowed;
+}
+
+.settingsMenuOrderItem button svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Mobile/tablet: navegação vira drawer */
+@media (max-width: 900px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .shell {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .shell > aside {
+    position: fixed !important;
+    z-index: 120;
+    inset: 0 auto 0 0;
+    width: min(84vw, 318px) !important;
+    max-width: 318px;
+    height: 100dvh;
+    padding: 16px 14px 18px !important;
+    border-right: 1px solid var(--line);
+    background: var(--sidebar);
+    box-shadow: 18px 0 50px rgb(0 0 0 / 38%);
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    transform: translateX(-105%);
+    transition: transform .22s ease;
+  }
+
+  .shell > aside.mobileOpen {
+    transform: translateX(0);
+  }
+
+  .mobileNavBackdrop {
+    display: block;
+    position: fixed;
+    z-index: 110;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    background: rgb(0 0 0 / 58%);
+    backdrop-filter: blur(3px);
+  }
+
+  .mobileNavHead {
+    min-height: 68px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .mobileNavHead .sidebarLogo {
+    width: 132px;
+    height: 56px;
+    margin: 0;
+    flex: 0 0 auto;
+  }
+
+  .mobileNavClose {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel-2);
+    color: var(--text);
+    display: grid;
+    place-items: center;
+    flex: 0 0 40px;
+  }
+
+  .mobileNavClose svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  aside nav {
+    display: flex !important;
+    flex-direction: column;
+    gap: 4px !important;
+    padding-bottom: 14px;
+  }
+
+  aside nav > button,
+  aside nav .stockNavGroup > button {
+    position: relative;
+    width: 100%;
+    min-height: 44px !important;
+    padding: 0 12px !important;
+    border-radius: 10px !important;
+    justify-content: flex-start !important;
+    font-size: 12px !important;
+  }
+
+  .stockNavGroup,
+  .financeNavGroup {
+    width: 100%;
+    display: grid !important;
+    gap: 3px;
+  }
+
+  .stockSubnav {
+    display: grid !important;
+    width: auto;
+    margin: 1px 0 5px 35px !important;
+    padding: 0 0 0 9px !important;
+    border-left: 1px solid var(--line) !important;
+    gap: 2px !important;
+  }
+
+  .stockSubnav button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 34px !important;
+    padding: 0 9px !important;
+    justify-content: flex-start !important;
+    border-radius: 8px !important;
+    font-size: 10px !important;
+  }
+
+  aside nav button .navAlertGroup,
+  .financeNavGroup .stockParent .navAlertGroup {
+    position: static !important;
+    margin: 0 3px 0 auto !important;
+    display: inline-flex !important;
+  }
+
+  .financeNavGroup .stockParent .navAlertGroup {
+    order: 3;
+  }
+
+  .financeNavGroup .stockParent .stockNavChevron {
+    order: 4;
+    margin-left: 0;
+  }
+
+  aside > footer {
+    margin-top: 12px;
+    padding-top: 14px;
+  }
+
+  main {
+    width: 100% !important;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: 0 !important;
+  }
+
+  main > header {
+    width: 100%;
+    min-height: 72px;
+    height: auto !important;
+    padding: 10px 12px !important;
+    gap: 9px;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  .mobileMenuButton {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: var(--panel-2);
+    color: var(--text);
+    display: grid;
+    place-items: center;
+  }
+
+  .mobileMenuButton svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .mainHeaderTitle {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .mainHeaderTitle small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mainHeaderTitle h1 {
+    margin-top: 2px;
+    font-size: clamp(18px, 5vw, 22px) !important;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+
+  .headerActions {
+    flex: 0 0 auto;
+    max-width: 48%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 5px;
+  }
+
+  .headerActions button {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 8px 9px !important;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  .headerActions button svg {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+  }
+
+  .content {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 12px !important;
+    gap: 12px !important;
+    overflow: hidden;
+  }
+
+  .content > *,
+  .panel,
+  .cards,
+  .cards > div,
+  .products,
+  .products > div,
+  .clients,
+  .clients > div,
+  .financeWorkspace,
+  .dashboardMain {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .panel,
+  .cards > div,
+  .products > div,
+  .clients > div {
+    padding: 13px;
+    border-radius: 13px;
+  }
+
+  .workspaceToolbar,
+  .stockHead,
+  .receivableHeader,
+  .dashboardStockSnapshotHead,
+  .preparePanelHead,
+  .salesTitleRow {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .periodSelectorWrap,
+  .workspaceMonthPicker,
+  .monthPicker {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .periodSelectorWrap {
+    justify-content: stretch;
+  }
+
+  .periodSelectorWrap .workspaceMonthPicker {
+    flex: 1 1 auto;
+  }
+
+  .dateRangePopover {
+    position: fixed;
+    z-index: 160;
+    top: 84px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: calc(100dvh - 100px);
+    overflow-y: auto;
+  }
+
+  .executiveMetricGrid,
+  .financeMetricGrid,
+  .cards,
+  .dashboardTopGrid,
+  .dashboardLowerGrid,
+  .financePrimaryGrid,
+  .financeSecondaryGrid,
+  .financeSecondaryGrid.single,
+  .dashboardStockSnapshotGrid,
+  .marketplaceSummary,
+  .clientHistoryStats,
+  .supplierHistoryStats,
+  .supplierHistoryStats.three,
+  .supplierHistoryStats.four,
+  .stockSummaryRow,
+  .stockSummaryRow > .cards,
+  .profitControl > .cards,
+  .financeHealthGrid,
+  .settingsGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .metricCard {
+    min-height: 118px !important;
+  }
+
+  .dashboardLowerGrid .panel,
+  .dashboardTopGrid .panel,
+  .financePrimaryGrid > *,
+  .financeSecondaryGrid > * {
+    height: auto !important;
+    min-height: 0;
+  }
+
+  .modernPaymentChart.compact,
+  .financePrimaryGrid .modernPaymentChart.compact {
+    grid-template-columns: 1fr !important;
+    justify-items: stretch !important;
+  }
+
+  .financePrimaryGrid .modernPaymentChart.compact .paymentLegend,
+  .paymentLegend {
+    width: 100%;
+    grid-template-columns: 1fr !important;
+  }
+
+  .interactiveSvgDonut,
+  .interactiveSvgDonut svg,
+  .paymentInteractiveDonut,
+  .paymentInteractiveDonut svg {
+    max-width: 100%;
+  }
+
+  .dashboardRevenueChart .bars {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .salesToolbar,
+  .purchaseMonthToolbar,
+  .clientHistoryToolbar,
+  .supplierHistoryToolbar,
+  .supplierHistoryFilters,
+  .stockFilters,
+  .salesFilters,
+  .marketplaceFields,
+  .quickQuoteGrid,
+  .costEditorSummary,
+  .costEditorSection label {
+    width: 100%;
+    grid-template-columns: 1fr !important;
+  }
+
+  .salesToolbar > *,
+  .stockFilters > *,
+  .salesFilters > *,
+  .purchaseMonthToolbar > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .stockHeadActions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .stockHeadActions > button,
+  .stockQuickFilters button,
+  .productSalesHistoryButton,
+  .filterButton,
+  .overdueFilter {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .products,
+  .clients {
+    display: grid;
+    grid-template-columns: 1fr !important;
+  }
+
+  .products .tableActions,
+  .clients .tableActions,
+  .tableActions {
+    max-width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tableActions button {
+    max-width: 100%;
+  }
+
+  .table,
+  .stockReportTableWrap,
+  .productHistoryTableWrap,
+  .clientHistorySales,
+  .supplierHistoryTable {
+    max-width: 100%;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table table,
+  .stockReportTable,
+  .productHistoryTable,
+  .clientHistoryTable,
+  .supplierHistoryTable table {
+    min-width: 680px;
+  }
+
+  .overlay {
+    padding: 10px !important;
+    align-items: flex-start !important;
+    overflow-y: auto;
+  }
+
+  .overlay > form,
+  .overlay > .systemDialog,
+  .overlay > .history,
+  .overlay .systemDialog,
+  .costEditor,
+  .clientHistory,
+  .supplierHistory,
+  .productSalesHistoryDialog,
+  .stockReportDialog {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    margin: 0 auto;
+    padding: 15px !important;
+    border-radius: 14px !important;
+    overflow-y: auto;
+  }
+
+  .overlay input,
+  .overlay select,
+  .overlay textarea,
+  input,
+  select,
+  textarea {
+    max-width: 100%;
+    font-size: 16px;
+  }
+
+  .settingsMenuOrderItem {
+    grid-template-columns: 30px 20px minmax(0, 1fr) auto;
+    padding: 8px;
+  }
+
+  .settingsMenuOrderItem > div {
+    gap: 3px;
+  }
+
+  .settingsMenuOrderItem button {
+    width: 32px;
+    height: 32px;
+  }
+
+  .settingsReset,
+  .themeSettingRow,
+  .settingsIntro {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .headerActions {
+    max-width: 44%;
+  }
+
+  .content {
+    padding: 10px !important;
+  }
+
+  .panel,
+  .cards > div,
+  .products > div,
+  .clients > div {
+    padding: 11px;
+  }
+
+  .mainHeaderTitle small {
+    font-size: 7.5px;
+    letter-spacing: .08em;
+  }
+
+  .mainHeaderTitle h1 {
+    font-size: 18px !important;
+  }
+
+  .executiveMetricGrid,
+  .financeMetricGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .metricCard {
+    min-height: 110px !important;
+  }
+
+  .settingsMenuOrderItem {
+    grid-template-columns: 26px 18px minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .settingsMenuOrderItem > b {
+    font-size: 9.5px;
+  }
+}
