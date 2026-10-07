@@ -557,6 +557,7 @@ function System({ session }: { session: Session }) {
       `color-mix(in srgb, ${localUi.accent} 16%, transparent)`,
     );
     window.localStorage.setItem("daf-ui-settings", JSON.stringify(localUi));
+    document.title = localUi.appName || DEFAULT_LOCAL_UI_SETTINGS.appName;
   }, [localUi]);
 
   function notify(message: string) {
@@ -755,7 +756,7 @@ const action =
   return (
     <div className="shell">
       <aside>
-        <img className="sidebarLogo" src={LOGO} alt="DAF Splits" />
+        <img className="sidebarLogo" src={LOGO} alt={localUi.appName} />
         <nav>
           {nav.map(([id, label, Icon]) => {
             if (id === "stock") {
@@ -2627,51 +2628,7 @@ function Dash({ d, set }: { d: D; set: any }) {
         </div>
       </div>
 
-      <div className="panel dashboardStockSnapshot">
-        <div className="dashboardStockSnapshotHead">
-          <div>
-            <span className="eyebrow">Estoque operacional</span>
-            <h2>Relatório rápido de insumos</h2>
-            <p>Itens escolhidos para acompanhamento diário.</p>
-          </div>
-          <button
-            type="button"
-            className="secondary"
-            onClick={() => {
-              setStockReportDraft([...(d.dashboardSupplyReportIds || [])]);
-              setStockReportEditOpen(true);
-            }}
-          >
-            <Pencil /> Editar
-          </button>
-        </div>
-        <div className="dashboardStockSnapshotGrid">
-          {dashboardSupplies.map((supply) => (
-            <div key={supply.id}>
-              <span>{supply.name}</span>
-              <b>
-                {Math.max(0, supply.stock).toLocaleString("pt-BR", {
-                  maximumFractionDigits: 2,
-                })}{" "}
-                {supply.unit}
-              </b>
-              {(supply.pendingLots || []).length ? (
-                <small>
-                  +{(supply.pendingLots || []).reduce((sum, lot) => sum + lot.qty, 0)}{" "}
-                  {supply.unit} em próximo lote
-                </small>
-              ) : (
-                <small>Estoque atual</small>
-              )}
-            </div>
-          ))}
-          {!dashboardSupplies.length ? (
-            <p className="empty">
-              Nenhum insumo selecionado. Clique em Editar para escolher os itens.
-            </p>
-          ) : null}
-        </div>
-      </div>
+
 
       <div className="dashboardTopGrid">
         <div className="panel chart dashboardRevenueChart">
@@ -2745,6 +2702,52 @@ function Dash({ d, set }: { d: D; set: any }) {
         <PaymentBreakdown d={d} sales={activeSales} compact />
         <CategoryChart d={d} sales={activeSales} />
         <LeadRanking d={d} start={rangeStart} end={rangeEnd} />
+      </div>
+
+      <div className="panel dashboardStockSnapshot">
+        <div className="dashboardStockSnapshotHead">
+          <div>
+            <span className="eyebrow">Estoque operacional</span>
+            <h2>Relatório rápido de insumos</h2>
+            <p>Itens escolhidos para acompanhamento diário.</p>
+          </div>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              setStockReportDraft([...(d.dashboardSupplyReportIds || [])]);
+              setStockReportEditOpen(true);
+            }}
+          >
+            <Pencil /> Editar
+          </button>
+        </div>
+        <div className="dashboardStockSnapshotGrid">
+          {dashboardSupplies.map((supply) => (
+            <div key={supply.id}>
+              <span>{supply.name}</span>
+              <b>
+                {Math.max(0, supply.stock).toLocaleString("pt-BR", {
+                  maximumFractionDigits: 2,
+                })}{" "}
+                {supply.unit}
+              </b>
+              {(supply.pendingLots || []).length ? (
+                <small>
+                  +{(supply.pendingLots || []).reduce((sum, lot) => sum + lot.qty, 0)}{" "}
+                  {supply.unit} em próximo lote
+                </small>
+              ) : (
+                <small>Estoque atual</small>
+              )}
+            </div>
+          ))}
+          {!dashboardSupplies.length ? (
+            <p className="empty">
+              Nenhum insumo selecionado. Clique em Editar para escolher os itens.
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {stockReportEditOpen ? (
@@ -5562,6 +5565,7 @@ function StockReport({
   close: () => void;
 }) {
   const [apcOnly, setApcOnly] = useState(false);
+  const [copied, setCopied] = useState(false);
   const allAvailableProducts = d.products
     .filter((product) => product.stock > 0)
     .sort((a, b) =>
@@ -5600,18 +5604,23 @@ function StockReport({
     return lines.join("\n");
   }
 
-  function downloadTxt() {
-    const blob = new Blob([buildReportText()], {
-      type: "text/plain;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `daf-splits-relatorio-estoque-${today()}.txt`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    URL.revokeObjectURL(url);
+  async function copyReport() {
+    const text = buildReportText();
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
   }
 
   return (
@@ -5685,8 +5694,9 @@ function StockReport({
           <button type="button" onClick={close}>
             Fechar
           </button>
-          <button type="button" className="primary" onClick={downloadTxt}>
-            Baixar .txt
+          <button type="button" className="primary" onClick={copyReport}>
+            {copied ? <Check /> : <Copy />}
+            {copied ? "Copiado" : "Copiar"}
           </button>
         </footer>
       </div>
@@ -6259,7 +6269,7 @@ function Stock({
                   {p.stock} ml · {brl(p.cost)} por ml
                 </p>
                 <p className="productBottleLine">
-                  Frasco atual: <b>{p.bottleNumber || 1}</b>
+                  Identificação do frasco: <b>nº {p.bottleNumber || 1}</b>
                 </p>
                 <p className={p.apc ? "apcAvailable" : "apcUnavailable"}>
                   APC: {p.apc ? "1 disponível" : "indisponível"}
@@ -6388,8 +6398,8 @@ function Stock({
 
             <div className="productBottleOverview">
               <div>
-                <span>Frasco atual</span>
-                <b>Frasco {historyProduct.bottleNumber || 1}</b>
+                <span>Identificação atual</span>
+                <b>Frasco nº {historyProduct.bottleNumber || 1}</b>
               </div>
               <div>
                 <span>Frascos registrados</span>
@@ -6405,7 +6415,7 @@ function Stock({
                         : ""
                     }
                   >
-                    Frasco {entry.number}
+                    Frasco nº {entry.number}
                     {entry.date ? <small>{dateBR(entry.date)}</small> : null}
                   </span>
                 ))}
@@ -6448,7 +6458,7 @@ function Stock({
                       </td>
                       <td>
                         {bottleNumbers.length
-                          ? bottleNumbers.map((number) => `Frasco ${number}`).join(", ")
+                          ? bottleNumbers.map((number) => `Frasco nº ${number}`).join(", ")
                           : "Anterior ao controle"}
                       </td>
                       <td>{dateBR(sale.date)}</td>
