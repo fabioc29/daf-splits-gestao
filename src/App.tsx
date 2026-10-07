@@ -5051,6 +5051,9 @@ function Receivables({
     "direct",
   );
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [paymentSale, setPaymentSale] = useState<V | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentError, setPaymentError] = useState("");
   const allPendingSales = d.sales
     .filter(
       (s) =>
@@ -5093,19 +5096,28 @@ function Receivables({
       notify(`Repasse do pedido #${orderNo(s.id)} confirmado.`);
       return;
     }
-    const raw = window.prompt(
-      `Quanto o cliente pagou agora?\nSaldo atual: ${brl(s.total - s.paid)}`,
-    );
-    if (raw === null) return;
-    const amount = Number(raw.replace(",", "."));
+    setPaymentSale(s);
+    setPaymentAmount("");
+    setPaymentError("");
+  }
+
+  function confirmPayment() {
+    if (!paymentSale) return;
+    const amount = parseDecimal(paymentAmount);
+    const remaining = Math.max(0, paymentSale.total - paymentSale.paid);
     if (!Number.isFinite(amount) || amount <= 0) {
-      window.alert("Informe um valor de pagamento válido.");
+      setPaymentError("Informe um valor de pagamento válido.");
       return;
     }
+    if (amount > remaining + 0.01) {
+      setPaymentError(`O valor não pode ultrapassar o saldo de ${brl(remaining)}.`);
+      return;
+    }
+
     set((x: D) => ({
       ...x,
       sales: x.sales.map((sale) => {
-        if (sale.id !== s.id) return sale;
+        if (sale.id !== paymentSale.id) return sale;
         const paid = Math.min(sale.total, sale.paid + amount);
         const scheduleTotal = (sale.installments || []).reduce(
           (n, installment) => n + installment.amount,
@@ -5126,11 +5138,15 @@ function Receivables({
         return { ...sale, paid, installments };
       }),
     }));
+
     notify(
-      amount >= s.total - s.paid
-        ? `Pedido #${orderNo(s.id)} quitado.`
-        : `Pagamento de ${brl(amount)} lançado no pedido #${orderNo(s.id)}.`,
+      amount >= remaining
+        ? `Pedido #${orderNo(paymentSale.id)} quitado.`
+        : `Pagamento de ${brl(amount)} lançado no pedido #${orderNo(paymentSale.id)}.`,
     );
+    setPaymentSale(null);
+    setPaymentAmount("");
+    setPaymentError("");
   }
   return (
     <>
@@ -5239,6 +5255,75 @@ function Receivables({
           </p>
         ) : null}
       </div>
+
+      {paymentSale ? (
+        <div className="overlay">
+          <form
+            className="systemDialog paymentEntryDialog"
+            onSubmit={(event) => {
+              event.preventDefault();
+              confirmPayment();
+            }}
+          >
+            <header>
+              <div>
+                <small>BAIXA DE RECEBIMENTO</small>
+                <h2>Registrar pagamento</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentSale(null);
+                  setPaymentError("");
+                }}
+                aria-label="Fechar"
+              >
+                <X />
+              </button>
+            </header>
+            <div className="paymentEntrySummary">
+              <span>
+                Pedido <b>#{orderNo(paymentSale.id)}</b>
+              </span>
+              <span>
+                Cliente <b>{saleCustomer(paymentSale, d)}</b>
+              </span>
+              <span>
+                Saldo atual <b>{brl(paymentSale.total - paymentSale.paid)}</b>
+              </span>
+            </div>
+            <label>
+              <span>Quanto o cliente pagou agora?</span>
+              <input
+                autoFocus
+                type="text"
+                inputMode="decimal"
+                value={paymentAmount}
+                onChange={(event) => {
+                  setPaymentAmount(event.target.value);
+                  setPaymentError("");
+                }}
+                placeholder="0,00"
+              />
+            </label>
+            {paymentError ? <p className="paymentEntryError">{paymentError}</p> : null}
+            <footer>
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentSale(null);
+                  setPaymentError("");
+                }}
+              >
+                Cancelar
+              </button>
+              <button type="submit" className="primary">
+                Confirmar pagamento
+              </button>
+            </footer>
+          </form>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -5250,8 +5335,18 @@ function StockReport({
   d: D;
   close: () => void;
 }) {
-  const availableProducts = d.products
+  const [apcOnly, setApcOnly] = useState(false);
+  const allAvailableProducts = d.products
     .filter((product) => product.stock > 0)
+    .sort((a, b) =>
+      `${a.brand} ${a.name}`.localeCompare(
+        `${b.brand} ${b.name}`,
+        "pt-BR",
+        { sensitivity: "base" },
+      ),
+    );
+  const availableProducts = allAvailableProducts
+    .filter((product) => !apcOnly || product.apc > 0)
     .sort((a, b) =>
       `${a.brand} ${a.name}`.localeCompare(
         `${b.brand} ${b.name}`,
@@ -5309,6 +5404,19 @@ function StockReport({
             <X />
           </button>
         </header>
+
+        <div className="stockReportToolbar">
+          <button
+            type="button"
+            className={apcOnly ? "active" : ""}
+            onClick={() => setApcOnly((current) => !current)}
+          >
+            <Check />
+            {apcOnly
+              ? "Mostrando apenas APC disponíveis"
+              : `Filtrar APC disponíveis (${allAvailableProducts.filter((p) => p.apc > 0).length})`}
+          </button>
+        </div>
 
         <div className="stockReportTableWrap">
           <table className="stockReportTable">
@@ -8465,7 +8573,10 @@ function Form({
           : "Registrar compra/despesa";
   return (
     <div className="overlay">
-      <form onSubmit={submit}>
+      <form
+        onSubmit={submit}
+        className={isSale ? "recordForm saleRecordForm" : "recordForm"}
+      >
         <header>
           <div>
             <small>{modal!.id ? "EDIÇÃO" : "NOVO REGISTRO"}</small>
@@ -9034,7 +9145,7 @@ function Form({
                       phone: formatClientPhone(event.target.value),
                     }))
                   }
-                  required
+                  required={!existingClient}
                 />
               </label>
               <label>
@@ -9052,7 +9163,7 @@ function Form({
                     setClientLookupMessage("");
                   }}
                   onBlur={(event) => findClientByCpf(event.target.value)}
-                  required
+                  required={!existingClient}
                 />
               </label>
             </div>
@@ -9066,7 +9177,7 @@ function Form({
                     setClientDraft((current) => ({ ...current, cep: event.target.value }))
                   }
                   onBlur={(event) => fillAddressFromCep(event.target.value)}
-                  required
+                  required={!existingClient}
                 />
               </label>
               <button
@@ -9086,7 +9197,7 @@ function Form({
                   onChange={(event) =>
                     setClientDraft((current) => ({ ...current, address: event.target.value }))
                   }
-                  required
+                  required={!existingClient}
                 />
               </label>
               <label>
@@ -9097,7 +9208,7 @@ function Form({
                   onChange={(event) =>
                     setClientDraft((current) => ({ ...current, number: event.target.value }))
                   }
-                  required
+                  required={!existingClient}
                 />
               </label>
               <label>
@@ -9137,7 +9248,7 @@ function Form({
                     leadSource: event.target.value,
                   }))
                 }
-                required
+                required={!existingClient}
               >
                 <option value="" disabled>Selecione...</option>
                 <option value="Grupo 1">Grupo 1</option>
@@ -9159,12 +9270,14 @@ function Form({
                   n={"address" + i}
                   l={"Endereço " + (i + 1)}
                   v={existingClient?.addresses[i]?.value}
+                  required={false}
                 />
                 <Field
                   n={"label" + i}
                   l="Identificação"
                   p="Casa, trabalho..."
                   v={existingClient?.addresses[i]?.label}
+                  required={false}
                 />
                 <span />
               </div>
