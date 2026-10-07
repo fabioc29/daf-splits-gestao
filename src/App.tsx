@@ -641,12 +641,27 @@ function supplyDisplayUnit(supply: S) {
   return unit || "Unidades";
 }
 
-function supplyReplenishmentProgress(supply: S) {
-  const current = Math.max(0, Number(supply.stock) || 0);
-  const baseline = Math.max(
-    current,
+function supplyReplenishmentBaseline(supply: S) {
+  const key = supplyStockKey(supply.name);
+
+  if (key.includes("frasco")) return 100;
+  if (key.includes("caixa")) return 100;
+  if (key.includes("cartadeagradecimento")) return 500;
+  if (key.includes("cartaodevisita")) return 500;
+  if (key.includes("papeldeseda")) return 100;
+  if (key.includes("organza")) return 100;
+  if (key.includes("sacoladaf") || key.includes("sacolasdaf")) return 100;
+  if (key.includes("envelopeapc")) return 50;
+
+  return Math.max(
+    Math.max(0, Number(supply.stock) || 0),
     Math.max(0, Number(supply.activeLotQty) || 0),
   );
+}
+
+function supplyReplenishmentProgress(supply: S) {
+  const current = Math.max(0, Number(supply.stock) || 0);
+  const baseline = supplyReplenishmentBaseline(supply);
   if (baseline <= 0) return 0;
   return Math.max(0, Math.min(100, (current / baseline) * 100));
 }
@@ -3313,7 +3328,7 @@ function Dash({ d, set }: { d: D; set: any }) {
                     {health
                       ? `Estoque ${health.label.toLowerCase()} · ${Math.round(
                           replenishmentProgress,
-                        )}% da última reposição`
+                        )}% da referência de reposição`
                       : "Estoque atual"}
                   </small>
                 )}
@@ -3322,7 +3337,7 @@ function Dash({ d, set }: { d: D; set: any }) {
                     className="stockHealthTrack"
                     aria-label={`${Math.round(
                       replenishmentProgress,
-                    )}% da última reposição disponível`}
+                    )}% da referência de reposição disponível`}
                   >
                     <em style={{ width: `${replenishmentProgress}%` }} />
                   </i>
