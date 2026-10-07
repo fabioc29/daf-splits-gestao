@@ -3424,3 +3424,62 @@ vercel-toolbar {
     width: 100% !important;
   }
 }
+
+
+/* =========================================================
+   DAF — proporção final dos cards do catálogo
+   ========================================================= */
+
+.catalogGrid {
+  align-items: start !important;
+}
+
+.catalogCard {
+  height: auto !important;
+  align-self: start !important;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.catalogMediaBlock {
+  flex: 0 0 auto;
+}
+
+.catalogCardContent {
+  flex: 0 0 auto !important;
+  display: grid !important;
+  grid-template-rows: auto auto auto;
+  gap: 14px;
+  padding-top: 15px;
+}
+
+.catalogCardIdentity {
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.catalogCardBrand {
+  margin-top: 0 !important;
+}
+
+.catalogScarcity {
+  margin-top: 0 !important;
+  padding-top: 12px;
+}
+
+.catalogWhatsappButton {
+  margin-top: 0 !important;
+}
+
+@media (max-width: 640px) {
+  .catalogCardContent {
+    gap: 12px;
+    padding-top: 13px;
+  }
+
+  .catalogCardIdentity {
+    min-height: 52px;
+  }
+}
