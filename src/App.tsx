@@ -50,6 +50,13 @@ import {
   type CatalogSettings,
 } from "./Catalog";
 
+type BottleHistoryEntry = {
+  number: number;
+  date?: string;
+  purchaseId?: number;
+  ml?: number;
+};
+
 type P = {
   id: number;
   brand: string;
@@ -60,6 +67,8 @@ type P = {
   min: number;
   cost: number;
   apc: number;
+  bottleNumber?: number;
+  bottleHistory?: BottleHistoryEntry[];
 };
 type S = {
   id: number;
@@ -100,7 +109,13 @@ type C = {
     state?: string;
   }[];
 };
-type L = { productId: number; ml: number; isApc?: boolean; unitCost?: number };
+type L = {
+  productId: number;
+  ml: number;
+  isApc?: boolean;
+  unitCost?: number;
+  bottleNumber?: number;
+};
 type Installment = { date: string; amount: number; paid?: boolean };
 type V = {
   id: number;
@@ -160,6 +175,7 @@ type B = {
   total: number;
   mlPerBottle?: number;
   attachCost?: boolean;
+  bottleNumbers?: number[];
 };
 type SupplierType =
   | "Fornecedor de perfumes"
@@ -186,6 +202,7 @@ type D = {
   supplyInventoryVersion?: number;
   marketplacePayoutDays?: { "TikTok Shop": number; Shopee: number };
   catalogSettings: CatalogSettings;
+  dashboardSupplyReportIds: number[];
 };
 type Modal = { type: string; id?: number } | null;
 
@@ -201,11 +218,58 @@ const blank: D = {
   brands: [],
   marketplacePayoutDays: { "TikTok Shop": 9, Shopee: 7 },
   catalogSettings: { ...DEFAULT_CATALOG_SETTINGS },
+  dashboardSupplyReportIds: [],
 };
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const parseDecimal = (value: unknown) =>
   Number(String(value ?? "").trim().replace(",", ".")) || 0;
+
+function parseBottleMarker(value: unknown) {
+  const original = String(value || "").trim();
+  const match = original.match(/\s*\(\s*frasco\s*(\d+)\s*\)\s*$/i);
+  const number = match ? Math.max(1, Number(match[1]) || 1) : undefined;
+  const name = original
+    .replace(/\s*\(\s*frasco\s*\d+\s*\)\s*$/i, "")
+    .trim();
+  return { name, number };
+}
+
+function perfumeIdentity(brand: unknown, name: unknown) {
+  return (
+    String(brand || "").trim() +
+    " " +
+    parseBottleMarker(name).name
+  )
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeBottleHistory(
+  product: Partial<P>,
+  inferredNumber: number,
+): BottleHistoryEntry[] {
+  const existing = Array.isArray(product.bottleHistory)
+    ? product.bottleHistory
+        .map((entry) => ({
+          number: Math.max(1, Number(entry.number) || 1),
+          date: entry.date ? String(entry.date) : undefined,
+          purchaseId: entry.purchaseId ? Number(entry.purchaseId) : undefined,
+          ml: entry.ml ? Number(entry.ml) : undefined,
+        }))
+        .sort((a, b) => a.number - b.number)
+    : [];
+  if (existing.length) return existing;
+
+  return Array.from({ length: Math.max(1, inferredNumber) }, (_, index) => ({
+    number: index + 1,
+  }));
+}
+
 const today = () => {
   const date = new Date();
   date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
@@ -879,12 +943,31 @@ const action =
 
 function normalizeData(stored: any): D {
   const merged = { ...blank, ...stored };
-  const products = (merged.products || []).map((p: P) => ({
-    ...p,
-    category: p.category === "Importado" ? "Designer" : p.category,
-    gender: p.gender || "Unissex",
-    apc: p.apc ?? 1,
-  }));
+  const products = (merged.products || []).map((p: P) => {
+    const parsed = parseBottleMarker(p.name);
+    const storedCurrent = Math.max(0, Number(p.bottleNumber) || 0);
+    const historyCurrent = Array.isArray(p.bottleHistory)
+      ? Math.max(
+          0,
+          ...p.bottleHistory.map((entry) => Number(entry.number) || 0),
+        )
+      : 0;
+    const inferredNumber = Math.max(
+      1,
+      storedCurrent,
+      historyCurrent,
+      parsed.number || 0,
+    );
+    return {
+      ...p,
+      name: parsed.name,
+      category: p.category === "Importado" ? "Designer" : p.category,
+      gender: p.gender || "Unissex",
+      apc: p.apc ?? 1,
+      bottleNumber: inferredNumber,
+      bottleHistory: normalizeBottleHistory(p, inferredNumber),
+    };
+  });
   const brands = Array.from(
     new Set([
       ...(merged.brands || []),
@@ -962,8 +1045,15 @@ function normalizeData(stored: any): D {
   ) as Record<string, string>;
   const purchases = (merged.purchases || []).map((purchase: B) => {
     const cleaned = cleanSupplierName(purchase.supplier);
+    const cleanedDescription =
+      purchase.type === "Perfume"
+        ? String(purchase.description || "")
+            .replace(/\s*\(\s*frasco\s*\d+\s*\)\s*$/i, "")
+            .trim()
+        : purchase.description;
     return {
       ...purchase,
+      description: cleanedDescription,
       supplier: supplierByKey.get(supplierKey(cleaned)) || cleaned,
     };
   });
@@ -1027,6 +1117,9 @@ function normalizeData(stored: any): D {
       items: (s.items || []).map((item: L) => ({
         ...item,
         isApc: Boolean(item.isApc),
+        bottleNumber: item.bottleNumber
+          ? Math.max(1, Number(item.bottleNumber))
+          : undefined,
         unitCost:
           item.unitCost ??
           products.find((p: P) => p.id === item.productId)?.cost ??
@@ -1069,6 +1162,11 @@ function normalizeData(stored: any): D {
       Shopee: Number(merged.marketplacePayoutDays?.Shopee || 7),
     },
     catalogSettings: normalizeCatalogSettings(merged.catalogSettings),
+    dashboardSupplyReportIds: Array.isArray(stored?.dashboardSupplyReportIds)
+      ? stored.dashboardSupplyReportIds
+          .map((id: unknown) => Number(id))
+          .filter((id: number) => normalizedSupplies.some((s: S) => s.id === id))
+      : normalizedSupplies.map((s: S) => s.id),
     purchases,
     supplies: normalizedSupplies,
     clients: normalizedClients,
@@ -7643,9 +7741,25 @@ function Form({
     }
     set((x: D) => {
       if (type === "product") {
-        const brand = String(f.brand || "").trim(),
-          product = mkP({ ...f, brand }, existingProduct?.id),
-          brands = x.brands.includes(brand) ? x.brands : [...x.brands, brand];
+        const brand = String(f.brand || "").trim();
+        const parsedName = parseBottleMarker(f.name);
+        const baseProduct = mkP(
+          { ...f, brand, name: parsedName.name },
+          existingProduct?.id,
+        );
+        const bottleNumber = Math.max(
+          1,
+          Number(existingProduct?.bottleNumber) || parsedName.number || 1,
+        );
+        const product: P = {
+          ...baseProduct,
+          name: parsedName.name,
+          bottleNumber,
+          bottleHistory: existingProduct?.bottleHistory?.length
+            ? existingProduct.bottleHistory
+            : normalizeBottleHistory(existingProduct || {}, bottleNumber),
+        };
+        const brands = x.brands.includes(brand) ? x.brands : [...x.brands, brand];
         return {
           ...x,
           brands,
@@ -7779,15 +7893,40 @@ function Form({
             ? String(f.newSupplier)
             : String(f.supplier)).trim(),
           qty = Number(f.qty || 1),
+          bottleQty = Math.max(1, Math.round(qty || 1)),
           mlPerBottle = kind === "Perfume" ? Number(f.mlPerBottle) : undefined,
           total = Number(f.total),
           brand = String(f.brand || "").trim(),
+          cleanProductName =
+            kind === "Perfume"
+              ? parseBottleMarker(f.productName).name
+              : "",
           description =
             kind === "Perfume"
-              ? `${brand} ${String(f.productName)}`.trim()
+              ? `${brand} ${cleanProductName}`.trim()
               : String(f.description);
+        const purchaseId = Date.now();
+        const existingPerfume =
+          kind === "Perfume"
+            ? x.products.find(
+                (p) =>
+                  perfumeIdentity(p.brand, p.name) ===
+                  perfumeIdentity(brand, cleanProductName),
+              )
+            : undefined;
+        const startingBottleNumber = Math.max(
+          0,
+          Number(existingPerfume?.bottleNumber) || 0,
+        );
+        const bottleNumbers =
+          kind === "Perfume"
+            ? Array.from(
+                { length: bottleQty },
+                (_, index) => startingBottleNumber + index + 1,
+              )
+            : undefined;
         const purchase: B = {
-          id: Date.now(),
+          id: purchaseId,
           date: String(f.date),
           supplier,
           type: kind,
@@ -7795,6 +7934,7 @@ function Form({
           qty,
           mlPerBottle,
           total,
+          bottleNumbers,
           attachCost:
             kind === "Suprimento / insumo"
               ? String(f.attachCost) === "Sim"
@@ -7805,20 +7945,31 @@ function Form({
           brands = x.brands;
         if (kind === "Perfume") {
           const volume = qty * (mlPerBottle || 0),
-            found = x.products.find(
-              (p) =>
-                p.brand.toLowerCase() === brand.toLowerCase() &&
-                p.name.toLowerCase() === String(f.productName).toLowerCase(),
-            );
+            found = existingPerfume,
+            newBottleHistory = (bottleNumbers || []).map((number) => ({
+              number,
+              date: String(f.date),
+              purchaseId,
+              ml: mlPerBottle,
+            }));
           products = found
             ? x.products.map((p) =>
                 p.id === found.id
                   ? {
                       ...p,
+                      name: parseBottleMarker(p.name).name,
                       stock: p.stock + volume,
                       cost:
                         (p.cost * p.stock + total) / (p.stock + volume || 1),
                       apc: String(f.apc) === "Sim" ? 1 : Math.min(1, p.apc),
+                      bottleNumber:
+                        bottleNumbers?.[bottleNumbers.length - 1] ||
+                        p.bottleNumber ||
+                        1,
+                      bottleHistory: [
+                        ...(p.bottleHistory || normalizeBottleHistory(p, p.bottleNumber || 1)),
+                        ...newBottleHistory,
+                      ],
                     }
                   : p,
               )
@@ -7827,13 +7978,16 @@ function Form({
                 {
                   id: Date.now() + 1,
                   brand,
-                  name: String(f.productName),
+                  name: cleanProductName,
                   category: String(f.category),
                   gender: String(f.gender),
                   stock: volume,
                   min: 0,
                   cost: total / (volume || 1),
                   apc: String(f.apc) === "Sim" ? 1 : 0,
+                  bottleNumber:
+                    bottleNumbers?.[bottleNumbers.length - 1] || bottleQty,
+                  bottleHistory: newBottleHistory,
                 },
               ];
           brands = x.brands.includes(brand) ? x.brands : [...x.brands, brand];
@@ -7999,6 +8153,10 @@ function Form({
           ml: parseDecimal(f["ml" + i]),
           isApc: Boolean(apcLines[i]),
           unitCost: existingSale?.items[i]?.unitCost ?? product?.cost ?? 0,
+          bottleNumber:
+            existingSale?.items[i]?.bottleNumber ??
+            product?.bottleNumber ??
+            1,
         };
       });
       const installments =
