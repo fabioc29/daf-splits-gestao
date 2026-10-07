@@ -26,6 +26,7 @@ import {
   Printer,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   SlidersHorizontal,
   Sun,
   Moon,
@@ -437,7 +438,6 @@ const nav = [
   ["prepare", "Pedidos para preparar", ClipboardCheck],
   ["shipping", "Envios", Truck],
   ["stock", "Estoque", Box],
-  ["catalog", "Catálogo", PackageOpen],
   ["purchases", "Compras", ShoppingCart],
   ["clients", "Clientes", Users],
   ["suppliers", "Fornecedores", Building2],
@@ -507,6 +507,12 @@ function System({ session }: { session: Session }) {
     [history, setHistory] = useState(0),
     [supplierHistory, setSupplierHistory] = useState(""),
     [toast, setToast] = useState("");
+  const [stockMenuOpen, setStockMenuOpen] = useState(true);
+  useEffect(() => {
+    if (page === "stock" || page === "stock-supplies" || page === "catalog") {
+      setStockMenuOpen(true);
+    }
+  }, [page]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("daf-theme", theme);
@@ -683,6 +689,16 @@ const action =
             : page === "receivables"
             ? ["Cadastrar venda antiga", "oldSale"]
             : null;
+  const stockSectionActive =
+    page === "stock" || page === "stock-supplies" || page === "catalog";
+  const pageTitle =
+    page === "stock"
+      ? "Estoque de perfumes"
+      : page === "stock-supplies"
+        ? "Estoque de insumos"
+        : page === "catalog"
+          ? "Catálogo"
+          : nav.find((item) => item[0] === page)?.[1] || "Painel";
   if (!ready && sync !== "error")
     return (
       <div className="authPage">
@@ -697,43 +713,81 @@ const action =
       <aside>
         <img className="sidebarLogo" src={LOGO} alt="DAF Splits" />
         <nav>
-          {nav.map(([id, label, Icon]) => (
-            <button
-              key={id}
-              className={page === id ? "on" : ""}
-              onClick={() => setPage(id)}
-            >
-              <Icon />
-              {label}
-              {navAlerts[id] || (id === "receivables" && receivableDueAlert) ? (
-      <span className="navAlertGroup">
-        {id === "receivables" && receivableDueAlert ? (
-          <span
-            className={"receivableDueAlert " + receivableDueAlert}
-            aria-label={
-              receivableDueAlert === "overdue"
-                ? "Há parcela atrasada"
-                : "Há parcela vencendo hoje"
-            }
-            title={
-              receivableDueAlert === "overdue"
-                ? "Há parcela atrasada"
-                : "Há parcela vencendo hoje"
-            }
-          />
-        ) : null}
-        {navAlerts[id] ? (
-          <span
-            className="navAlert"
-            aria-label={String(navAlerts[id]) + " pendente(s)"}
-          >
-            {navAlerts[id]}
-          </span>
-        ) : null}
-      </span>
-    ) : null}
-            </button>
-          ))}
+          {nav.map(([id, label, Icon]) =>
+            id === "stock" ? (
+              <div className="stockNavGroup" key={id}>
+                <button
+                  className={stockSectionActive ? "on stockParent" : "stockParent"}
+                  onClick={() => setStockMenuOpen((open) => !open)}
+                  aria-expanded={stockMenuOpen}
+                >
+                  <Icon />
+                  {label}
+                  <ChevronDown
+                    className={"stockNavChevron" + (stockMenuOpen ? " open" : "")}
+                  />
+                </button>
+                {stockMenuOpen ? (
+                  <div className="stockSubnav">
+                    <button
+                      className={page === "stock" ? "on" : ""}
+                      onClick={() => setPage("stock")}
+                    >
+                      Perfumes
+                    </button>
+                    <button
+                      className={page === "stock-supplies" ? "on" : ""}
+                      onClick={() => setPage("stock-supplies")}
+                    >
+                      Insumos
+                    </button>
+                    <button
+                      className={page === "catalog" ? "on" : ""}
+                      onClick={() => setPage("catalog")}
+                    >
+                      Catálogo
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <button
+                key={id}
+                className={page === id ? "on" : ""}
+                onClick={() => setPage(id)}
+              >
+                <Icon />
+                {label}
+                {navAlerts[id] || (id === "receivables" && receivableDueAlert) ? (
+                  <span className="navAlertGroup">
+                    {id === "receivables" && receivableDueAlert ? (
+                      <span
+                        className={"receivableDueAlert " + receivableDueAlert}
+                        aria-label={
+                          receivableDueAlert === "overdue"
+                            ? "Há parcela atrasada"
+                            : "Há parcela vencendo hoje"
+                        }
+                        title={
+                          receivableDueAlert === "overdue"
+                            ? "Há parcela atrasada"
+                            : "Há parcela vencendo hoje"
+                        }
+                      />
+                    ) : null}
+                    {navAlerts[id] ? (
+                      <span
+                        className="navAlert"
+                        aria-label={String(navAlerts[id]) + " pendente(s)"}
+                      >
+                        {navAlerts[id]}
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </button>
+            ),
+          )}
         </nav>
         <div className={"sync " + sync}>
           {sync === "error" ? <CloudOff /> : <Cloud />}
@@ -757,7 +811,7 @@ const action =
         <header>
           <div>
             <small>PAINEL ADMINISTRATIVO</small>
-            <h1>{nav.find((n) => n[0] === page)?.[1]}</h1>
+            <h1>{pageTitle}</h1>
           </div>
           <div className="headerActions">
             <button
@@ -844,9 +898,10 @@ const action =
               edit={(id) => setModal({ type: "sale", id })}
               notify={notify}
             />
-          ) : page === "stock" ? (
+          ) : page === "stock" || page === "stock-supplies" ? (
             <Stock
               d={data}
+              mode={page === "stock-supplies" ? "supplies" : "perfumes"}
               set={setData}
               add={() => setModal({ type: "supply" })}
               addProduct={() => setModal({ type: "product" })}
@@ -5669,6 +5724,7 @@ function BrandManager({
 
 function Stock({
   d,
+  mode,
   add,
   addProduct,
   manageBrands,
@@ -5678,6 +5734,7 @@ function Stock({
   notify,
 }: {
   d: D;
+  mode: "perfumes" | "supplies";
   add: () => void;
   addProduct: () => void;
   manageBrands: () => void;
@@ -5686,12 +5743,13 @@ function Stock({
   set: any;
   notify: (s: string) => void;
 }) {
-  const [view, setView] = useState("perfumes"),
+  const [apcOnly, setApcOnly] = useState(false),
     [category, setCategory] = useState("Todos"),
     [brand, setBrand] = useState("Todas"),
     [query, setQuery] = useState(""),
     [productHistoryPickerOpen, setProductHistoryPickerOpen] = useState(false),
     [productHistoryId, setProductHistoryId] = useState<number | null>(null);
+  const view = mode === "supplies" ? "supplies" : apcOnly ? "apc" : "perfumes";
   const brands = Array.from(new Set(d.products.map((p) => p.brand))).sort(
     (a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
   );
@@ -5759,8 +5817,12 @@ function Stock({
     <>
       <div className="stockHead">
         <div>
-          <h2>Estoque</h2>
-          <p>Escolha qual tipo de estoque deseja consultar.</p>
+          <h2>{mode === "supplies" ? "Insumos" : "Perfumes"}</h2>
+          <p>
+            {mode === "supplies"
+              ? "Controle de suprimentos e materiais utilizados nos pedidos."
+              : "Controle de perfumes, volume disponível e APC."}
+          </p>
         </div>
         <div className="stockHeadActions">
           {view !== "supplies" ? (
@@ -5781,34 +5843,17 @@ function Stock({
           </button>
         </div>
       </div>
-      <div className="segmented stockSwitch">
-        <button
-          className={view !== "supplies" ? "active" : ""}
-          onClick={() => setView("perfumes")}
-        >
-          Perfumes
-        </button>
-        <button
-          className={view === "supplies" ? "active" : ""}
-          onClick={() => setView("supplies")}
-        >
-          Suprimentos / insumos
-        </button>
-      </div>
       {view !== "supplies" ? (
-        <div className="segmented">
+        <div className="stockQuickFilters">
           <button
-            className={view === "apc" ? "active" : ""}
-            onClick={() => setView("apc")}
+            type="button"
+            className={apcOnly ? "active" : ""}
+            onClick={() => setApcOnly((current) => !current)}
           >
-            APC's disponíveis ({d.products.filter((p) => p.apc > 0).length})
-          </button>
-          <button
-            className={view === "out" ? "active" : ""}
-            onClick={() => setView("out")}
-          >
-            Perfumes fora de estoque (
-            {d.products.filter((p) => p.stock <= 0).length})
+            <Check />
+            {apcOnly
+              ? "Mostrando apenas APC disponíveis"
+              : `Filtrar APC disponíveis (${d.products.filter((p) => p.apc > 0).length})`}
           </button>
         </div>
       ) : null}
