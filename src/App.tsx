@@ -825,7 +825,7 @@ const action =
         </header>
         <section className="content">
           {page === "dashboard" ? (
-            <Dash d={data} />
+            <Dash d={data} set={setData} />
           ) : page === "sales" ? (
             <Sales
               d={data}
@@ -1587,23 +1587,43 @@ function metricDelta(current: number, previous: number) {
 function ComparisonBadge({
   value,
   label,
+  previousValue,
+  previousPeriod,
 }: {
   value: number | null;
   label: string;
+  previousValue?: string;
+  previousPeriod?: string;
 }) {
   if (value === null)
     return (
-      <small className="metricDelta neutral">
+      <span className="metricDelta neutral">
         <Sparkles /> Sem base anterior
-      </small>
+      </span>
     );
   const positive = value >= 0;
   return (
-    <small className={"metricDelta " + (positive ? "positive" : "negative")}>
+    <span
+      className={"metricDelta metricDeltaInteractive " + (positive ? "positive" : "negative")}
+      tabIndex={0}
+      role="button"
+      aria-label={
+        previousValue
+          ? `Comparativo. Período anterior: ${previousValue}`
+          : "Comparativo com período anterior"
+      }
+    >
       {positive ? <TrendingUp /> : <TrendingDown />}
       {Math.abs(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
       <span>{label}</span>
-    </small>
+      {previousValue ? (
+        <span className="metricPreviousTooltip">
+          <small>Período anterior</small>
+          <b>{previousValue}</b>
+          {previousPeriod ? <em>{previousPeriod}</em> : null}
+        </span>
+      ) : null}
+    </span>
   );
 }
 
@@ -2156,8 +2176,10 @@ function LeadRanking({ d, start, end }: { d: D; start: string; end: string }) {
   );
 }
 
-function Dash({ d }: { d: D }) {
+function Dash({ d, set }: { d: D; set: any }) {
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [stockReportEditOpen, setStockReportEditOpen] = useState(false);
+  const [stockReportDraft, setStockReportDraft] = useState<number[]>([]);
   const [monthKey, setMonthKey] = useState(today().slice(0, 7));
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
@@ -2194,6 +2216,11 @@ function Dash({ d }: { d: D }) {
       periodMonthLabel(shiftMonthKey(monthKey, -1)).replace(/^./, (letter) =>
         letter.toUpperCase(),
       );
+  const previousPeriodLabel = rangeLabel(previousStart, previousEnd);
+  const selectedSupplyIds = d.dashboardSupplyReportIds || [];
+  const dashboardSupplies = d.supplies.filter((supply) =>
+    selectedSupplyIds.includes(supply.id),
+  );
 
   const daysInMonth = monthDays(monthKey);
   const chartKeys = customRange
@@ -2267,25 +2294,45 @@ function Dash({ d }: { d: D }) {
           <span>Faturamento</span>
           <b>{brl(metrics.gross)}</b>
           <small>{activeSales.length} pedido(s) no período</small>
-          <ComparisonBadge value={metricDelta(metrics.gross, previousMetrics.gross)} label={comparisonLabel} />
+          <ComparisonBadge
+            value={metricDelta(metrics.gross, previousMetrics.gross)}
+            label={comparisonLabel}
+            previousValue={brl(previousMetrics.gross)}
+            previousPeriod={previousPeriodLabel}
+          />
         </div>
         <div className="metricCard metricViolet">
           <span>Pedidos</span>
           <b>{activeSales.length}</b>
           <small>{metrics.uniqueClients} cliente(s) únicos</small>
-          <ComparisonBadge value={metricDelta(activeSales.length, previousMetrics.orders)} label={comparisonLabel} />
+          <ComparisonBadge
+            value={metricDelta(activeSales.length, previousMetrics.orders)}
+            label={comparisonLabel}
+            previousValue={String(previousMetrics.orders)}
+            previousPeriod={previousPeriodLabel}
+          />
         </div>
         <div className="metricCard metricGreen">
           <span>Lucro estimado</span>
           <b>{brl(metrics.profit)}</b>
           <small>Margem de {metrics.margin.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</small>
-          <ComparisonBadge value={metricDelta(metrics.profit, previousMetrics.profit)} label={comparisonLabel} />
+          <ComparisonBadge
+            value={metricDelta(metrics.profit, previousMetrics.profit)}
+            label={comparisonLabel}
+            previousValue={brl(previousMetrics.profit)}
+            previousPeriod={previousPeriodLabel}
+          />
         </div>
         <div className="metricCard metricCyan">
           <span>Ticket médio</span>
           <b>{brl(metrics.ticket)}</b>
           <small>Valor médio por pedido</small>
-          <ComparisonBadge value={metricDelta(metrics.ticket, previousMetrics.ticket)} label={comparisonLabel} />
+          <ComparisonBadge
+            value={metricDelta(metrics.ticket, previousMetrics.ticket)}
+            label={comparisonLabel}
+            previousValue={brl(previousMetrics.ticket)}
+            previousPeriod={previousPeriodLabel}
+          />
         </div>
         <div className="metricCard metricOrange">
           <span>Frascos vendidos</span>
@@ -2296,6 +2343,52 @@ function Dash({ d }: { d: D }) {
           <span>Volume vendido</span>
           <b>{metrics.ml.toLocaleString("pt-BR")} ml</b>
           <small>{brl(metrics.paid)} já recebidos</small>
+        </div>
+      </div>
+
+      <div className="panel dashboardStockSnapshot">
+        <div className="dashboardStockSnapshotHead">
+          <div>
+            <span className="eyebrow">Estoque operacional</span>
+            <h2>Relatório rápido de insumos</h2>
+            <p>Itens escolhidos para acompanhamento diário.</p>
+          </div>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => {
+              setStockReportDraft([...(d.dashboardSupplyReportIds || [])]);
+              setStockReportEditOpen(true);
+            }}
+          >
+            <Pencil /> Editar
+          </button>
+        </div>
+        <div className="dashboardStockSnapshotGrid">
+          {dashboardSupplies.map((supply) => (
+            <div key={supply.id}>
+              <span>{supply.name}</span>
+              <b>
+                {Math.max(0, supply.stock).toLocaleString("pt-BR", {
+                  maximumFractionDigits: 2,
+                })}{" "}
+                {supply.unit}
+              </b>
+              {(supply.pendingLots || []).length ? (
+                <small>
+                  +{(supply.pendingLots || []).reduce((sum, lot) => sum + lot.qty, 0)}{" "}
+                  {supply.unit} em próximo lote
+                </small>
+              ) : (
+                <small>Estoque atual</small>
+              )}
+            </div>
+          ))}
+          {!dashboardSupplies.length ? (
+            <p className="empty">
+              Nenhum insumo selecionado. Clique em Editar para escolher os itens.
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -2372,6 +2465,70 @@ function Dash({ d }: { d: D }) {
         <CategoryChart d={d} sales={activeSales} />
         <LeadRanking d={d} start={rangeStart} end={rangeEnd} />
       </div>
+
+      {stockReportEditOpen ? (
+        <div className="overlay">
+          <div className="systemDialog dashboardStockEditor">
+            <header>
+              <div>
+                <small>VISÃO GERAL</small>
+                <h2>Editar relatório de estoque</h2>
+                <p>Escolha quais insumos deseja acompanhar no dashboard.</p>
+              </div>
+              <button type="button" onClick={() => setStockReportEditOpen(false)}>
+                <X />
+              </button>
+            </header>
+            <div className="dashboardStockEditorList">
+              {d.supplies.map((supply) => {
+                const checked = stockReportDraft.includes(supply.id);
+                return (
+                  <label key={supply.id} className={checked ? "selected" : ""}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) =>
+                        setStockReportDraft((current) =>
+                          event.target.checked
+                            ? [...current, supply.id]
+                            : current.filter((id) => id !== supply.id),
+                        )
+                      }
+                    />
+                    <span>
+                      <b>{supply.name}</b>
+                      <small>
+                        {supply.stock.toLocaleString("pt-BR", {
+                          maximumFractionDigits: 2,
+                        })}{" "}
+                        {supply.unit}
+                      </small>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <footer>
+              <button type="button" onClick={() => setStockReportEditOpen(false)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  set((current: D) => ({
+                    ...current,
+                    dashboardSupplyReportIds: [...stockReportDraft],
+                  }));
+                  setStockReportEditOpen(false);
+                }}
+              >
+                Salvar itens
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
