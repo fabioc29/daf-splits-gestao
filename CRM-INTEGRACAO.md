@@ -12,7 +12,7 @@ Esta atualização acrescenta a tela **Integração CRM**. Ela exporta uma proje
 
 ## Contrato
 
-`POST /rest/v1/rpc/daf_crm_feed`, cabeçalho `apikey` com a chave publicável do projeto, corpo `{ "p_token": "<chave de leitura>" }`. A função não aceita usuário de destino nem caminhos de escrita. O proprietário é resolvido a partir do hash da chave. A leitura retorna `format`, `meta.identity`, `meta.revision`, `meta.exportedAt` e `data` com produtos, clientes e vendas.
+`POST /rest/v1/rpc/daf_crm_feed`, cabeçalho `apikey` com a chave publicável do projeto, corpo `{ "p_token": "<chave de leitura>", "p_contract_version": "daf-crm-feed-v2" }`. A função não aceita usuário de destino nem caminhos de escrita. O proprietário é resolvido a partir do hash da chave. A leitura retorna `format`, `meta.identity`, `meta.revision`, `meta.exportedAt` e `data` com produtos, clientes e vendas.
 
 `stock` já é o volume disponível; o CRM nunca subtrai as vendas novamente. IDs de produto representam lotes e não são reunidos por nome. `apc` é 0 ou 1 frasco. Vendas canceladas permanecem identificadas no histórico. Preço de custo, margem, CPF, suprimentos, despesas e recebíveis financeiros ficam fora da projeção. Nome, telefone e endereço de entrega continuam sendo dados pessoais e o arquivo deve permanecer em acesso restrito.
 
@@ -37,3 +37,5 @@ O identificador da migração foi alterado para não colidir com `202610060001_c
 Com Node compatível com a execução de TypeScript nativo e as dependências do lockfile: `npm ci`, `npm run test:crm`, `npm run typecheck`, `npm run typecheck:crm`, `npm run build`. `test:crm` usa PostgreSQL local em memória (PGlite); não utiliza URL, token ou dados de produção. A opção de resolução Bundler no script de tipos é compatível com o Vite e evita a opção Node antiga removida na versão do TypeScript registrada no lockfile. Nenhuma dependência de execução mudou de versão.
 
 A main foi verificada antes e depois da revisão. O trabalho recente de Fábio está na branch `fabio`, não na main. Antes de integrar com ela, consulte `CRM-CHECKPOINT.md` e o patch de quatro linhas para seu App.tsx. Não substitua seu App.tsx pelo arquivo desta branch.
+
+O pedido à API exige `p_contract_version=daf-crm-feed-v2`. A assinatura antiga com apenas token é preservada, mas seu acesso é revogado e ela rejeita a operação: isso impede o CRM antigo de consumir silenciosamente dados cujo histórico de frascos ele ignora. Na ativação, publicar primeiro o CRM consolidado com envios desabilitados; configurar a leitura e verificar os bloqueios antes de qualquer pareamento/envio autorizado.

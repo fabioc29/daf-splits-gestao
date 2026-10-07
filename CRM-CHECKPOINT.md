@@ -34,3 +34,5 @@ Uma simulação local de merge com fabio encontrou três conflitos: imports do c
 ## Próxima etapa
 
 Definir com o mantenedor se a integração será levada primeiro a fabio ou se o trabalho dessa branch será integrado à main. Não resolver isso substituindo App.tsx antigo. Validar o modelo de saldo por frasco antes de liberar APC de produtos agregados. Somente depois, com autorização de ativação, instalar o SQL em ambiente de teste, configurar o token no CRM e realizar teste controlado de WhatsApp. Nenhuma migração, dado de produção, pareamento ou mensagem real foi executada nesta revisão.
+
+O contrato v2 também é exigido na requisição (`p_contract_version`), não apenas na resposta. A assinatura antiga do RPC é mantida sem permissão de uso; clientes antigos falham de forma segura em vez de ignorar os frascos agregados. Na ativação, publicar primeiro o CRM consolidado com envio desabilitado. Os testes incluem rejeição do consumidor antigo e da versão de contrato incorreta.

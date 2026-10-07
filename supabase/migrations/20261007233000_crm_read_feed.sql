@@ -42,10 +42,19 @@ $$;
 revoke all on function public.daf_crm_revoke_token() from public, anon;
 grant execute on function public.daf_crm_revoke_token() to authenticated;
 
+-- Keep the legacy signature but deny its use: an old CRM drops bottle evidence.
+-- No table, data or key is removed during this protocol transition.
 create or replace function public.daf_crm_feed(p_token text)
+returns jsonb language plpgsql security definer set search_path = '' as $$
+begin raise exception 'CRM contract v2 required'; end;
+$$;
+revoke all on function public.daf_crm_feed(text) from public, anon, authenticated;
+
+create or replace function public.daf_crm_feed(p_token text, p_contract_version text)
 returns jsonb language plpgsql security definer set search_path = '' as $$
 declare v_owner uuid; v_data jsonb; v_revision timestamptz;
 begin
+ if p_contract_version is distinct from 'daf-crm-feed-v2' then raise exception 'CRM contract v2 required' using errcode='22023'; end if;
  if p_token is null or p_token !~ '^[a-f0-9]{64}$' then raise exception 'Invalid read capability' using errcode='28000'; end if;
  select user_id into v_owner from public.daf_crm_tokens where token_hash=encode(sha256(convert_to(p_token,'UTF8')),'hex');
  if v_owner is null then raise exception 'Invalid read capability' using errcode='28000'; end if;
@@ -54,5 +63,5 @@ begin
  return jsonb_build_object('format','daf-crm-feed-v2','meta',jsonb_build_object('identity','daf-gestao:'||v_owner::text,'revision',v_revision,'exportedAt',now(),'stockModel','product-bottle-evidence-v1'),'data',public.daf_crm_projection(v_data));
 end;
 $$;
-revoke all on function public.daf_crm_feed(text) from public;
-grant execute on function public.daf_crm_feed(text) to anon, authenticated;
+revoke all on function public.daf_crm_feed(text,text) from public;
+grant execute on function public.daf_crm_feed(text,text) to anon, authenticated;

@@ -34,8 +34,10 @@ test('PostgreSQL feed: account scope, revocation, read-only grants and bottle ev
   await assert.rejects(db.query('SELECT public.daf_crm_issue_token()'),/permission denied/);
   assert.equal((await db.query('UPDATE public.app_state SET data=$1',[{}])).affectedRows,0);
   assert.equal((await db.query('SELECT * FROM public.app_state')).rows.length,0);
-  await assert.rejects(db.query('SELECT public.daf_crm_feed($1)', ['x']),/Invalid read/);
-  const feed=(await db.query('SELECT public.daf_crm_feed($1) AS feed',[token])).rows[0].feed;
+  await assert.rejects(db.query("SELECT public.daf_crm_feed($1, 'daf-crm-feed-v2')", ['x']),/Invalid read/);
+  await assert.rejects(db.query('SELECT public.daf_crm_feed($1)',[token]),/permission denied/);
+  await assert.rejects(db.query('SELECT public.daf_crm_feed($1,$2)',[token,'daf-crm-feed-v1']),/contract v2/);
+  const feed=(await db.query("SELECT public.daf_crm_feed($1, 'daf-crm-feed-v2') AS feed",[token])).rows[0].feed;
   assert.equal(feed.format,'daf-crm-feed-v2');
   assert.equal(feed.meta.stockModel,'product-bottle-evidence-v1');
   assert.equal(feed.meta.identity,'daf-gestao:'+owner);
@@ -51,12 +53,12 @@ test('PostgreSQL feed: account scope, revocation, read-only grants and bottle ev
   assert.deepEqual((await db.query('SELECT user_id FROM public.app_state')).rows.map(r=>r.user_id),[other]);
   assert.equal((await db.query('UPDATE public.app_state SET data=$1 WHERE user_id=$2',[{},owner])).affectedRows,0);
   await db.query('SELECT public.daf_crm_revoke_token()');
-  assert.equal((await db.query('SELECT public.daf_crm_feed($1) AS feed',[token])).rows[0].feed.meta.identity,'daf-gestao:'+owner);
+  assert.equal((await db.query("SELECT public.daf_crm_feed($1, 'daf-crm-feed-v2') AS feed",[token])).rows[0].feed.meta.identity,'daf-gestao:'+owner);
   await db.exec(`SET "request.jwt.claim.sub"='${owner}';`);
   const rotated=(await db.query('SELECT public.daf_crm_issue_token() AS token')).rows[0].token;
   assert.notEqual(rotated,token);
-  await assert.rejects(db.query('SELECT public.daf_crm_feed($1)',[token]),/Invalid read/);
+  await assert.rejects(db.query("SELECT public.daf_crm_feed($1, 'daf-crm-feed-v2')",[token]),/Invalid read/);
   await db.query('SELECT public.daf_crm_revoke_token()');
-  await assert.rejects(db.query('SELECT public.daf_crm_feed($1)',[rotated]),/Invalid read/);
+  await assert.rejects(db.query("SELECT public.daf_crm_feed($1, 'daf-crm-feed-v2')",[rotated]),/Invalid read/);
  } finally { await db.close(); }
 });
