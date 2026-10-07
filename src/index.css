@@ -7503,3 +7503,1602 @@ aside nav {
     min-height: 92px;
   }
 }
+
+
+/* =========================================================
+   DAF — melhorias operacionais 07/10
+   ========================================================= */
+
+/* Modal de lançamento de venda: visual integrado ao sistema */
+.overlay > form.saleRecordForm {
+  width: min(860px, calc(100vw - 30px));
+  max-height: calc(100vh - 30px);
+  padding: 24px;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 28px 80px rgb(0 0 0 / 42%);
+}
+
+.saleRecordForm > header {
+  border-bottom-color: var(--line);
+  padding-bottom: 17px;
+}
+
+.saleRecordForm > header small {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .14em;
+}
+
+.saleRecordForm > header h2 {
+  color: var(--text);
+  font-size: 26px;
+}
+
+.saleRecordForm > header button {
+  color: var(--muted);
+}
+
+.saleRecordForm label > span,
+.saleRecordForm legend {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.saleRecordForm input,
+.saleRecordForm select {
+  border-color: var(--line);
+  background: var(--input);
+  color: var(--text);
+}
+
+.saleRecordForm input::placeholder {
+  color: color-mix(in srgb, var(--muted) 76%, transparent);
+}
+
+.saleRecordForm fieldset label span {
+  border-color: var(--line);
+  background: var(--input);
+  color: var(--muted);
+}
+
+.saleRecordForm fieldset input:checked + span {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.saleRecordForm .apcButton {
+  border-color: var(--line);
+  background: var(--input);
+  color: var(--muted);
+}
+
+.saleRecordForm .apcButton.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.saleRecordForm .add {
+  color: var(--gold);
+}
+
+.saleRecordForm .saleSupplies {
+  border-color: var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.saleRecordForm .saleSuppliesHead b,
+.saleRecordForm .saleSupplies > strong {
+  color: var(--text);
+}
+
+.saleRecordForm .saleSuppliesHead small,
+.saleRecordForm .saleSupplyList > div > small {
+  color: var(--muted);
+}
+
+.saleRecordForm .saleSuppliesHead button {
+  color: var(--accent);
+}
+
+.saleRecordForm .saleSupplyList > div {
+  border-color: var(--line);
+  background: var(--input);
+  opacity: .72;
+}
+
+.saleRecordForm .saleSupplyList > div.selected {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--line));
+  background: color-mix(in srgb, var(--accent) 5%, var(--input));
+}
+
+.saleRecordForm .saleSupplyList input[type="number"] {
+  background: var(--panel);
+}
+
+.saleRecordForm > footer {
+  margin-top: 2px;
+  padding-top: 15px;
+  border-top: 1px solid var(--line);
+}
+
+.saleRecordForm > footer button {
+  border-color: var(--line) !important;
+  background: var(--panel-2) !important;
+  color: var(--text);
+}
+
+.saleRecordForm > footer .primary {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: white;
+}
+
+/* Métricas maiores e tooltip do período anterior */
+.metricCard {
+  min-height: 152px;
+  padding: 18px;
+}
+
+.metricCard > span {
+  font-size: 12px;
+}
+
+.metricCard > b {
+  margin-top: 9px;
+  font-size: clamp(23px, 1.7vw, 31px);
+}
+
+.metricCard > small:not(.metricDelta) {
+  margin-top: 7px;
+  font-size: 10.5px;
+}
+
+.metricDelta {
+  position: relative;
+  font-size: 10px;
+  gap: 5px;
+  cursor: help;
+  overflow: visible !important;
+}
+
+.metricDelta svg {
+  width: 14px;
+  height: 14px;
+}
+
+.metricDeltaInteractive:focus {
+  outline: none;
+}
+
+.metricPreviousTooltip {
+  position: absolute;
+  z-index: 45;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: max-content;
+  min-width: 190px;
+  max-width: 270px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #2c213f;
+  color: #fff !important;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 34%);
+  display: none !important;
+  overflow: visible !important;
+  white-space: normal;
+}
+
+.metricDeltaInteractive:hover .metricPreviousTooltip,
+.metricDeltaInteractive:focus .metricPreviousTooltip {
+  display: grid !important;
+  gap: 3px;
+}
+
+.metricPreviousTooltip small {
+  color: #c8bcd9;
+  font-size: 8px;
+  font-style: normal;
+}
+
+.metricPreviousTooltip b {
+  color: #fff;
+  font-size: 13px;
+}
+
+.metricPreviousTooltip em {
+  color: #b8abc9;
+  font-size: 8px;
+  font-style: normal;
+}
+
+/* Relatório rápido de estoque na Visão Geral */
+.dashboardStockSnapshot {
+  display: grid;
+  gap: 14px;
+}
+
+.dashboardStockSnapshotHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dashboardStockSnapshotHead h2 {
+  margin: 4px 0 0;
+}
+
+.dashboardStockSnapshotHead p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.dashboardStockSnapshotHead button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.dashboardStockSnapshotHead button svg {
+  width: 15px;
+}
+
+.dashboardStockSnapshotGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.dashboardStockSnapshotGrid > div {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+}
+
+.dashboardStockSnapshotGrid span,
+.dashboardStockSnapshotGrid b,
+.dashboardStockSnapshotGrid small {
+  display: block;
+}
+
+.dashboardStockSnapshotGrid span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.dashboardStockSnapshotGrid b {
+  margin-top: 5px;
+  color: var(--text);
+  font-size: 17px;
+}
+
+.dashboardStockSnapshotGrid small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.dashboardStockSnapshotGrid > .empty {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.dashboardStockEditor {
+  width: min(720px, calc(100vw - 30px));
+  max-height: calc(100vh - 30px);
+  overflow: auto;
+}
+
+.dashboardStockEditor header p {
+  margin: 5px 0 0;
+  color: #647185;
+  font-size: 10px;
+}
+
+.dashboardStockEditorList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dashboardStockEditorList label {
+  min-height: 62px;
+  padding: 10px 11px;
+  border: 1px solid #d8dde5;
+  border-radius: 10px;
+  background: #fff;
+  display: flex !important;
+  align-items: center;
+  gap: 9px;
+}
+
+.dashboardStockEditorList label.selected {
+  border-color: #d8ae43;
+  background: #fff9e8;
+}
+
+.dashboardStockEditorList input {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+}
+
+.dashboardStockEditorList span {
+  display: grid;
+  gap: 3px;
+}
+
+.dashboardStockEditorList b {
+  color: #172233;
+  font-size: 11px;
+}
+
+.dashboardStockEditorList small {
+  color: #647185;
+  font-size: 9px;
+}
+
+/* Estoque como submenu lateral */
+.stockNavGroup {
+  display: grid;
+  gap: 3px;
+}
+
+.stockNavGroup > .stockParent {
+  width: 100%;
+}
+
+.stockNavChevron {
+  width: 15px !important;
+  margin-left: auto;
+  transition: transform .18s ease;
+}
+
+.stockNavChevron.open {
+  transform: rotate(180deg);
+}
+
+.stockSubnav {
+  display: grid;
+  gap: 2px;
+  margin: 1px 0 4px 38px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.stockSubnav button {
+  min-height: 31px !important;
+  padding: 0 10px !important;
+  border-radius: 8px !important;
+  justify-content: flex-start !important;
+  color: var(--muted);
+  font-size: 10px !important;
+}
+
+.stockSubnav button.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.stockQuickFilters {
+  margin: 0 0 15px;
+}
+
+.stockQuickFilters button,
+.stockReportToolbar button {
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.stockQuickFilters button.active,
+.stockReportToolbar button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.stockQuickFilters svg,
+.stockReportToolbar svg {
+  width: 15px;
+}
+
+.stockReportToolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Modal próprio para baixa de recebíveis */
+.overlay > form.paymentEntryDialog {
+  width: min(520px, calc(100vw - 30px));
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 28px 80px rgb(0 0 0 / 44%);
+}
+
+.paymentEntryDialog > header {
+  border-bottom-color: var(--line);
+}
+
+.paymentEntryDialog > header small {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .13em;
+}
+
+.paymentEntryDialog > header h2 {
+  color: var(--text);
+}
+
+.paymentEntryDialog > header button {
+  color: var(--muted);
+}
+
+.paymentEntrySummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.paymentEntrySummary > span {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.paymentEntrySummary b {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 11px;
+}
+
+.paymentEntryDialog label > span {
+  color: var(--muted);
+}
+
+.paymentEntryDialog input {
+  border-color: var(--line) !important;
+  background: var(--input) !important;
+  color: var(--text);
+}
+
+.paymentEntryError {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.paymentEntryDialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.paymentEntryDialog > footer button {
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 800;
+}
+
+.paymentEntryDialog > footer .primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+/* Histórico automático de frascos */
+.productBottleLine {
+  color: var(--muted) !important;
+  font-size: 10px;
+}
+
+.productBottleLine b {
+  color: var(--gold);
+}
+
+.productBottleOverview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+}
+
+.productBottleOverview > div:not(.productBottleSequence) {
+  padding: 11px;
+  border: 1px solid #d8dde5;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.productBottleOverview span,
+.productBottleOverview b {
+  display: block;
+}
+
+.productBottleOverview span {
+  color: #647185;
+  font-size: 9px;
+}
+
+.productBottleOverview b {
+  margin-top: 4px;
+  color: #172233;
+  font-size: 15px;
+}
+
+.productBottleSequence {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.productBottleSequence > span {
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid #d8dde5;
+  border-radius: 9px;
+  background: #fff;
+  color: #647185;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.productBottleSequence > span.current {
+  border-color: #d8ae43;
+  background: #fff8e4;
+  color: #8b6500;
+}
+
+.productBottleSequence small {
+  display: block;
+  margin-top: 2px;
+  font-size: 7px;
+  font-weight: 600;
+}
+
+@media (max-width: 1100px) {
+  .dashboardStockSnapshotGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .metricCard {
+    min-height: 138px;
+  }
+
+  .metricCard > b {
+    font-size: 24px;
+  }
+
+  .dashboardStockSnapshotHead,
+  .paymentEntrySummary {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .dashboardStockSnapshotGrid,
+  .dashboardStockEditorList {
+    grid-template-columns: 1fr;
+  }
+
+  .stockNavGroup {
+    display: flex;
+    align-items: stretch;
+  }
+
+  .stockSubnav {
+    display: flex;
+    margin: 0;
+    padding: 0;
+    border-left: 0;
+    gap: 4px;
+  }
+
+  .stockSubnav button {
+    min-width: 70px !important;
+  }
+
+  .stockNavChevron {
+    display: none;
+  }
+}
+
+
+/* =========================================================
+   DAF — navegação financeira e configurações locais
+   ========================================================= */
+
+.stockSubnav button {
+  position: relative;
+}
+
+.stockSubnav .subnavCount {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--danger);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.financeNavGroup .stockParent .navAlertGroup {
+  margin-left: auto;
+}
+
+.financeNavGroup .stockParent .navAlertGroup + .stockNavChevron {
+  margin-left: 3px;
+}
+
+/* Financeiro: gráfico de pagamento centralizado */
+.financePrimaryGrid .modernPaymentChart.compact {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  align-content: start;
+  gap: 12px;
+  text-align: center;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .dashboardMiniHeader {
+  width: 100%;
+  text-align: center;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .dashboardMiniHeader p {
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .dashboardMiniVisual {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .paymentInteractiveDonut {
+  margin: 4px auto;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .paymentInteractiveDonut svg {
+  width: 176px !important;
+  height: 176px !important;
+}
+
+.financePrimaryGrid .modernPaymentChart.compact .paymentLegend {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  text-align: left;
+}
+
+/* Configurações — somente localStorage do navegador */
+.settingsWorkspace {
+  display: grid;
+  gap: 14px;
+}
+
+.settingsIntro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.settingsIntro h2,
+.settingsSection h2 {
+  margin: 4px 0 0;
+}
+
+.settingsIntro p,
+.settingsSection .panelHeading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.settingsIntro > svg {
+  width: 34px;
+  height: 34px;
+  padding: 7px;
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.settingsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settingsSection {
+  display: grid;
+  gap: 16px;
+}
+
+.settingsSection .panelHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.settingsSection .panelHeading > svg {
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.themeSettingRow {
+  min-height: 70px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.themeSettingRow b,
+.themeSettingRow small {
+  display: block;
+}
+
+.themeSettingRow b {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.themeSettingRow small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.settingsThemeToggle {
+  flex: none;
+}
+
+.settingsColorGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.settingsSection > label,
+.settingsColorGrid > label {
+  display: grid;
+  gap: 6px;
+}
+
+.settingsSection label > span,
+.settingsColorGrid label > span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.settingsSection > label > input,
+.colorSetting input[type="text"],
+.colorSetting input:not([type]) {
+  width: 100%;
+  min-height: 43px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  color: var(--text);
+  padding: 0 11px;
+  font: inherit;
+}
+
+.colorSetting {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 7px;
+}
+
+.colorSetting input[type="color"] {
+  width: 48px;
+  height: 43px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+}
+
+.colorSetting input:last-child {
+  width: 100%;
+  min-width: 0;
+  height: 43px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  color: var(--text);
+  padding: 0 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+}
+
+.settingsReset {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.settingsReset b,
+.settingsReset small {
+  display: block;
+}
+
+.settingsReset b {
+  font-size: 12px;
+}
+
+.settingsReset small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.settingsReset button {
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.settingsReset button svg {
+  width: 16px;
+}
+
+/* Relatório de estoque: botão copiar */
+.stockReportFooter .primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.stockReportFooter .primary svg {
+  width: 16px;
+}
+
+/* A numeração do frasco é identificação, não quantidade */
+.productBottleLine {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.productBottleLine b {
+  font-size: inherit;
+}
+
+@media (max-width: 900px) {
+  .settingsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .financePrimaryGrid .modernPaymentChart.compact .paymentLegend {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .settingsIntro,
+  .themeSettingRow,
+  .settingsReset {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settingsColorGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsThemeToggle,
+  .settingsReset button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .financeNavGroup .stockParent .navAlertGroup {
+    display: none;
+  }
+}
+
+
+/* =========================================================
+   DAF — ordem de menus + mobile drawer e responsividade
+   ========================================================= */
+
+/* Logo dentro do novo cabeçalho da navegação */
+.mobileNavHead {
+  display: block;
+}
+
+.mobileNavHead .sidebarLogo {
+  width: 156px;
+  height: 64px;
+  margin: 0 10px 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #050505;
+  object-fit: cover;
+}
+
+.mobileNavClose,
+.mobileMenuButton,
+.mobileNavBackdrop {
+  display: none;
+}
+
+/* Numeração do frasco sem destaque visual */
+.productBottleLine,
+.productBottleLine b {
+  color: var(--muted) !important;
+  font-weight: 400 !important;
+}
+
+/* Ordenação de menus nas configurações */
+.settingsMenuOrder {
+  display: grid;
+  gap: 14px;
+}
+
+.settingsMenuOrder .panelHeading p {
+  max-width: 620px;
+}
+
+.settingsMenuOrderList {
+  display: grid;
+  gap: 7px;
+}
+
+.settingsMenuOrderItem {
+  min-height: 54px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  display: grid;
+  grid-template-columns: 34px 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.settingsMenuOrderIndex {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.settingsMenuOrderItem > svg {
+  width: 17px;
+  height: 17px;
+  color: var(--accent);
+}
+
+.settingsMenuOrderItem > b {
+  min-width: 0;
+  color: var(--text);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settingsMenuOrderItem > div {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.settingsMenuOrderItem button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+}
+
+.settingsMenuOrderItem button:disabled {
+  opacity: .28;
+  cursor: not-allowed;
+}
+
+.settingsMenuOrderItem button svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Mobile/tablet: navegação vira drawer */
+@media (max-width: 900px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .shell {
+    display: block;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .shell > aside {
+    position: fixed !important;
+    z-index: 120;
+    inset: 0 auto 0 0;
+    width: min(84vw, 318px) !important;
+    max-width: 318px;
+    height: 100dvh;
+    padding: 16px 14px 18px !important;
+    border-right: 1px solid var(--line);
+    background: var(--sidebar);
+    box-shadow: 18px 0 50px rgb(0 0 0 / 38%);
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    transform: translateX(-105%);
+    transition: transform .22s ease;
+  }
+
+  .shell > aside.mobileOpen {
+    transform: translateX(0);
+  }
+
+  .mobileNavBackdrop {
+    display: block;
+    position: fixed;
+    z-index: 110;
+    inset: 0;
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    background: rgb(0 0 0 / 58%);
+    backdrop-filter: blur(3px);
+  }
+
+  .mobileNavHead {
+    min-height: 68px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .mobileNavHead .sidebarLogo {
+    width: 132px;
+    height: 56px;
+    margin: 0;
+    flex: 0 0 auto;
+  }
+
+  .mobileNavClose {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel-2);
+    color: var(--text);
+    display: grid;
+    place-items: center;
+    flex: 0 0 40px;
+  }
+
+  .mobileNavClose svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  aside nav {
+    display: flex !important;
+    flex-direction: column;
+    gap: 4px !important;
+    padding-bottom: 14px;
+  }
+
+  aside nav > button,
+  aside nav .stockNavGroup > button {
+    position: relative;
+    width: 100%;
+    min-height: 44px !important;
+    padding: 0 12px !important;
+    border-radius: 10px !important;
+    justify-content: flex-start !important;
+    font-size: 12px !important;
+  }
+
+  .stockNavGroup,
+  .financeNavGroup {
+    width: 100%;
+    display: grid !important;
+    gap: 3px;
+  }
+
+  .stockSubnav {
+    display: grid !important;
+    width: auto;
+    margin: 1px 0 5px 35px !important;
+    padding: 0 0 0 9px !important;
+    border-left: 1px solid var(--line) !important;
+    gap: 2px !important;
+  }
+
+  .stockSubnav button {
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 34px !important;
+    padding: 0 9px !important;
+    justify-content: flex-start !important;
+    border-radius: 8px !important;
+    font-size: 10px !important;
+  }
+
+  aside nav button .navAlertGroup,
+  .financeNavGroup .stockParent .navAlertGroup {
+    position: static !important;
+    margin: 0 3px 0 auto !important;
+    display: inline-flex !important;
+  }
+
+  .financeNavGroup .stockParent .navAlertGroup {
+    order: 3;
+  }
+
+  .financeNavGroup .stockParent .stockNavChevron {
+    order: 4;
+    margin-left: 0;
+  }
+
+  aside > footer {
+    margin-top: 12px;
+    padding-top: 14px;
+  }
+
+  main {
+    width: 100% !important;
+    max-width: 100%;
+    min-width: 0;
+    margin-left: 0 !important;
+  }
+
+  main > header {
+    width: 100%;
+    min-height: 72px;
+    height: auto !important;
+    padding: 10px 12px !important;
+    gap: 9px;
+    align-items: center;
+    justify-content: flex-start;
+  }
+
+  .mobileMenuButton {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 42px;
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    background: var(--panel-2);
+    color: var(--text);
+    display: grid;
+    place-items: center;
+  }
+
+  .mobileMenuButton svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .mainHeaderTitle {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .mainHeaderTitle small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mainHeaderTitle h1 {
+    margin-top: 2px;
+    font-size: clamp(18px, 5vw, 22px) !important;
+    line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+
+  .headerActions {
+    flex: 0 0 auto;
+    max-width: 48%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 5px;
+  }
+
+  .headerActions button {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 8px 9px !important;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  .headerActions button svg {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+  }
+
+  .content {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 12px !important;
+    gap: 12px !important;
+    overflow: hidden;
+  }
+
+  .content > *,
+  .panel,
+  .cards,
+  .cards > div,
+  .products,
+  .products > div,
+  .clients,
+  .clients > div,
+  .financeWorkspace,
+  .dashboardMain {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .panel,
+  .cards > div,
+  .products > div,
+  .clients > div {
+    padding: 13px;
+    border-radius: 13px;
+  }
+
+  .workspaceToolbar,
+  .stockHead,
+  .receivableHeader,
+  .dashboardStockSnapshotHead,
+  .preparePanelHead,
+  .salesTitleRow {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .periodSelectorWrap,
+  .workspaceMonthPicker,
+  .monthPicker {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .periodSelectorWrap {
+    justify-content: stretch;
+  }
+
+  .periodSelectorWrap .workspaceMonthPicker {
+    flex: 1 1 auto;
+  }
+
+  .dateRangePopover {
+    position: fixed;
+    z-index: 160;
+    top: 84px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: calc(100dvh - 100px);
+    overflow-y: auto;
+  }
+
+  .executiveMetricGrid,
+  .financeMetricGrid,
+  .cards,
+  .dashboardTopGrid,
+  .dashboardLowerGrid,
+  .financePrimaryGrid,
+  .financeSecondaryGrid,
+  .financeSecondaryGrid.single,
+  .dashboardStockSnapshotGrid,
+  .marketplaceSummary,
+  .clientHistoryStats,
+  .supplierHistoryStats,
+  .supplierHistoryStats.three,
+  .supplierHistoryStats.four,
+  .stockSummaryRow,
+  .stockSummaryRow > .cards,
+  .profitControl > .cards,
+  .financeHealthGrid,
+  .settingsGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .metricCard {
+    min-height: 118px !important;
+  }
+
+  .dashboardLowerGrid .panel,
+  .dashboardTopGrid .panel,
+  .financePrimaryGrid > *,
+  .financeSecondaryGrid > * {
+    height: auto !important;
+    min-height: 0;
+  }
+
+  .modernPaymentChart.compact,
+  .financePrimaryGrid .modernPaymentChart.compact {
+    grid-template-columns: 1fr !important;
+    justify-items: stretch !important;
+  }
+
+  .financePrimaryGrid .modernPaymentChart.compact .paymentLegend,
+  .paymentLegend {
+    width: 100%;
+    grid-template-columns: 1fr !important;
+  }
+
+  .interactiveSvgDonut,
+  .interactiveSvgDonut svg,
+  .paymentInteractiveDonut,
+  .paymentInteractiveDonut svg {
+    max-width: 100%;
+  }
+
+  .dashboardRevenueChart .bars {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .salesToolbar,
+  .purchaseMonthToolbar,
+  .clientHistoryToolbar,
+  .supplierHistoryToolbar,
+  .supplierHistoryFilters,
+  .stockFilters,
+  .salesFilters,
+  .marketplaceFields,
+  .quickQuoteGrid,
+  .costEditorSummary,
+  .costEditorSection label {
+    width: 100%;
+    grid-template-columns: 1fr !important;
+  }
+
+  .salesToolbar > *,
+  .stockFilters > *,
+  .salesFilters > *,
+  .purchaseMonthToolbar > * {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .stockHeadActions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .stockHeadActions > button,
+  .stockQuickFilters button,
+  .productSalesHistoryButton,
+  .filterButton,
+  .overdueFilter {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .products,
+  .clients {
+    display: grid;
+    grid-template-columns: 1fr !important;
+  }
+
+  .products .tableActions,
+  .clients .tableActions,
+  .tableActions {
+    max-width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tableActions button {
+    max-width: 100%;
+  }
+
+  .table,
+  .stockReportTableWrap,
+  .productHistoryTableWrap,
+  .clientHistorySales,
+  .supplierHistoryTable {
+    max-width: 100%;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table table,
+  .stockReportTable,
+  .productHistoryTable,
+  .clientHistoryTable,
+  .supplierHistoryTable table {
+    min-width: 680px;
+  }
+
+  .overlay {
+    padding: 10px !important;
+    align-items: flex-start !important;
+    overflow-y: auto;
+  }
+
+  .overlay > form,
+  .overlay > .systemDialog,
+  .overlay > .history,
+  .overlay .systemDialog,
+  .costEditor,
+  .clientHistory,
+  .supplierHistory,
+  .productSalesHistoryDialog,
+  .stockReportDialog {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    margin: 0 auto;
+    padding: 15px !important;
+    border-radius: 14px !important;
+    overflow-y: auto;
+  }
+
+  .overlay input,
+  .overlay select,
+  .overlay textarea,
+  input,
+  select,
+  textarea {
+    max-width: 100%;
+    font-size: 16px;
+  }
+
+  .settingsMenuOrderItem {
+    grid-template-columns: 30px 20px minmax(0, 1fr) auto;
+    padding: 8px;
+  }
+
+  .settingsMenuOrderItem > div {
+    gap: 3px;
+  }
+
+  .settingsMenuOrderItem button {
+    width: 32px;
+    height: 32px;
+  }
+
+  .settingsReset,
+  .themeSettingRow,
+  .settingsIntro {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-items: stretch !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .headerActions {
+    max-width: 44%;
+  }
+
+  .content {
+    padding: 10px !important;
+  }
+
+  .panel,
+  .cards > div,
+  .products > div,
+  .clients > div {
+    padding: 11px;
+  }
+
+  .mainHeaderTitle small {
+    font-size: 7.5px;
+    letter-spacing: .08em;
+  }
+
+  .mainHeaderTitle h1 {
+    font-size: 18px !important;
+  }
+
+  .executiveMetricGrid,
+  .financeMetricGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .metricCard {
+    min-height: 110px !important;
+  }
+
+  .settingsMenuOrderItem {
+    grid-template-columns: 26px 18px minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .settingsMenuOrderItem > b {
+    font-size: 9.5px;
+  }
+}
