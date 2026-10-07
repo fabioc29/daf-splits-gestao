@@ -36,6 +36,10 @@ import {
   PackageOpen,
   BarChart3,
   CalendarDays,
+  Settings,
+  Palette,
+  RotateCcw,
+  Copy,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
@@ -206,6 +210,35 @@ type D = {
   dashboardSupplyReportIds: number[];
 };
 type Modal = { type: string; id?: number } | null;
+
+type LocalUiSettings = {
+  accent: string;
+  gold: string;
+  appName: string;
+  panelLabel: string;
+};
+
+const DEFAULT_LOCAL_UI_SETTINGS: LocalUiSettings = {
+  accent: "#5b6ef5",
+  gold: "#e0b43c",
+  appName: "DAF Splits",
+  panelLabel: "PAINEL ADMINISTRATIVO",
+};
+
+function readLocalUiSettings(): LocalUiSettings {
+  if (typeof window === "undefined") return { ...DEFAULT_LOCAL_UI_SETTINGS };
+  try {
+    const stored = JSON.parse(
+      window.localStorage.getItem("daf-ui-settings") || "null",
+    );
+    return {
+      ...DEFAULT_LOCAL_UI_SETTINGS,
+      ...(stored && typeof stored === "object" ? stored : {}),
+    };
+  } catch {
+    return { ...DEFAULT_LOCAL_UI_SETTINGS };
+  }
+}
 
 const blank: D = {
   products: [],
@@ -437,12 +470,12 @@ const nav = [
   ["sales", "Vendas", ShoppingBag],
   ["prepare", "Pedidos para preparar", ClipboardCheck],
   ["shipping", "Envios", Truck],
-  ["stock", "Estoque", Box],
   ["purchases", "Compras", ShoppingCart],
+  ["stock", "Estoque", Box],
   ["clients", "Clientes", Users],
   ["suppliers", "Fornecedores", Building2],
-  ["receivables", "Vendas a receber", ReceiptText],
   ["finance", "Financeiro", Wallet],
+  ["settings", "Configurações", Settings],
 ] as const;
 
 function isPublicCatalogRoute() {
@@ -507,16 +540,24 @@ function System({ session }: { session: Session }) {
     [history, setHistory] = useState(0),
     [supplierHistory, setSupplierHistory] = useState(""),
     [toast, setToast] = useState("");
-  const [stockMenuOpen, setStockMenuOpen] = useState(true);
-  useEffect(() => {
-    if (page === "stock" || page === "stock-supplies" || page === "catalog") {
-      setStockMenuOpen(true);
-    }
-  }, [page]);
+  const [stockMenuOpen, setStockMenuOpen] = useState(false);
+  const [financeMenuOpen, setFinanceMenuOpen] = useState(false);
+  const [localUi, setLocalUi] = useState<LocalUiSettings>(() =>
+    readLocalUiSettings(),
+  );
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("daf-theme", theme);
   }, [theme]);
+  useEffect(() => {
+    document.documentElement.style.setProperty("--accent", localUi.accent);
+    document.documentElement.style.setProperty("--gold", localUi.gold);
+    document.documentElement.style.setProperty(
+      "--accent-soft",
+      `color-mix(in srgb, ${localUi.accent} 16%, transparent)`,
+    );
+    window.localStorage.setItem("daf-ui-settings", JSON.stringify(localUi));
+  }, [localUi]);
 
   function notify(message: string) {
     setToast(message);
@@ -691,6 +732,7 @@ const action =
             : null;
   const stockSectionActive =
     page === "stock" || page === "stock-supplies" || page === "catalog";
+  const financeSectionActive = page === "finance" || page === "receivables";
   const pageTitle =
     page === "stock"
       ? "Estoque de perfumes"
@@ -698,7 +740,9 @@ const action =
         ? "Estoque de insumos"
         : page === "catalog"
           ? "Catálogo"
-          : nav.find((item) => item[0] === page)?.[1] || "Painel";
+          : page === "receivables"
+            ? "Vendas a receber"
+            : nav.find((item) => item[0] === page)?.[1] || "Painel";
   if (!ready && sync !== "error")
     return (
       <div className="authPage">
@@ -713,44 +757,102 @@ const action =
       <aside>
         <img className="sidebarLogo" src={LOGO} alt="DAF Splits" />
         <nav>
-          {nav.map(([id, label, Icon]) =>
-            id === "stock" ? (
-              <div className="stockNavGroup" key={id}>
-                <button
-                  className={stockSectionActive ? "on stockParent" : "stockParent"}
-                  onClick={() => setStockMenuOpen((open) => !open)}
-                  aria-expanded={stockMenuOpen}
-                >
-                  <Icon />
-                  {label}
-                  <ChevronDown
-                    className={"stockNavChevron" + (stockMenuOpen ? " open" : "")}
-                  />
-                </button>
-                {stockMenuOpen ? (
-                  <div className="stockSubnav">
-                    <button
-                      className={page === "stock" ? "on" : ""}
-                      onClick={() => setPage("stock")}
-                    >
-                      Perfumes
-                    </button>
-                    <button
-                      className={page === "stock-supplies" ? "on" : ""}
-                      onClick={() => setPage("stock-supplies")}
-                    >
-                      Insumos
-                    </button>
-                    <button
-                      className={page === "catalog" ? "on" : ""}
-                      onClick={() => setPage("catalog")}
-                    >
-                      Catálogo
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
+          {nav.map(([id, label, Icon]) => {
+            if (id === "stock") {
+              return (
+                <div className="stockNavGroup" key={id}>
+                  <button
+                    className={stockSectionActive ? "on stockParent" : "stockParent"}
+                    onClick={() => setStockMenuOpen((open) => !open)}
+                    aria-expanded={stockMenuOpen}
+                  >
+                    <Icon />
+                    {label}
+                    <ChevronDown
+                      className={"stockNavChevron" + (stockMenuOpen ? " open" : "")}
+                    />
+                  </button>
+                  {stockMenuOpen ? (
+                    <div className="stockSubnav">
+                      <button
+                        className={page === "stock" ? "on" : ""}
+                        onClick={() => setPage("stock")}
+                      >
+                        Perfumes
+                      </button>
+                      <button
+                        className={page === "stock-supplies" ? "on" : ""}
+                        onClick={() => setPage("stock-supplies")}
+                      >
+                        Insumos
+                      </button>
+                      <button
+                        className={page === "catalog" ? "on" : ""}
+                        onClick={() => setPage("catalog")}
+                      >
+                        Catálogo
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+
+            if (id === "finance") {
+              return (
+                <div className="stockNavGroup financeNavGroup" key={id}>
+                  <button
+                    className={financeSectionActive ? "on stockParent" : "stockParent"}
+                    onClick={() => setFinanceMenuOpen((open) => !open)}
+                    aria-expanded={financeMenuOpen}
+                  >
+                    <Icon />
+                    {label}
+                    {navAlerts.receivables || receivableDueAlert ? (
+                      <span className="navAlertGroup">
+                        {receivableDueAlert ? (
+                          <span
+                            className={"receivableDueAlert " + receivableDueAlert}
+                            aria-label={
+                              receivableDueAlert === "overdue"
+                                ? "Há parcela atrasada"
+                                : "Há parcela vencendo hoje"
+                            }
+                          />
+                        ) : null}
+                        {navAlerts.receivables ? (
+                          <span className="navAlert">{navAlerts.receivables}</span>
+                        ) : null}
+                      </span>
+                    ) : null}
+                    <ChevronDown
+                      className={"stockNavChevron" + (financeMenuOpen ? " open" : "")}
+                    />
+                  </button>
+                  {financeMenuOpen ? (
+                    <div className="stockSubnav">
+                      <button
+                        className={page === "finance" ? "on" : ""}
+                        onClick={() => setPage("finance")}
+                      >
+                        Resumo financeiro
+                      </button>
+                      <button
+                        className={page === "receivables" ? "on" : ""}
+                        onClick={() => setPage("receivables")}
+                      >
+                        Vendas a receber
+                        {navAlerts.receivables ? (
+                          <span className="subnavCount">{navAlerts.receivables}</span>
+                        ) : null}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+
+            return (
               <button
                 key={id}
                 className={page === id ? "on" : ""}
@@ -758,36 +860,19 @@ const action =
               >
                 <Icon />
                 {label}
-                {navAlerts[id] || (id === "receivables" && receivableDueAlert) ? (
+                {navAlerts[id] ? (
                   <span className="navAlertGroup">
-                    {id === "receivables" && receivableDueAlert ? (
-                      <span
-                        className={"receivableDueAlert " + receivableDueAlert}
-                        aria-label={
-                          receivableDueAlert === "overdue"
-                            ? "Há parcela atrasada"
-                            : "Há parcela vencendo hoje"
-                        }
-                        title={
-                          receivableDueAlert === "overdue"
-                            ? "Há parcela atrasada"
-                            : "Há parcela vencendo hoje"
-                        }
-                      />
-                    ) : null}
-                    {navAlerts[id] ? (
-                      <span
-                        className="navAlert"
-                        aria-label={String(navAlerts[id]) + " pendente(s)"}
-                      >
-                        {navAlerts[id]}
-                      </span>
-                    ) : null}
+                    <span
+                      className="navAlert"
+                      aria-label={String(navAlerts[id]) + " pendente(s)"}
+                    >
+                      {navAlerts[id]}
+                    </span>
                   </span>
                 ) : null}
               </button>
-            ),
-          )}
+            );
+          })}
         </nav>
         <div className={"sync " + sync}>
           {sync === "error" ? <CloudOff /> : <Cloud />}
@@ -810,22 +895,10 @@ const action =
       <main>
         <header>
           <div>
-            <small>PAINEL ADMINISTRATIVO</small>
+            <small>{localUi.panelLabel}</small>
             <h1>{pageTitle}</h1>
           </div>
           <div className="headerActions">
-            <button
-              type="button"
-              className="themeToggle"
-              onClick={() =>
-                setTheme((current) => (current === "dark" ? "light" : "dark"))
-              }
-              title={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
-              aria-label={theme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"}
-            >
-              {theme === "dark" ? <Sun /> : <Moon />}
-              <span>{theme === "dark" ? "Claro" : "Escuro"}</span>
-            </button>
             {page === "dashboard" || page === "finance" ? (
               <button
                 className="secondary reportButton"
@@ -942,6 +1015,14 @@ const action =
               set={setData}
               history={setSupplierHistory}
               edit={(id) => setModal({ type: "supplier", id })}
+              notify={notify}
+            />
+          ) : page === "settings" ? (
+            <SettingsPage
+              theme={theme}
+              setTheme={setTheme}
+              settings={localUi}
+              setSettings={setLocalUi}
               notify={notify}
             />
           ) : (
@@ -1290,6 +1371,151 @@ function Auth() {
           {busy ? "Aguarde..." : "Entrar"}
         </button>
       </form>
+    </div>
+  );
+}
+
+function SettingsPage({
+  theme,
+  setTheme,
+  settings,
+  setSettings,
+  notify,
+}: {
+  theme: "dark" | "light";
+  setTheme: (value: "dark" | "light") => void;
+  settings: LocalUiSettings;
+  setSettings: (value: LocalUiSettings) => void;
+  notify: (message: string) => void;
+}) {
+  function update<K extends keyof LocalUiSettings>(
+    key: K,
+    value: LocalUiSettings[K],
+  ) {
+    setSettings({ ...settings, [key]: value });
+  }
+
+  function resetLocalSettings() {
+    window.localStorage.removeItem("daf-ui-settings");
+    window.localStorage.removeItem("daf-theme");
+    setSettings({ ...DEFAULT_LOCAL_UI_SETTINGS });
+    setTheme("dark");
+    notify("Configurações locais restauradas para o padrão.");
+  }
+
+  return (
+    <div className="settingsWorkspace">
+      <div className="panel settingsIntro">
+        <div>
+          <span className="eyebrow">Personalização local</span>
+          <h2>Configurações do sistema</h2>
+          <p>
+            Estas preferências ficam salvas somente neste navegador e não
+            alteram a interface dos outros usuários.
+          </p>
+        </div>
+        <Settings />
+      </div>
+
+      <div className="settingsGrid">
+        <div className="panel settingsSection">
+          <div className="panelHeading">
+            <div>
+              <span className="eyebrow">Aparência</span>
+              <h2>Tema e cores</h2>
+            </div>
+            <Palette />
+          </div>
+
+          <div className="themeSettingRow">
+            <div>
+              <b>Modo da interface</b>
+              <small>Alterna apenas neste navegador.</small>
+            </div>
+            <button
+              type="button"
+              className="themeToggle settingsThemeToggle"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            >
+              {theme === "dark" ? <Sun /> : <Moon />}
+              {theme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
+            </button>
+          </div>
+
+          <div className="settingsColorGrid">
+            <label>
+              <span>Cor de destaque</span>
+              <div className="colorSetting">
+                <input
+                  type="color"
+                  value={settings.accent}
+                  onChange={(event) => update("accent", event.target.value)}
+                />
+                <input
+                  value={settings.accent}
+                  onChange={(event) => update("accent", event.target.value)}
+                  maxLength={7}
+                />
+              </div>
+            </label>
+            <label>
+              <span>Cor secundária</span>
+              <div className="colorSetting">
+                <input
+                  type="color"
+                  value={settings.gold}
+                  onChange={(event) => update("gold", event.target.value)}
+                />
+                <input
+                  value={settings.gold}
+                  onChange={(event) => update("gold", event.target.value)}
+                  maxLength={7}
+                />
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div className="panel settingsSection">
+          <div className="panelHeading">
+            <div>
+              <span className="eyebrow">Identificação</span>
+              <h2>Informações da interface</h2>
+            </div>
+            <Pencil />
+          </div>
+
+          <label>
+            <span>Nome do sistema</span>
+            <input
+              value={settings.appName}
+              onChange={(event) => update("appName", event.target.value)}
+              placeholder="DAF Splits"
+            />
+          </label>
+          <label>
+            <span>Texto superior do painel</span>
+            <input
+              value={settings.panelLabel}
+              onChange={(event) => update("panelLabel", event.target.value)}
+              placeholder="PAINEL ADMINISTRATIVO"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="panel settingsReset">
+        <div>
+          <b>Restaurar configurações visuais</b>
+          <small>
+            Remove tema, cores e textos personalizados apenas deste navegador.
+          </small>
+        </div>
+        <button type="button" onClick={resetLocalSettings}>
+          <RotateCcw />
+          Resetar para o padrão
+        </button>
+      </div>
     </div>
   );
 }
