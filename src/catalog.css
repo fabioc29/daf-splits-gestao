@@ -3287,3 +3287,140 @@ vercel-toolbar {
     justify-content: center;
   }
 }
+
+
+/* =========================================================
+   DAF — correção estrutural de alinhamento do catálogo
+   ========================================================= */
+
+/*
+ * O catálogo usa um <main> próprio. No sistema principal existe uma regra global
+ * para main que reserva o espaço da sidebar; por isso o catálogo herdava um
+ * deslocamento lateral indevido tanto no público quanto na prévia administrativa.
+ */
+.catalogExperience {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.catalogExperience > .catalogMain,
+.catalogExperience .catalogMain {
+  width: 100% !important;
+  max-width: 1280px !important;
+  margin: 0 auto !important;
+  margin-left: auto !important;
+  box-sizing: border-box;
+}
+
+.catalogHeaderInner {
+  width: 100% !important;
+  max-width: 1280px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  box-sizing: border-box;
+}
+
+.catalogReferenceIntro {
+  width: 100%;
+  max-width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+.catalogReferenceIntro h1 {
+  text-align: center;
+}
+
+.catalogReferenceFilters {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.catalogGrid {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  align-items: stretch;
+}
+
+.catalogCard {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  align-self: stretch;
+}
+
+.catalogMediaBlock {
+  width: 100%;
+  min-width: 0;
+}
+
+.catalogCardContent {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.catalogCardIdentity {
+  width: 100%;
+  min-width: 0;
+}
+
+.catalogWhatsappButton {
+  width: 100%;
+  margin-top: auto !important;
+}
+
+.catalogGroupCta {
+  width: 100%;
+  max-width: 100%;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* A prévia interna deve ocupar somente a largura do painel, sem herdar recuo da sidebar. */
+.catalogExperience.embedded {
+  width: 100%;
+  max-width: 100%;
+}
+
+.catalogExperience.embedded .catalogMain {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding-left: 18px !important;
+  padding-right: 18px !important;
+}
+
+/* Grade previsível e centralizada em todos os breakpoints. */
+@media (min-width: 1121px) {
+  .catalogGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 1120px) and (min-width: 641px) {
+  .catalogGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .catalogExperience > .catalogMain,
+  .catalogExperience .catalogMain {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  .catalogGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .catalogReferenceFilters {
+    width: 100% !important;
+  }
+}
