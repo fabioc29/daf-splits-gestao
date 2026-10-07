@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:crm": "node --test tests/crm-feed.test.mjs",
+    "typecheck:crm": "tsc -p tsconfig.crm.json",
+    "typecheck": "tsc --noEmit --moduleResolution Bundler --types vite/client,react,react-dom"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
@@ -17,5 +20,10 @@
     "react-dom": "latest",
     "typescript": "latest",
     "vite": "latest"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3"
   }
 }

@@ -10,7 +10,7 @@ revoke all on public.daf_crm_tokens from public, anon, authenticated;
 create or replace function public.daf_crm_projection(p_data jsonb)
 returns jsonb language sql immutable set search_path = '' as $$
  select jsonb_build_object(
-  'products',coalesce((select jsonb_agg(jsonb_build_object('id',p->'id','name',p->'name','brand',p->'brand','category',p->'category','gender',p->'gender','stock',p->'stock','apc',p->'apc')) from jsonb_array_elements(coalesce(p_data->'products','[]'::jsonb)) p),'[]'::jsonb),
+  'products',coalesce((select jsonb_agg(jsonb_build_object('id',p->'id','name',p->'name','brand',p->'brand','category',p->'category','gender',p->'gender','stock',p->'stock','apc',p->'apc','bottleNumber',p->'bottleNumber','bottleHistory',coalesce((select jsonb_agg(jsonb_build_object('number',b->'number','ml',b->'ml')) from jsonb_array_elements(coalesce(p->'bottleHistory','[]'::jsonb)) b),'[]'::jsonb))) from jsonb_array_elements(coalesce(p_data->'products','[]'::jsonb)) p),'[]'::jsonb),
   'clients',coalesce((select jsonb_agg(jsonb_build_object('id',c->'id','name',c->'name','phone',c->'phone','date',c->'date','addresses',coalesce(c->'addresses','[]'::jsonb))) from jsonb_array_elements(coalesce(p_data->'clients','[]'::jsonb)) c),'[]'::jsonb),
   'sales',coalesce((select jsonb_agg(jsonb_build_object('id',v->'id','clientId',v->'clientId','date',v->'date','total',v->'total','paid',v->'paid','status',coalesce(v->'status','"active"'::jsonb),'prepared',coalesce(v->'prepared','false'::jsonb),'sent',coalesce(v->'sent','false'::jsonb),'channel',coalesce(v->'channel','"direct"'::jsonb),'marketplace',v->'marketplace','customerName',v->'customerName','items',coalesce((select jsonb_agg(jsonb_build_object('productId',i->'productId','ml',i->'ml','isApc',coalesce(i->'isApc','false'::jsonb))) from jsonb_array_elements(coalesce(v->'items','[]'::jsonb)) i),'[]'::jsonb))) from jsonb_array_elements(coalesce(p_data->'sales','[]'::jsonb)) v),'[]'::jsonb)
  );
@@ -51,7 +51,7 @@ begin
  if v_owner is null then raise exception 'Invalid read capability' using errcode='28000'; end if;
  select data,updated_at into v_data,v_revision from public.app_state where user_id=v_owner;
  if not found then raise exception 'Dashboard unavailable'; end if;
- return jsonb_build_object('format','daf-crm-feed-v1','meta',jsonb_build_object('identity','daf-gestao:'||v_owner::text,'revision',v_revision,'exportedAt',now()),'data',public.daf_crm_projection(v_data));
+ return jsonb_build_object('format','daf-crm-feed-v2','meta',jsonb_build_object('identity','daf-gestao:'||v_owner::text,'revision',v_revision,'exportedAt',now(),'stockModel','product-bottle-evidence-v1'),'data',public.daf_crm_projection(v_data));
 end;
 $$;
 revoke all on function public.daf_crm_feed(text) from public;

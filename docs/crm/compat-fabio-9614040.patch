@@ -1,0 +1,27 @@
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -47,6 +47,7 @@
+ import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
+ import { captureReport } from "./report";
+ import { isSupabaseConfigured, supabase } from "./supabase";
++import { CRMFeedPanel } from "./crm/CRMFeedPanel";
+ import {
+   CatalogAdminPreview,
+   PublicCatalog,
+@@ -781,6 +782,7 @@
+   ["suppliers", "Fornecedores", Building2],
+   ["finance", "Financeiro", Wallet],
+   ["settings", "Configurações", Settings],
++  ["crm", "Integração CRM", Cloud],
+ ] as const;
+ 
+ function isPublicCatalogRoute() {
+@@ -1368,6 +1370,8 @@
+               edit={(id) => setModal({ type: "sale", id })}
+               notify={notify}
+             />
++          ) : page === "crm" ? (
++            <CRMFeedPanel userId={session.user.id} synced={sync === "saved"} />
+           ) : page === "stock" || page === "stock-supplies" ? (
+             <Stock
+               d={data}

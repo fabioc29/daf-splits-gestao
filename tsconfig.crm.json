@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {"moduleResolution": "Bundler", "types": ["vite/client", "react"]},
+  "include": ["src/crm/**/*.ts", "src/crm/**/*.tsx", "src/supabase.ts"]
+}

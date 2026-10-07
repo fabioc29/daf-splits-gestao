@@ -9,7 +9,7 @@ export function CRMFeedPanel({userId,synced}:{userId:string;synced:boolean}){
    if(action==='export'){
     const {data:row,error}=await supabase.from('app_state').select('data,updated_at').eq('user_id',userId).single();
     if(error)throw error;
-    const content={format:'daf-crm-feed-v1',meta:{identity:'daf-gestao:'+userId,revision:row.updated_at,exportedAt:new Date().toISOString()},data:crmProjection(row.data)};
+    const content={format:'daf-crm-feed-v2',meta:{identity:'daf-gestao:'+userId,revision:row.updated_at,exportedAt:new Date().toISOString(),stockModel:'product-bottle-evidence-v1'},data:crmProjection(row.data)};
     const url=URL.createObjectURL(new Blob([JSON.stringify(content,null,2)],{type:'application/json'}));
     const a=document.createElement('a');a.href=url;a.download='DAF-gestao-para-CRM.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);setNotice('Exportação da última versão salva concluída.');
    }else{
