@@ -227,47 +227,165 @@ const DEFAULT_MENU_ORDER = [
   "settings",
 ];
 
-type LocalUiSettings = {
+type SystemPalette = {
+  background: string;
+  panel: string;
+  panel2: string;
+  panel3: string;
+  sidebar: string;
+  input: string;
+  hover: string;
+  line: string;
+  lineStrong: string;
+  text: string;
+  muted: string;
   accent: string;
+  accentStrong: string;
   gold: string;
+  success: string;
+  warning: string;
+  danger: string;
+  cyan: string;
+  healthCritical: string;
+  healthModerate: string;
+  healthHealthy: string;
+};
+
+const DARK_SYSTEM_PALETTE: SystemPalette = {
+  background: "#090d14",
+  panel: "#111722",
+  panel2: "#161e2b",
+  panel3: "#1b2534",
+  sidebar: "#070a10",
+  input: "#0d131d",
+  hover: "#182232",
+  line: "#263142",
+  lineStrong: "#354256",
+  text: "#f4f7fb",
+  muted: "#8c98aa",
+  accent: "#7186ff",
+  accentStrong: "#5b6ef5",
+  gold: "#7186ff",
+  success: "#32bf8a",
+  warning: "#f2b84b",
+  danger: "#ef6670",
+  cyan: "#54c7d4",
+  healthCritical: "#e34b57",
+  healthModerate: "#e7ad2f",
+  healthHealthy: "#2fac7a",
+};
+
+const LIGHT_SYSTEM_PALETTE: SystemPalette = {
+  background: "#f2f5f9",
+  panel: "#ffffff",
+  panel2: "#f7f9fc",
+  panel3: "#eef2f7",
+  sidebar: "#ffffff",
+  input: "#f8fafc",
+  hover: "#edf1f7",
+  line: "#dde3ec",
+  lineStrong: "#cbd4e1",
+  text: "#172033",
+  muted: "#6e7a8c",
+  accent: "#5b6ef5",
+  accentStrong: "#4859db",
+  gold: "#5b6ef5",
+  success: "#168a65",
+  warning: "#b87c18",
+  danger: "#cf4654",
+  cyan: "#168da0",
+  healthCritical: "#d64b57",
+  healthModerate: "#d79a1f",
+  healthHealthy: "#198b63",
+};
+
+type LocalUiSettings = {
   appName: string;
   panelLabel: string;
   menuOrder: string[];
+  menuZoom: number;
+  darkPalette: SystemPalette;
+  lightPalette: SystemPalette;
 };
 
 const DEFAULT_LOCAL_UI_SETTINGS: LocalUiSettings = {
-  accent: "#5b6ef5",
-  gold: "#e0b43c",
   appName: "DAF Splits",
   panelLabel: "PAINEL ADMINISTRATIVO",
   menuOrder: [...DEFAULT_MENU_ORDER],
+  menuZoom: 100,
+  darkPalette: { ...DARK_SYSTEM_PALETTE },
+  lightPalette: { ...LIGHT_SYSTEM_PALETTE },
 };
 
 function readLocalUiSettings(): LocalUiSettings {
-  if (typeof window === "undefined") return { ...DEFAULT_LOCAL_UI_SETTINGS };
+  if (typeof window === "undefined")
+    return {
+      ...DEFAULT_LOCAL_UI_SETTINGS,
+      menuOrder: [...DEFAULT_MENU_ORDER],
+      darkPalette: { ...DARK_SYSTEM_PALETTE },
+      lightPalette: { ...LIGHT_SYSTEM_PALETTE },
+    };
   try {
     const stored = JSON.parse(
       window.localStorage.getItem("daf-ui-settings") || "null",
     );
-    const raw =
-      stored && typeof stored === "object"
-        ? { ...DEFAULT_LOCAL_UI_SETTINGS, ...stored }
-        : { ...DEFAULT_LOCAL_UI_SETTINGS };
-    const storedOrder = Array.isArray(raw.menuOrder)
-      ? raw.menuOrder.filter(
+    const storedOrder = Array.isArray(stored?.menuOrder)
+      ? stored.menuOrder.filter(
           (id: unknown): id is string =>
             typeof id === "string" && DEFAULT_MENU_ORDER.includes(id),
         )
       : [];
+    const legacyAccent =
+      typeof stored?.accent === "string" ? stored.accent : undefined;
+    const legacyGold =
+      typeof stored?.gold === "string" ? stored.gold : undefined;
+    const darkPalette = {
+      ...DARK_SYSTEM_PALETTE,
+      ...(stored?.darkPalette && typeof stored.darkPalette === "object"
+        ? stored.darkPalette
+        : {}),
+      ...(legacyAccent
+        ? { accent: legacyAccent, accentStrong: legacyAccent }
+        : {}),
+      ...(legacyGold ? { gold: legacyGold } : {}),
+    };
+    const lightPalette = {
+      ...LIGHT_SYSTEM_PALETTE,
+      ...(stored?.lightPalette && typeof stored.lightPalette === "object"
+        ? stored.lightPalette
+        : {}),
+      ...(legacyAccent
+        ? { accent: legacyAccent, accentStrong: legacyAccent }
+        : {}),
+      ...(legacyGold ? { gold: legacyGold } : {}),
+    };
     return {
-      ...raw,
+      appName:
+        typeof stored?.appName === "string"
+          ? stored.appName
+          : DEFAULT_LOCAL_UI_SETTINGS.appName,
+      panelLabel:
+        typeof stored?.panelLabel === "string"
+          ? stored.panelLabel
+          : DEFAULT_LOCAL_UI_SETTINGS.panelLabel,
       menuOrder: [
         ...storedOrder,
         ...DEFAULT_MENU_ORDER.filter((id) => !storedOrder.includes(id)),
       ],
+      menuZoom: Math.max(
+        80,
+        Math.min(130, Number(stored?.menuZoom) || 100),
+      ),
+      darkPalette,
+      lightPalette,
     };
   } catch {
-    return { ...DEFAULT_LOCAL_UI_SETTINGS };
+    return {
+      ...DEFAULT_LOCAL_UI_SETTINGS,
+      menuOrder: [...DEFAULT_MENU_ORDER],
+      darkPalette: { ...DARK_SYSTEM_PALETTE },
+      lightPalette: { ...LIGHT_SYSTEM_PALETTE },
+    };
   }
 }
 
@@ -431,6 +549,63 @@ const supplyStockKey = (value: string) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
+
+type SupplyHealth = {
+  status: "critical" | "moderate" | "healthy";
+  label: "Crítico" | "Moderado" | "Saudável";
+  criticalMax: number;
+  moderateMax: number;
+};
+
+function supplyHealth(supply: S): SupplyHealth | null {
+  const key = supplyStockKey(supply.name);
+  let criticalMax: number | null = null;
+  let moderateMax: number | null = null;
+
+  if (key.includes("frasco")) {
+    criticalMax = 10;
+    moderateMax = 35;
+  } else if (key.includes("caixa")) {
+    criticalMax = 5;
+    moderateMax = 30;
+  } else if (key.includes("cartadeagradecimento")) {
+    criticalMax = 20;
+    moderateMax = 100;
+  } else if (key.includes("cartaodevisita")) {
+    criticalMax = 20;
+    moderateMax = 100;
+  } else if (key.includes("papeldeseda")) {
+    criticalMax = 10;
+    moderateMax = 25;
+  } else if (key.includes("organza")) {
+    criticalMax = 10;
+    moderateMax = 30;
+  } else if (key.includes("sacoladaf") || key.includes("sacolasdaf")) {
+    criticalMax = 10;
+    moderateMax = 25;
+  } else if (key.includes("envelopeapc")) {
+    criticalMax = 5;
+    moderateMax = 15;
+  } else if (key.includes("envelopedecante")) {
+    criticalMax = 20;
+    moderateMax = 100;
+  }
+
+  if (criticalMax === null || moderateMax === null) return null;
+  const stock = Math.max(0, Number(supply.stock) || 0);
+  if (stock <= criticalMax)
+    return { status: "critical", label: "Crítico", criticalMax, moderateMax };
+  if (stock <= moderateMax)
+    return { status: "moderate", label: "Moderado", criticalMax, moderateMax };
+  return { status: "healthy", label: "Saudável", criticalMax, moderateMax };
+}
+
+function supplyDisplayUnit(supply: S) {
+  const unit = String(supply.unit || "").trim();
+  if (/^unidade/i.test(unit) || supplyHealth(supply)) return "Unidades";
+  return unit || "Unidades";
+}
+
 function activateNextSupplyLot(supply: S): S {
   let stock = Math.max(0, Number(supply.stock) || 0);
   let cost = Number(supply.cost || 0);
@@ -582,15 +757,43 @@ function System({ session }: { session: Session }) {
     window.localStorage.setItem("daf-theme", theme);
   }, [theme]);
   useEffect(() => {
-    document.documentElement.style.setProperty("--accent", localUi.accent);
-    document.documentElement.style.setProperty("--gold", localUi.gold);
-    document.documentElement.style.setProperty(
-      "--accent-soft",
-      `color-mix(in srgb, ${localUi.accent} 16%, transparent)`,
+    const palette =
+      theme === "dark" ? localUi.darkPalette : localUi.lightPalette;
+    const root = document.documentElement;
+    const variables: Record<string, string> = {
+      "--bg": palette.background,
+      "--panel": palette.panel,
+      "--panel-2": palette.panel2,
+      "--panel-3": palette.panel3,
+      "--sidebar": palette.sidebar,
+      "--input": palette.input,
+      "--hover": palette.hover,
+      "--line": palette.line,
+      "--line-strong": palette.lineStrong,
+      "--text": palette.text,
+      "--muted": palette.muted,
+      "--accent": palette.accent,
+      "--accent-strong": palette.accentStrong,
+      "--gold": palette.gold,
+      "--success": palette.success,
+      "--warning": palette.warning,
+      "--danger": palette.danger,
+      "--cyan": palette.cyan,
+      "--health-critical": palette.healthCritical,
+      "--health-moderate": palette.healthModerate,
+      "--health-healthy": palette.healthHealthy,
+      "--accent-soft": `color-mix(in srgb, ${palette.accent} 16%, transparent)`,
+      "--success-soft": `color-mix(in srgb, ${palette.success} 10%, transparent)`,
+      "--danger-soft": `color-mix(in srgb, ${palette.danger} 10%, transparent)`,
+      "--menu-zoom": String(localUi.menuZoom / 100),
+      "--sidebar-width": `${Math.round(236 * (localUi.menuZoom / 100))}px`,
+    };
+    Object.entries(variables).forEach(([key, value]) =>
+      root.style.setProperty(key, value),
     );
     window.localStorage.setItem("daf-ui-settings", JSON.stringify(localUi));
-    document.title = localUi.appName || DEFAULT_LOCAL_UI_SETTINGS.appName;
-  }, [localUi]);
+    document.title = "Gestão | DAF Splits";
+  }, [localUi, theme]);
   useEffect(() => {
     setMobileNavOpen(false);
   }, [page]);
@@ -2296,8 +2499,20 @@ function HealthGauge({
   if (cashGeneration < 0) score = Math.min(score, 49);
 
   const status =
-    !gross ? "Sem dados" : score <= 39 ? "Crítico" : score <= 69 ? "Moderado" : "Saudável";
-  const needleRotation = Math.max(0, Math.min(180, score * 1.8));
+    !gross
+      ? "Sem dados"
+      : score <= 39
+        ? "Crítico"
+        : score <= 69
+          ? "Moderado"
+          : "Saudável";
+  const needleRotation =
+    score <= 39
+      ? (score / 39) * 60
+      : score <= 69
+        ? 60 + ((score - 40) / 29) * 60
+        : 120 + ((score - 70) / 30) * 60;
+  const safeNeedleRotation = Math.max(0, Math.min(180, needleRotation));
 
   return (
     <div className="panel companyHealthPanel">
@@ -2320,25 +2535,25 @@ function HealthGauge({
             className="healthGaugeArc critical"
             d="M 40 160 A 120 120 0 0 1 280 160"
             pathLength="100"
-            strokeDasharray="40 60"
+            strokeDasharray="33.333 66.667"
           />
           <path
             className="healthGaugeArc moderate"
             d="M 40 160 A 120 120 0 0 1 280 160"
             pathLength="100"
-            strokeDasharray="30 70"
-            strokeDashoffset="-40"
+            strokeDasharray="33.333 66.667"
+            strokeDashoffset="-33.333"
           />
           <path
             className="healthGaugeArc healthy"
             d="M 40 160 A 120 120 0 0 1 280 160"
             pathLength="100"
-            strokeDasharray="30 70"
-            strokeDashoffset="-70"
+            strokeDasharray="33.334 66.666"
+            strokeDashoffset="-66.666"
           />
           <g
             className="healthGaugeNeedle"
-            style={{ transform: `rotate(${needleRotation}deg)` }}
+            style={{ transform: `rotate(${safeNeedleRotation}deg)` }}
           >
             <line x1="160" y1="160" x2="57" y2="160" />
           </g>
@@ -2867,25 +3082,48 @@ function Dash({ d, set }: { d: D; set: any }) {
           </button>
         </div>
         <div className="dashboardStockSnapshotGrid">
-          {dashboardSupplies.map((supply) => (
-            <div key={supply.id}>
-              <span>{supply.name}</span>
-              <b>
-                {Math.max(0, supply.stock).toLocaleString("pt-BR", {
-                  maximumFractionDigits: 2,
-                })}{" "}
-                {supply.unit}
-              </b>
-              {(supply.pendingLots || []).length ? (
-                <small>
-                  +{(supply.pendingLots || []).reduce((sum, lot) => sum + lot.qty, 0)}{" "}
-                  {supply.unit} em próximo lote
-                </small>
-              ) : (
-                <small>Estoque atual</small>
-              )}
-            </div>
-          ))}
+          {dashboardSupplies.map((supply) => {
+            const health = supplyHealth(supply);
+            return (
+              <div
+                key={supply.id}
+                className={
+                  "dashboardSupplyCard" +
+                  (health ? ` stock-${health.status}` : "")
+                }
+              >
+                <div className="dashboardSupplyNameRow">
+                  <strong>{supply.name}</strong>
+                  {health ? (
+                    <span className={`stockHealthBadge ${health.status}`}>
+                      {health.label}
+                    </span>
+                  ) : null}
+                </div>
+                <b>
+                  {Math.max(0, supply.stock).toLocaleString("pt-BR", {
+                    maximumFractionDigits: 2,
+                  })}{" "}
+                  {supplyDisplayUnit(supply)}
+                </b>
+                {(supply.pendingLots || []).length ? (
+                  <small>
+                    +{(supply.pendingLots || []).reduce((sum, lot) => sum + lot.qty, 0)}{" "}
+                    {supplyDisplayUnit(supply)} em próximo lote
+                  </small>
+                ) : (
+                  <small>
+                    {health ? `Estoque ${health.label.toLowerCase()}` : "Estoque atual"}
+                  </small>
+                )}
+                {health ? (
+                  <i className="stockHealthTrack" aria-hidden="true">
+                    <em />
+                  </i>
+                ) : null}
+              </div>
+            );
+          })}
           {!dashboardSupplies.length ? (
             <p className="empty">
               Nenhum insumo selecionado. Clique em Editar para escolher os itens.
