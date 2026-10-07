@@ -40,6 +40,9 @@ import {
   Palette,
   RotateCcw,
   Copy,
+  Menu,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
@@ -211,11 +214,25 @@ type D = {
 };
 type Modal = { type: string; id?: number } | null;
 
+const DEFAULT_MENU_ORDER = [
+  "dashboard",
+  "sales",
+  "prepare",
+  "shipping",
+  "purchases",
+  "stock",
+  "clients",
+  "suppliers",
+  "finance",
+  "settings",
+];
+
 type LocalUiSettings = {
   accent: string;
   gold: string;
   appName: string;
   panelLabel: string;
+  menuOrder: string[];
 };
 
 const DEFAULT_LOCAL_UI_SETTINGS: LocalUiSettings = {
@@ -223,6 +240,7 @@ const DEFAULT_LOCAL_UI_SETTINGS: LocalUiSettings = {
   gold: "#e0b43c",
   appName: "DAF Splits",
   panelLabel: "PAINEL ADMINISTRATIVO",
+  menuOrder: [...DEFAULT_MENU_ORDER],
 };
 
 function readLocalUiSettings(): LocalUiSettings {
@@ -231,9 +249,22 @@ function readLocalUiSettings(): LocalUiSettings {
     const stored = JSON.parse(
       window.localStorage.getItem("daf-ui-settings") || "null",
     );
+    const raw =
+      stored && typeof stored === "object"
+        ? { ...DEFAULT_LOCAL_UI_SETTINGS, ...stored }
+        : { ...DEFAULT_LOCAL_UI_SETTINGS };
+    const storedOrder = Array.isArray(raw.menuOrder)
+      ? raw.menuOrder.filter(
+          (id: unknown): id is string =>
+            typeof id === "string" && DEFAULT_MENU_ORDER.includes(id),
+        )
+      : [];
     return {
-      ...DEFAULT_LOCAL_UI_SETTINGS,
-      ...(stored && typeof stored === "object" ? stored : {}),
+      ...raw,
+      menuOrder: [
+        ...storedOrder,
+        ...DEFAULT_MENU_ORDER.filter((id) => !storedOrder.includes(id)),
+      ],
     };
   } catch {
     return { ...DEFAULT_LOCAL_UI_SETTINGS };
@@ -542,6 +573,7 @@ function System({ session }: { session: Session }) {
     [toast, setToast] = useState("");
   const [stockMenuOpen, setStockMenuOpen] = useState(false);
   const [financeMenuOpen, setFinanceMenuOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [localUi, setLocalUi] = useState<LocalUiSettings>(() =>
     readLocalUiSettings(),
   );
@@ -559,6 +591,22 @@ function System({ session }: { session: Session }) {
     window.localStorage.setItem("daf-ui-settings", JSON.stringify(localUi));
     document.title = localUi.appName || DEFAULT_LOCAL_UI_SETTINGS.appName;
   }, [localUi]);
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [page]);
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [mobileNavOpen]);
 
   function notify(message: string) {
     setToast(message);
@@ -734,6 +782,14 @@ const action =
   const stockSectionActive =
     page === "stock" || page === "stock-supplies" || page === "catalog";
   const financeSectionActive = page === "finance" || page === "receivables";
+  const orderedNav = [...nav].sort((a, b) => {
+    const aIndex = localUi.menuOrder.indexOf(a[0]);
+    const bIndex = localUi.menuOrder.indexOf(b[0]);
+    return (
+      (aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex) -
+      (bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex)
+    );
+  });
   const pageTitle =
     page === "stock"
       ? "Estoque de perfumes"
@@ -755,10 +811,28 @@ const action =
     );
   return (
     <div className="shell">
-      <aside>
-        <img className="sidebarLogo" src={LOGO} alt={localUi.appName} />
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          className="mobileNavBackdrop"
+          aria-label="Fechar menu"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      ) : null}
+      <aside className={mobileNavOpen ? "mobileOpen" : ""}>
+        <div className="mobileNavHead">
+          <img className="sidebarLogo" src={LOGO} alt={localUi.appName} />
+          <button
+            type="button"
+            className="mobileNavClose"
+            onClick={() => setMobileNavOpen(false)}
+            aria-label="Fechar menu"
+          >
+            <X />
+          </button>
+        </div>
         <nav>
-          {nav.map(([id, label, Icon]) => {
+          {orderedNav.map(([id, label, Icon]) => {
             if (id === "stock") {
               return (
                 <div className="stockNavGroup" key={id}>
@@ -895,7 +969,16 @@ const action =
       </aside>
       <main>
         <header>
-          <div>
+          <button
+            type="button"
+            className="mobileMenuButton"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Abrir menu"
+            aria-expanded={mobileNavOpen}
+          >
+            <Menu />
+          </button>
+          <div className="mainHeaderTitle">
             <small>{localUi.panelLabel}</small>
             <h1>{pageTitle}</h1>
           </div>
@@ -1396,10 +1479,21 @@ function SettingsPage({
     setSettings({ ...settings, [key]: value });
   }
 
+  function moveMenu(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= settings.menuOrder.length) return;
+    const next = [...settings.menuOrder];
+    [next[index], next[target]] = [next[target], next[index]];
+    update("menuOrder", next);
+  }
+
   function resetLocalSettings() {
     window.localStorage.removeItem("daf-ui-settings");
     window.localStorage.removeItem("daf-theme");
-    setSettings({ ...DEFAULT_LOCAL_UI_SETTINGS });
+    setSettings({
+      ...DEFAULT_LOCAL_UI_SETTINGS,
+      menuOrder: [...DEFAULT_MENU_ORDER],
+    });
     setTheme("dark");
     notify("Configurações locais restauradas para o padrão.");
   }
@@ -1502,6 +1596,56 @@ function SettingsPage({
               placeholder="PAINEL ADMINISTRATIVO"
             />
           </label>
+        </div>
+      </div>
+
+      <div className="panel settingsMenuOrder">
+        <div className="panelHeading">
+          <div>
+            <span className="eyebrow">Navegação</span>
+            <h2>Ordem dos menus</h2>
+            <p>
+              Organize os menus na ordem que preferir. Esta ordem vale somente
+              neste navegador.
+            </p>
+          </div>
+          <Menu />
+        </div>
+        <div className="settingsMenuOrderList">
+          {settings.menuOrder.map((id, index) => {
+            const item = nav.find(([menuId]) => menuId === id);
+            if (!item) return null;
+            const [, label, Icon] = item;
+            return (
+              <div key={id} className="settingsMenuOrderItem">
+                <span className="settingsMenuOrderIndex">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <Icon />
+                <b>{label}</b>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => moveMenu(index, -1)}
+                    disabled={index === 0}
+                    aria-label={`Mover ${label} para cima`}
+                    title="Mover para cima"
+                  >
+                    <ArrowUp />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveMenu(index, 1)}
+                    disabled={index === settings.menuOrder.length - 1}
+                    aria-label={`Mover ${label} para baixo`}
+                    title="Mover para baixo"
+                  >
+                    <ArrowDown />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -6269,7 +6413,7 @@ function Stock({
                   {p.stock} ml · {brl(p.cost)} por ml
                 </p>
                 <p className="productBottleLine">
-                  Identificação do frasco: <b>nº {p.bottleNumber || 1}</b>
+                  Identificação do frasco: nº {p.bottleNumber || 1}
                 </p>
                 <p className={p.apc ? "apcAvailable" : "apcUnavailable"}>
                   APC: {p.apc ? "1 disponível" : "indisponível"}
