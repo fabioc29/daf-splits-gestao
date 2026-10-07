@@ -5451,7 +5451,8 @@ function StockReport({
         </div>
 
         <div className="stockReportSummary">
-          Total de perfumes disponíveis: <b>{availableProducts.length}</b>
+          {apcOnly ? "Perfumes com APC disponível" : "Total de perfumes disponíveis"}:{" "}
+          <b>{availableProducts.length}</b>
         </div>
 
         <footer className="stockReportFooter">
@@ -5884,6 +5885,13 @@ function Stock({
             sale,
             ml: matchingItems.reduce((sum, item) => sum + item.ml, 0),
             hasApc: matchingItems.some((item) => item.isApc),
+            bottleNumbers: Array.from(
+              new Set(
+                matchingItems
+                  .map((item) => item.bottleNumber)
+                  .filter((number): number is number => Boolean(number)),
+              ),
+            ).sort((a, b) => a - b),
           };
         })
         .sort(
@@ -6027,6 +6035,9 @@ function Stock({
                 <p>
                   {p.stock} ml · {brl(p.cost)} por ml
                 </p>
+                <p className="productBottleLine">
+                  Frasco atual: <b>{p.bottleNumber || 1}</b>
+                </p>
                 <p className={p.apc ? "apcAvailable" : "apcUnavailable"}>
                   APC: {p.apc ? "1 disponível" : "indisponível"}
                 </p>
@@ -6152,6 +6163,32 @@ function Stock({
               </button>
             </header>
 
+            <div className="productBottleOverview">
+              <div>
+                <span>Frasco atual</span>
+                <b>Frasco {historyProduct.bottleNumber || 1}</b>
+              </div>
+              <div>
+                <span>Frascos registrados</span>
+                <b>{historyProduct.bottleHistory?.length || historyProduct.bottleNumber || 1}</b>
+              </div>
+              <div className="productBottleSequence">
+                {(historyProduct.bottleHistory || []).map((entry) => (
+                  <span
+                    key={entry.number}
+                    className={
+                      entry.number === (historyProduct.bottleNumber || 1)
+                        ? "current"
+                        : ""
+                    }
+                  >
+                    Frasco {entry.number}
+                    {entry.date ? <small>{dateBR(entry.date)}</small> : null}
+                  </span>
+                ))}
+              </div>
+            </div>
+
             <div className="productHistoryStats">
               <div>
                 <span>ML cadastrados</span>
@@ -6173,17 +6210,23 @@ function Stock({
                   <tr>
                     <th>Cliente</th>
                     <th>ML vendidos</th>
+                    <th>Frasco</th>
                     <th>Data</th>
                     <th>Pedido</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {productHistoryRows.map(({ sale, ml, hasApc }) => (
+                  {productHistoryRows.map(({ sale, ml, hasApc, bottleNumbers }) => (
                     <tr key={sale.id}>
                       <td>{saleCustomer(sale, d)}</td>
                       <td>
                         {formatMl(ml)}
                         {hasApc ? <small>APC</small> : null}
+                      </td>
+                      <td>
+                        {bottleNumbers.length
+                          ? bottleNumbers.map((number) => `Frasco ${number}`).join(", ")
+                          : "Anterior ao controle"}
                       </td>
                       <td>{dateBR(sale.date)}</td>
                       <td>#{orderNo(sale.id)}</td>
