@@ -6691,20 +6691,6 @@ function Stock({
         </div>
       </div>
       {view !== "supplies" ? (
-        <div className="stockQuickFilters">
-          <button
-            type="button"
-            className={apcOnly ? "active" : ""}
-            onClick={() => setApcOnly((current) => !current)}
-          >
-            <Check />
-            {apcOnly
-              ? "Mostrando apenas APC disponíveis"
-              : `Filtrar APC disponíveis (${d.products.filter((p) => p.apc > 0).length})`}
-          </button>
-        </div>
-      ) : null}
-      {view !== "supplies" ? (
         <>
           <div className="stockSummaryRow">
             <Cards
@@ -6741,18 +6727,32 @@ function Stock({
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
+              aria-label="Filtrar por categoria"
             >
-              <option>Todos</option>
-              <option>Árabe</option>
-              <option>Nicho</option>
-              <option>Designer</option>
+              <option value="Todos">Categoria</option>
+              <option value="Árabe">Árabe</option>
+              <option value="Nicho">Nicho</option>
+              <option value="Designer">Designer</option>
             </select>
-            <select value={brand} onChange={(e) => setBrand(e.target.value)}>
-              <option>Todas</option>
+            <select
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              aria-label="Filtrar por marca"
+            >
+              <option value="Todas">Marca</option>
               {brands.map((x) => (
                 <option key={x}>{x}</option>
               ))}
             </select>
+            <button
+              type="button"
+              className={"stockApcFilter" + (apcOnly ? " active" : "")}
+              onClick={() => setApcOnly((current) => !current)}
+              aria-pressed={apcOnly}
+            >
+              <Check />
+              {apcOnly ? "Somente APC" : "Filtrar APC"}
+            </button>
           </div>
           <div className="products">
             {filtered.map((p) => (
