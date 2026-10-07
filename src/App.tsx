@@ -86,6 +86,8 @@ type S = {
   min: number;
   attachCost: boolean;
   cost?: number;
+  activeLotQty?: number;
+  activeLotPurchaseId?: number;
   pendingLots?: {
     purchaseId: number;
     qty: number;
@@ -639,9 +641,26 @@ function supplyDisplayUnit(supply: S) {
   return unit || "Unidades";
 }
 
+function supplyReplenishmentProgress(supply: S) {
+  const current = Math.max(0, Number(supply.stock) || 0);
+  const baseline = Math.max(
+    current,
+    Math.max(0, Number(supply.activeLotQty) || 0),
+  );
+  if (baseline <= 0) return 0;
+  return Math.max(0, Math.min(100, (current / baseline) * 100));
+}
+
 function activateNextSupplyLot(supply: S): S {
   let stock = Math.max(0, Number(supply.stock) || 0);
   let cost = Number(supply.cost || 0);
+  let activeLotQty = Math.max(
+    stock,
+    Math.max(0, Number(supply.activeLotQty) || 0),
+  );
+  let activeLotPurchaseId = supply.activeLotPurchaseId
+    ? Number(supply.activeLotPurchaseId)
+    : undefined;
   const pendingLots = [...(supply.pendingLots || [])].map((lot) => ({
     ...lot,
     qty: Math.max(0, Number(lot.qty) || 0),
@@ -652,13 +671,27 @@ function activateNextSupplyLot(supply: S): S {
     if (next.qty <= 0) continue;
     stock = next.qty;
     cost = next.cost;
+    activeLotQty = next.qty;
+    activeLotPurchaseId = next.purchaseId;
   }
-  return { ...supply, stock, cost, pendingLots };
+  return {
+    ...supply,
+    stock,
+    cost,
+    activeLotQty,
+    activeLotPurchaseId,
+    pendingLots,
+  };
 }
 function consumeSupplyStock(supply: S, quantity: number): S {
   let current = activateNextSupplyLot(supply);
   let stock = current.stock;
   let cost = Number(current.cost || 0);
+  let activeLotQty = Math.max(
+    stock,
+    Math.max(0, Number(current.activeLotQty) || 0),
+  );
+  let activeLotPurchaseId = current.activeLotPurchaseId;
   const pendingLots = [...(current.pendingLots || [])];
   let remaining = Math.max(0, quantity);
   while (remaining > 0) {
@@ -667,6 +700,8 @@ function consumeSupplyStock(supply: S, quantity: number): S {
       if (!next) break;
       stock = Math.max(0, Number(next.qty) || 0);
       cost = Math.max(0, Number(next.cost) || 0);
+      activeLotQty = stock;
+      activeLotPurchaseId = next.purchaseId;
       continue;
     }
     const used = Math.min(stock, remaining);
@@ -679,10 +714,19 @@ function consumeSupplyStock(supply: S, quantity: number): S {
       if (next.qty <= 0) continue;
       stock = next.qty;
       cost = next.cost;
+      activeLotQty = next.qty;
+      activeLotPurchaseId = next.purchaseId;
       break;
     }
   }
-  return { ...current, stock, cost, pendingLots };
+  return {
+    ...current,
+    stock,
+    cost,
+    activeLotQty,
+    activeLotPurchaseId,
+    pendingLots,
+  };
 }
 function moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {
   if (isHistoricalSale(sale)) return supplies;
@@ -693,9 +737,16 @@ function moveSupplyStock(supplies: S[], sale: V, direction: -1 | 1) {
     );
     if (!line) return supply;
     const qty = Math.max(0, Number(line.qty) || 0);
-    return direction === -1
-      ? consumeSupplyStock(supply, qty)
-      : { ...supply, stock: Math.max(0, supply.stock) + qty };
+    if (direction === -1) return consumeSupplyStock(supply, qty);
+    const restoredStock = Math.max(0, supply.stock) + qty;
+    return {
+      ...supply,
+      stock: restoredStock,
+      activeLotQty: Math.max(
+        restoredStock,
+        Math.max(0, Number(supply.activeLotQty) || 0),
+      ),
+    };
   });
 }
 const saleCustomer = (sale: V, data: D) =>
@@ -1604,15 +1655,44 @@ function normalizeData(stored: any): D {
           : [],
     } as V;
   });
-  let normalizedSupplies = (merged.supplies || []).map((s: S) => ({
-    ...s,
-    attachCost: Boolean(s.attachCost),
-    pendingLots: (s.pendingLots || []).map((lot) => ({
+  let normalizedSupplies = (merged.supplies || []).map((s: S) => {
+    const pendingLots = (s.pendingLots || []).map((lot) => ({
       ...lot,
       qty: Math.max(0, Number(lot.qty) || 0),
       cost: Math.max(0, Number(lot.cost) || 0),
-    })),
-  }));
+    }));
+    const pendingPurchaseIds = new Set(
+      pendingLots.map((lot) => Number(lot.purchaseId)),
+    );
+    const matchingActivePurchase = [...purchases]
+      .filter(
+        (purchase) =>
+          purchase.type === "Suprimento / insumo" &&
+          supplyStockKey(purchase.description) === supplyStockKey(s.name) &&
+          !pendingPurchaseIds.has(Number(purchase.id)),
+      )
+      .sort(
+        (a, b) =>
+          String(b.date || "").localeCompare(String(a.date || "")) ||
+          Number(b.id) - Number(a.id),
+      )[0];
+    const stock = Math.max(0, Number(s.stock) || 0);
+    const inferredLotQty = Math.max(
+      stock,
+      Math.max(0, Number(s.activeLotQty) || 0),
+      Math.max(0, Number(matchingActivePurchase?.qty) || 0),
+    );
+    return {
+      ...s,
+      stock,
+      attachCost: Boolean(s.attachCost),
+      activeLotQty: inferredLotQty,
+      activeLotPurchaseId:
+        Number(s.activeLotPurchaseId) ||
+        (matchingActivePurchase ? Number(matchingActivePurchase.id) : undefined),
+      pendingLots,
+    };
+  });
   if (!merged.supplyInventoryVersion) {
     normalizedSales.forEach((sale) => {
       normalizedSupplies = moveSupplyStock(normalizedSupplies, sale, -1);
@@ -3200,6 +3280,7 @@ function Dash({ d, set }: { d: D; set: any }) {
         <div className="dashboardStockSnapshotGrid">
           {dashboardSupplies.map((supply) => {
             const health = supplyHealth(supply);
+            const replenishmentProgress = supplyReplenishmentProgress(supply);
             return (
               <div
                 key={supply.id}
@@ -3229,12 +3310,21 @@ function Dash({ d, set }: { d: D; set: any }) {
                   </small>
                 ) : (
                   <small>
-                    {health ? `Estoque ${health.label.toLowerCase()}` : "Estoque atual"}
+                    {health
+                      ? `Estoque ${health.label.toLowerCase()} · ${Math.round(
+                          replenishmentProgress,
+                        )}% da última reposição`
+                      : "Estoque atual"}
                   </small>
                 )}
                 {health ? (
-                  <i className="stockHealthTrack" aria-hidden="true">
-                    <em />
+                  <i
+                    className="stockHealthTrack"
+                    aria-label={`${Math.round(
+                      replenishmentProgress,
+                    )}% da última reposição disponível`}
+                  >
+                    <em style={{ width: `${replenishmentProgress}%` }} />
                   </i>
                 ) : null}
               </div>
@@ -8460,6 +8550,10 @@ function InventoryEdit({
                 unit: String(f.unit),
                 stock,
                 cost,
+                activeLotQty: Math.max(
+                  stock,
+                  Math.max(0, Number(s.activeLotQty) || 0),
+                ),
                 attachCost: f.attachCost === "Sim",
               })
             : s,
@@ -8558,11 +8652,19 @@ function InventoryEdit({
             ? { ...p, stock: p.stock + delta, cost: newCost }
             : p,
         ),
-        supplies: x.supplies.map((s) =>
-          item && purchase.type !== "Perfume" && s.id === item.id
-            ? { ...s, stock: s.stock + delta, cost: newCost }
-            : s,
-        ),
+        supplies: x.supplies.map((s) => {
+          if (!item || purchase.type === "Perfume" || s.id !== item.id) return s;
+          const stock = s.stock + delta;
+          return {
+            ...s,
+            stock,
+            cost: newCost,
+            activeLotQty:
+              s.activeLotPurchaseId === purchase.id
+                ? Math.max(stock, qty)
+                : Math.max(stock, Number(s.activeLotQty) || 0),
+          };
+        }),
       }));
     }
     close();
@@ -8865,6 +8967,7 @@ function Form({
               min: 0,
               attachCost: String(f.attachCost) === "Sim",
               cost: Number(f.total) / (Number(f.stock) || 1),
+              activeLotQty: Math.max(0, Number(f.stock) || 0),
             },
           ],
         };
@@ -9106,6 +9209,8 @@ function Form({
                   unit: String(f.unit || current.unit),
                   attachCost,
                   cost: unitCost,
+                  activeLotQty: qty,
+                  activeLotPurchaseId: purchase.id,
                 };
               })
             : [
@@ -9118,6 +9223,8 @@ function Form({
                   min: 0,
                   attachCost: String(f.attachCost) === "Sim",
                   cost: unitCost,
+                  activeLotQty: qty,
+                  activeLotPurchaseId: purchase.id,
                   pendingLots: [],
                 },
               ];
