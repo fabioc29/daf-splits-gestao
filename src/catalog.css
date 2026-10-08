@@ -3483,3 +3483,232 @@ vercel-toolbar {
     min-height: 52px;
   }
 }
+
+
+/* =========================================================
+   DAF — imagens manuais no editor do catálogo
+   ========================================================= */
+
+.catalogManualImages {
+  margin-top: 15px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
+}
+
+.catalogManualImages > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 11px;
+}
+
+.catalogManualImages > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.catalogManualImages > header strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.catalogManualImages > header span {
+  color: var(--muted);
+  font-size: 8.5px;
+  line-height: 1.4;
+}
+
+.catalogManualImages > header > span {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--input);
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  font-weight: 850;
+}
+
+.catalogManualImageList {
+  display: grid;
+  gap: 8px;
+}
+
+.catalogManualImageRow {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  display: grid;
+  grid-template-columns:
+    minmax(150px, .9fr)
+    64px
+    minmax(220px, 1.5fr)
+    auto
+    auto;
+  align-items: end;
+  gap: 9px;
+}
+
+.catalogManualImageIdentity {
+  align-self: center;
+  min-width: 0;
+}
+
+.catalogManualImageIdentity strong,
+.catalogManualImageIdentity span {
+  display: block;
+}
+
+.catalogManualImageIdentity strong {
+  color: var(--text);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.catalogManualImageIdentity span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.catalogManualImagePreview {
+  width: 64px;
+  height: 52px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+}
+
+.catalogManualImagePreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.catalogManualImagePreview svg {
+  width: 20px;
+  height: 20px;
+}
+
+.catalogManualImageRow > label:not(.catalogUploadImageButton) {
+  display: grid;
+  gap: 5px;
+}
+
+.catalogManualImageRow > label:not(.catalogUploadImageButton) > span {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.catalogManualImageRow input[type="url"] {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+  color: var(--text);
+  font: inherit;
+  font-size: 9px;
+}
+
+.catalogUploadImageButton,
+.catalogRemoveManualImage {
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--input);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 8.5px;
+  font-weight: 850;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.catalogUploadImageButton input {
+  display: none;
+}
+
+.catalogUploadImageButton svg,
+.catalogRemoveManualImage svg {
+  width: 14px;
+  height: 14px;
+}
+
+.catalogRemoveManualImage {
+  color: #ef6670;
+  border-color: color-mix(in srgb, #ef6670 42%, var(--line));
+}
+
+.catalogImageEditorError {
+  margin: 0 0 9px;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, #ef6670 42%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, #ef6670 9%, transparent);
+  color: #ef6670;
+  font-size: 8.5px;
+  font-weight: 750;
+}
+
+.catalogManualImagesEmpty {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 9px;
+}
+
+@media (max-width: 900px) {
+  .catalogManualImageRow {
+    grid-template-columns: 1fr 64px;
+  }
+
+  .catalogManualImageRow > label:not(.catalogUploadImageButton) {
+    grid-column: 1 / -1;
+  }
+
+  .catalogUploadImageButton,
+  .catalogRemoveManualImage {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .catalogManualImages > header {
+    display: grid;
+  }
+
+  .catalogManualImages > header > span {
+    justify-self: start;
+  }
+
+  .catalogManualImageRow {
+    grid-template-columns: 1fr;
+  }
+
+  .catalogManualImagePreview {
+    width: 100%;
+    height: 120px;
+  }
+}
