@@ -63,6 +63,7 @@ type BottleHistoryEntry = {
   date?: string;
   purchaseId?: number;
   ml?: number;
+  assumedSold?: boolean;
 };
 
 type P = {
@@ -484,14 +485,35 @@ function normalizeBottleHistory(
           date: entry.date ? String(entry.date) : undefined,
           purchaseId: entry.purchaseId ? Number(entry.purchaseId) : undefined,
           ml: entry.ml ? Number(entry.ml) : undefined,
+          assumedSold: Boolean(entry.assumedSold),
         }))
         .sort((a, b) => a.number - b.number)
     : [];
-  if (existing.length) return existing;
 
-  return Array.from({ length: Math.max(1, inferredNumber) }, (_, index) => ({
-    number: index + 1,
-  }));
+  const currentNumber = Math.max(1, Math.round(Number(inferredNumber) || 1));
+  const highestKnown = Math.max(
+    currentNumber,
+    ...existing.map((entry) => entry.number),
+    1,
+  );
+  const fallbackMl = [...existing]
+    .reverse()
+    .map((entry) => Number(entry.ml) || 0)
+    .find((ml) => ml > 0);
+  const byNumber = new Map(existing.map((entry) => [entry.number, entry]));
+
+  return Array.from({ length: highestKnown }, (_, index) => {
+    const number = index + 1;
+    const known = byNumber.get(number);
+    if (known) return known;
+    return {
+      number,
+      ml: fallbackMl,
+      // Uma lacuna anterior ao frasco atual representa um frasco que existiu
+      // antes do controle no sistema e já foi encerrado integralmente.
+      assumedSold: number < currentNumber,
+    };
+  });
 }
 
 const today = () => {
@@ -1544,7 +1566,10 @@ function normalizeData(stored: any): D {
         fallbackBottle:
           (product.bottleHistory?.length || 0) > 1 ? 1 : currentBottle,
       });
-      products.push(product);
+      products.push({
+        ...product,
+        bottleHistory: normalizeBottleHistory(product, currentBottle),
+      });
       return;
     }
 
@@ -1598,6 +1623,7 @@ function normalizeData(stored: any): D {
           date: token.entry.date,
           purchaseId,
           ml: token.entry.ml ? Number(token.entry.ml) : undefined,
+          assumedSold: Boolean(token.entry.assumedSold),
         });
       }
     });
@@ -1642,17 +1668,25 @@ function normalizeData(stored: any): D {
           ) / positiveVolume
         : Math.max(0, Number(canonical.cost) || 0);
 
-    products.push({
+    const mergedBottleNumber = Math.max(
+      1,
+      ...mergedHistory.map((entry) => entry.number),
+    );
+    const mergedProduct: P = {
       ...canonical,
       name: parseBottleMarker(canonical.name).name,
       stock: positiveVolume,
       cost: weightedCost,
       apc: group.some((product) => Number(product.apc) > 0) ? 1 : 0,
-      bottleNumber: Math.max(
-        1,
-        ...mergedHistory.map((entry) => entry.number),
-      ),
+      bottleNumber: mergedBottleNumber,
       bottleHistory: mergedHistory.sort((a, b) => a.number - b.number),
+    };
+    products.push({
+      ...mergedProduct,
+      bottleHistory: normalizeBottleHistory(
+        mergedProduct,
+        mergedBottleNumber,
+      ),
     });
   });
 
@@ -6921,7 +6955,7 @@ function Stock({
             b.sale.date.localeCompare(a.sale.date) || b.sale.id - a.sale.id,
         )
     : [];
-  const historySoldMl = productHistoryRows.reduce(
+  const knownHistorySoldMl = productHistoryRows.reduce(
     (sum, row) => sum + row.ml,
     0,
   );
@@ -6929,16 +6963,20 @@ function Stock({
     (entry) => entry.number === selectedBottleNumber,
   );
   const currentBottleNumber = historyProduct?.bottleNumber || 1;
+  const isClosedBottle =
+    Boolean(historyProduct) && selectedBottleNumber !== currentBottleNumber;
   const historyRemainingMl = historyProduct
-    ? selectedBottleNumber === currentBottleNumber
-      ? Math.max(0, historyProduct.stock)
-      : Math.max(
-          0,
-          Number(selectedBottleEntry?.ml || historySoldMl) - historySoldMl,
-        )
+    ? isClosedBottle
+      ? 0
+      : Math.max(0, historyProduct.stock)
     : 0;
   const historyRegisteredMl =
-    Number(selectedBottleEntry?.ml) || historyRemainingMl + historySoldMl;
+    Number(selectedBottleEntry?.ml) ||
+    historyRemainingMl + knownHistorySoldMl;
+  const historySoldMl =
+    isClosedBottle && historyRegisteredMl > 0
+      ? historyRegisteredMl
+      : knownHistorySoldMl;
   const formatMl = (value: number) =>
     `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ml`;
   const formatCopyMl = (value: number) =>
@@ -7160,34 +7198,85 @@ function Stock({
         </>
       ) : (
         <>
-          <div className="products">
-            {d.supplies.map((s) => (
-              <div key={s.id}>
-                <h3>{s.name}</h3>
-                <p>
-                  {s.stock} {s.unit}
-                  {s.cost ? ` · ${brl(s.cost)} por unidade` : ""}
-                </p>
-                {(s.pendingLots || []).length ? (
-                  <p className="queuedSupplyLot">
-                    Em segundo plano: {(s.pendingLots || []).reduce((sum, lot) => sum + lot.qty, 0)} {s.unit}
-                    {s.pendingLots?.[0] ? ` · próximo lote ${brl(s.pendingLots[0].cost)} por unidade` : ""}
-                  </p>
-                ) : null}
-                <p>Custo na venda: {s.attachCost ? "Sim" : "Não"}</p>
-                <button className="iconButton" onClick={() => editSupply(s.id)}>
-                  <Pencil />
-                  Editar
-                </button>
-                <button
-                  className="iconButton danger"
-                  onClick={() => removeSupply(s.id)}
-                >
-                  <Trash2 />
-                  Excluir
-                </button>
-              </div>
-            ))}
+          <div className="panel table productStockTablePanel supplyStockTablePanel">
+            <table className="productStockTable supplyStockTable">
+              <thead>
+                <tr>
+                  <th>Insumo</th>
+                  <th>Estoque</th>
+                  <th>Custo por unidade</th>
+                  <th>Custo na venda</th>
+                  <th>Próximo lote</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...d.supplies]
+                  .sort((a, b) =>
+                    a.name.localeCompare(b.name, "pt-BR", {
+                      sensitivity: "base",
+                    }),
+                  )
+                  .map((s) => (
+                    <tr key={s.id}>
+                      <td className="productStockName">
+                        <strong>{s.name}</strong>
+                        <small>{supplyDisplayUnit(s)}</small>
+                      </td>
+                      <td>
+                        <strong>
+                          {Math.max(0, s.stock).toLocaleString("pt-BR", {
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          {s.unit}
+                        </strong>
+                      </td>
+                      <td>{s.cost ? brl(s.cost) : "—"}</td>
+                      <td>{s.attachCost ? "Sim" : "Não"}</td>
+                      <td>
+                        {(s.pendingLots || []).length ? (
+                          <span className="supplyNextLot">
+                            {(s.pendingLots || [])
+                              .reduce((sum, lot) => sum + lot.qty, 0)
+                              .toLocaleString("pt-BR", {
+                                maximumFractionDigits: 2,
+                              })}{" "}
+                            {s.unit}
+                            {s.pendingLots?.[0]
+                              ? ` · ${brl(s.pendingLots[0].cost)}/un.`
+                              : ""}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td>
+                        <div className="tableActions productStockActions">
+                          <button
+                            className="iconButton"
+                            onClick={() => editSupply(s.id)}
+                          >
+                            <Pencil />
+                            Editar
+                          </button>
+                          <button
+                            className="iconButton danger"
+                            onClick={() => removeSupply(s.id)}
+                          >
+                            <Trash2 />
+                            Excluir
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+            {!d.supplies.length ? (
+              <p className="empty productStockEmpty">
+                Nenhum insumo cadastrado.
+              </p>
+            ) : null}
           </div>
         </>
       )}
@@ -7282,7 +7371,11 @@ function Stock({
                     aria-pressed={entry.number === selectedBottleNumber}
                   >
                     Frasco nº {entry.number}
-                    {entry.date ? <small>{dateBR(entry.date)}</small> : null}
+                    {entry.assumedSold ? (
+                      <small>Vendido integralmente</small>
+                    ) : entry.date ? (
+                      <small>{dateBR(entry.date)}</small>
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -7335,7 +7428,9 @@ function Stock({
               </table>
               {!productHistoryRows.length ? (
                 <p className="empty">
-                  Nenhuma venda registrada para este perfume.
+                  {selectedBottleEntry?.assumedSold
+                    ? "Este frasco foi registrado como vendido integralmente antes do controle detalhado de pedidos."
+                    : "Nenhuma venda registrada para este perfume neste frasco."}
                 </p>
               ) : null}
             </div>
@@ -9179,6 +9274,45 @@ function Form({
         );
         return;
       }
+      const requestedByProduct = new Map<number, number>();
+      Array.from({ length: lines }, (_, i) => {
+        const typed = String(f["productName" + i] || "");
+        const product = d.products.find(
+          (candidate) => `${candidate.brand} ${candidate.name}` === typed,
+        );
+        if (!product) return;
+        const requestedMl = Math.max(0, parseDecimal(f["ml" + i]));
+        requestedByProduct.set(
+          product.id,
+          (requestedByProduct.get(product.id) || 0) + requestedMl,
+        );
+      });
+      const insufficientStock = Array.from(requestedByProduct.entries())
+        .map(([productId, requestedMl]) => {
+          const product = d.products.find((candidate) => candidate.id === productId);
+          if (!product) return null;
+          const restoredMl =
+            existingSale && existingSale.status !== "cancelled"
+              ? existingSale.items
+                  .filter((item) => item.productId === productId)
+                  .reduce((sum, item) => sum + item.ml, 0)
+              : 0;
+          const availableMl = Math.max(0, product.stock + restoredMl);
+          return requestedMl > availableMl + 0.0001
+            ? { product, requestedMl, availableMl }
+            : null;
+        })
+        .find(Boolean);
+      if (insufficientStock) {
+        const { product, requestedMl, availableMl } = insufficientStock;
+        const formatStockMl = (value: number) =>
+          value.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+        window.alert(
+          `Não há volume suficiente de ${product.brand} ${product.name}. Você tentou lançar ${formatStockMl(requestedMl)} ml, mas há apenas ${formatStockMl(availableMl)} ml disponíveis em estoque.`,
+        );
+        return;
+      }
+
       const apcProducts = Array.from({ length: lines }, (_, i) => {
         if (!apcLines[i]) return null;
         const typed = String(f["productName" + i] || "");
@@ -9236,13 +9370,13 @@ function Form({
         const previousHistory = existingProduct?.bottleHistory?.length
           ? [...existingProduct.bottleHistory]
           : normalizeBottleHistory(existingProduct || {}, bottleNumber);
-        const bottleHistory = previousHistory.some(
-          (entry) => entry.number === bottleNumber,
-        )
-          ? previousHistory
-          : [...previousHistory, { number: bottleNumber }].sort(
-              (a, b) => a.number - b.number,
-            );
+        const bottleHistory = normalizeBottleHistory(
+          {
+            ...(existingProduct || {}),
+            bottleHistory: previousHistory,
+          },
+          bottleNumber,
+        );
         const product: P = {
           ...baseProduct,
           name: parsedName.name,
