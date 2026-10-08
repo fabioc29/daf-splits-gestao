@@ -9460,3 +9460,88 @@ aside nav {
     width: 100%;
   }
 }
+
+
+/* =========================================================
+   DAF — complemento, histórico destacado e cópia de pedidos
+   ========================================================= */
+
+.clientSaleAddressRow {
+  display: grid;
+  grid-template-columns:
+    minmax(260px, 2fr)
+    minmax(145px, .75fr)
+    minmax(110px, .55fr)
+    minmax(180px, 1fr);
+  gap: 12px;
+}
+
+.addressRow.clientAddressRow {
+  grid-template-columns:
+    minmax(240px, 2fr)
+    minmax(110px, .55fr)
+    minmax(180px, 1fr)
+    minmax(150px, .8fr);
+}
+
+/* O fundo escuro do histórico recebe contorno claro para ganhar separação. */
+.productSalesHistoryDialog {
+  border: 1px solid rgb(255 255 255 / 78%) !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 7%),
+    0 28px 80px rgb(0 0 0 / 48%) !important;
+}
+
+.productSalesHistoryDialog > header {
+  border-bottom-color: rgb(255 255 255 / 72%) !important;
+}
+
+.productHistoryCopyButton {
+  border: 1px solid rgb(255 255 255 / 82%) !important;
+  border-radius: 9px;
+  background: var(--panel-2) !important;
+  color: var(--text) !important;
+  padding: 10px 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-weight: 850;
+}
+
+.productHistoryCopyButton:hover {
+  background: var(--hover) !important;
+}
+
+.productHistoryCopyButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+@media (max-width: 900px) {
+  .clientSaleAddressRow,
+  .addressRow.clientAddressRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .productHistoryFooter {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 620px) {
+  .clientSaleAddressRow,
+  .addressRow.clientAddressRow {
+    grid-template-columns: 1fr;
+  }
+
+  .productHistoryFooter {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .productHistoryFooter > button {
+    width: 100%;
+    justify-content: center;
+  }
+}
