@@ -4,6 +4,8 @@ import {
   Image as ImageIcon,
   MessageCircle,
   PackageOpen,
+  Upload,
+  Trash2,
   Palette,
   RefreshCw,
   RotateCcw,
@@ -25,6 +27,7 @@ export type CatalogItem = {
   bottle?: number;
   imageUrl?: string;
   fragranticaId?: number;
+  manualImage?: boolean;
 };
 
 export type CatalogSettings = {
@@ -46,6 +49,7 @@ export type CatalogSettings = {
   groupBorder: string;
   groupButton: string;
   groupButtonText: string;
+  manualImages: Record<string, string>;
 };
 
 const LEGACY_CATALOG_SETTINGS: CatalogSettings = {
@@ -67,6 +71,7 @@ const LEGACY_CATALOG_SETTINGS: CatalogSettings = {
   groupBorder: "#d7aa36",
   groupButton: "#d7aa36",
   groupButtonText: "#100d06",
+  manualImages: {},
 };
 
 export const DEFAULT_CATALOG_SETTINGS: CatalogSettings = {
@@ -88,6 +93,7 @@ export const DEFAULT_CATALOG_SETTINGS: CatalogSettings = {
   groupBorder: "#c1893b",
   groupButton: "#c1893b",
   groupButtonText: "#010101",
+  manualImages: {},
 };
 
 type ProductLike = {
@@ -105,9 +111,37 @@ type CatalogSettingsEnvelope = {
   __catalogSettings: CatalogSettings;
 };
 
-const CATALOG_SETTINGS_KEYS = Object.keys(
-  DEFAULT_CATALOG_SETTINGS,
-) as Array<keyof CatalogSettings>;
+const CATALOG_COLOR_KEYS = [
+  "background",
+  "header",
+  "card",
+  "text",
+  "muted",
+  "line",
+  "accent",
+  "whatsapp",
+  "whatsappText",
+  "apcAvailable",
+  "apcAvailableText",
+  "apcUnavailable",
+  "apcUnavailableText",
+  "scarcity",
+  "groupBackground",
+  "groupBorder",
+  "groupButton",
+  "groupButtonText",
+] as const;
+
+type CatalogColorKey = (typeof CATALOG_COLOR_KEYS)[number];
+
+function normalizeManualImages(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, image]) => typeof image === "string" && image.trim())
+      .map(([key, image]) => [key, String(image).trim()]),
+  );
+}
 
 function normalizeHex(value: unknown, fallback: string) {
   const normalized = String(value || "").trim();
@@ -121,20 +155,23 @@ export function normalizeCatalogSettings(value: unknown): CatalogSettings {
     value && typeof value === "object"
       ? (value as Partial<CatalogSettings>)
       : {};
-  return CATALOG_SETTINGS_KEYS.reduce(
-    (settings, key) => {
-      const incoming = normalizeHex(
-        source[key],
-        DEFAULT_CATALOG_SETTINGS[key],
-      );
-      settings[key] =
-        incoming === LEGACY_CATALOG_SETTINGS[key]
-          ? DEFAULT_CATALOG_SETTINGS[key]
-          : incoming;
-      return settings;
-    },
-    { ...DEFAULT_CATALOG_SETTINGS },
-  );
+  const settings: CatalogSettings = {
+    ...DEFAULT_CATALOG_SETTINGS,
+    manualImages: normalizeManualImages(source.manualImages),
+  };
+
+  CATALOG_COLOR_KEYS.forEach((key: CatalogColorKey) => {
+    const incoming = normalizeHex(
+      source[key],
+      DEFAULT_CATALOG_SETTINGS[key],
+    );
+    settings[key] =
+      incoming === LEGACY_CATALOG_SETTINGS[key]
+        ? DEFAULT_CATALOG_SETTINGS[key]
+        : incoming;
+  });
+
+  return settings;
 }
 
 export function catalogSnapshotPayload(
@@ -305,6 +342,7 @@ function applyKnownFragranticaImage<T extends CatalogItem>(
   item: T,
   bottle?: number,
 ): T {
+  if (item.manualImage && item.imageUrl) return item;
   const id = knownFragranticaId(item.name, bottle);
   if (id) {
     return {
@@ -387,23 +425,32 @@ export async function enrichCatalogItemsWithImages(
   );
 }
 
-export function catalogItemsFromProducts(products: ProductLike[]): CatalogItem[] {
+export function catalogItemsFromProducts(
+  products: ProductLike[],
+  manualImages: Record<string, string> = {},
+): CatalogItem[] {
   return products
-    .map((product) =>
-      applyKnownFragranticaImage(
-        {
-          id: product.id,
-          brand: String(product.brand || "").trim(),
-          name: String(product.name || "").trim(),
-          category: String(product.category || "Outros").trim(),
-          gender: String(product.gender || "Unissex").trim(),
-          stock: Math.max(0, Number(product.stock) || 0),
-          apc: Number(product.apc || 0) > 0,
-          bottle: Math.max(0, Number(product.bottle) || 0) || undefined,
-        },
-        product.bottle,
-      ),
-    )
+    .map((product) => {
+      const item: CatalogItem = {
+        id: product.id,
+        brand: String(product.brand || "").trim(),
+        name: String(product.name || "").trim(),
+        category: String(product.category || "Outros").trim(),
+        gender: String(product.gender || "Unissex").trim(),
+        stock: Math.max(0, Number(product.stock) || 0),
+        apc: Number(product.apc || 0) > 0,
+        bottle: Math.max(0, Number(product.bottle) || 0) || undefined,
+      };
+      const manualImage = manualImages[String(product.id)]?.trim();
+      if (manualImage) {
+        return {
+          ...item,
+          imageUrl: manualImage,
+          manualImage: true,
+        };
+      }
+      return applyKnownFragranticaImage(item, product.bottle);
+    })
     .filter((item) => item.stock > 0)
     .sort((a, b) =>
       `${a.brand} ${a.name}`.localeCompare(`${b.brand} ${b.name}`, "pt-BR", {
@@ -672,6 +719,48 @@ function CatalogColorField({
   );
 }
 
+async function catalogFileToDataUrl(file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Selecione um arquivo de imagem.");
+  }
+
+  const original = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+    reader.readAsDataURL(file);
+  });
+
+  return new Promise<string>((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const maxSide = 1200;
+      const scale = Math.min(
+        1,
+        maxSide / Math.max(image.naturalWidth || 1, image.naturalHeight || 1),
+      );
+      const width = Math.max(1, Math.round(image.naturalWidth * scale));
+      const height = Math.max(1, Math.round(image.naturalHeight * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        resolve(original);
+        return;
+      }
+      context.drawImage(image, 0, 0, width, height);
+      try {
+        resolve(canvas.toDataURL("image/webp", 0.82));
+      } catch {
+        resolve(original);
+      }
+    };
+    image.onerror = () => resolve(original);
+    image.src = original;
+  });
+}
+
 export function CatalogAdminPreview({
   products,
   settings,
@@ -685,10 +774,14 @@ export function CatalogAdminPreview({
     () => normalizeCatalogSettings(settings),
     [settings],
   );
-  const baseItems = useMemo(() => catalogItemsFromProducts(products), [products]);
+  const baseItems = useMemo(
+    () => catalogItemsFromProducts(products, normalizedSettings.manualImages),
+    [products, normalizedSettings.manualImages],
+  );
   const [previewItems, setPreviewItems] = useState(baseItems);
   const [editorOpen, setEditorOpen] = useState(false);
   const [draft, setDraft] = useState<CatalogSettings>(normalizedSettings);
+  const [imageEditorError, setImageEditorError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -705,14 +798,37 @@ export function CatalogAdminPreview({
     if (!editorOpen) setDraft(normalizedSettings);
   }, [normalizedSettings, editorOpen]);
 
-  const updateDraft = (key: keyof CatalogSettings, value: string) => {
+  const updateDraft = (key: CatalogColorKey, value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
   };
+
+  function setManualImage(productId: number, value: string) {
+    setDraft((current) => ({
+      ...current,
+      manualImages: {
+        ...current.manualImages,
+        [String(productId)]: value.trim(),
+      },
+    }));
+  }
+
+  function removeManualImage(productId: number) {
+    setDraft((current) => {
+      const manualImages = { ...current.manualImages };
+      delete manualImages[String(productId)];
+      return { ...current, manualImages };
+    });
+  }
+
+  const manualImageEditorItems = baseItems.filter((item) => {
+    const savedItem = previewItems.find((preview) => preview.id === item.id);
+    return !savedItem?.imageUrl || Boolean(draft.manualImages[String(item.id)]);
+  });
 
   const editorSections: Array<{
     title: string;
     description: string;
-    fields: Array<[keyof CatalogSettings, string]>;
+    fields: Array<[CatalogColorKey, string]>;
   }> = [
     {
       title: "Estrutura",
@@ -874,6 +990,101 @@ export function CatalogAdminPreview({
               </button>
             </div>
 
+            <section className="catalogManualImages">
+              <header>
+                <div>
+                  <strong>Imagens manuais</strong>
+                  <span>
+                    Use apenas quando o sistema não identificar a imagem correta automaticamente.
+                  </span>
+                </div>
+                <span>
+                  {manualImageEditorItems.length
+                    ? `${manualImageEditorItems.length} para revisar`
+                    : "Todas identificadas"}
+                </span>
+              </header>
+
+              {imageEditorError ? (
+                <p className="catalogImageEditorError">{imageEditorError}</p>
+              ) : null}
+
+              {manualImageEditorItems.length ? (
+                <div className="catalogManualImageList">
+                  {manualImageEditorItems.map((item) => {
+                    const manualValue =
+                      draft.manualImages[String(item.id)] || "";
+                    return (
+                      <div className="catalogManualImageRow" key={item.id}>
+                        <div className="catalogManualImageIdentity">
+                          <strong>{item.name}</strong>
+                          <span>{item.brand}</span>
+                        </div>
+                        <div className="catalogManualImagePreview">
+                          {manualValue ? (
+                            <img src={manualValue} alt="" />
+                          ) : (
+                            <ImageIcon />
+                          )}
+                        </div>
+                        <label>
+                          <span>Link da imagem</span>
+                          <input
+                            type="url"
+                            value={manualValue.startsWith("data:") ? "" : manualValue}
+                            placeholder="https://..."
+                            onChange={(event) => {
+                              setImageEditorError("");
+                              setManualImage(item.id, event.target.value);
+                            }}
+                          />
+                        </label>
+                        <label className="catalogUploadImageButton">
+                          <Upload />
+                          <span>Enviar arquivo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (event) => {
+                              const selected = event.target.files?.[0];
+                              if (!selected) return;
+                              try {
+                                setImageEditorError("");
+                                const dataUrl = await catalogFileToDataUrl(selected);
+                                setManualImage(item.id, dataUrl);
+                              } catch (error) {
+                                setImageEditorError(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Não foi possível processar a imagem.",
+                                );
+                              } finally {
+                                event.currentTarget.value = "";
+                              }
+                            }}
+                          />
+                        </label>
+                        {manualValue ? (
+                          <button
+                            type="button"
+                            className="catalogRemoveManualImage"
+                            onClick={() => removeManualImage(item.id)}
+                          >
+                            <Trash2 />
+                            Remover manual
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="catalogManualImagesEmpty">
+                  Nenhum perfume precisa de imagem manual neste momento.
+                </p>
+              )}
+            </section>
+
             <div className="catalogEditorSections">
               {editorSections.map((section) => (
                 <section key={section.title} className="catalogEditorSection">
@@ -899,7 +1110,12 @@ export function CatalogAdminPreview({
               <button
                 type="button"
                 className="catalogResetButton"
-                onClick={() => setDraft({ ...DEFAULT_CATALOG_SETTINGS })}
+                onClick={() =>
+                  setDraft({
+                    ...DEFAULT_CATALOG_SETTINGS,
+                    manualImages: { ...draft.manualImages },
+                  })
+                }
               >
                 <RotateCcw />
                 Restaurar padrão
@@ -917,7 +1133,7 @@ export function CatalogAdminPreview({
                   }}
                 >
                   <Save />
-                  Salvar cores
+                  Salvar catálogo
                 </button>
               </div>
             </footer>
@@ -948,14 +1164,18 @@ export function PublicCatalog() {
     async function localCatalogFallback() {
       try {
         const stored = JSON.parse(window.localStorage.getItem("daf-v4") || "null");
+        const fallbackSettings = normalizeCatalogSettings(
+          stored?.catalogSettings,
+        );
         const fallbackItems = catalogItemsFromProducts(
           Array.isArray(stored?.products) ? stored.products : [],
+          fallbackSettings.manualImages,
         );
         if (fallbackItems.length) {
           const resolved = await enrichCatalogItemsWithImages(fallbackItems);
           if (!active) return true;
           setItems(resolved);
-          setSettings(normalizeCatalogSettings(stored?.catalogSettings));
+          setSettings(fallbackSettings);
           setUpdatedAt(new Date().toISOString());
           setState("ready");
           return true;
