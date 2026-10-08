@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
 import {crmProjection} from '../src/crm/projection.ts';
+import {feedErrorMessage} from '../src/crm/feed-status.ts';
 
 const owner='00000000-0000-4000-8000-000000000001';
 const other='00000000-0000-4000-8000-000000000002';
@@ -61,4 +62,12 @@ test('PostgreSQL feed: account scope, revocation, read-only grants and bottle ev
   await db.query('SELECT public.daf_crm_revoke_token()');
   await assert.rejects(db.query("SELECT public.daf_crm_feed($1, 'daf-crm-feed-v2')",[rotated]),/Invalid read/);
  } finally { await db.close(); }
+});
+
+test('integration failures distinguish installation, access, empty state and uncertain network result',()=>{
+ assert.match(feedErrorMessage({code:'PGRST202'},'issue'),/migração/);
+ assert.match(feedErrorMessage({code:'42501'},'revoke'),/sessão/);
+ assert.match(feedErrorMessage({code:'PGRST116'},'export'),/Nenhuma base/);
+ assert.match(feedErrorMessage({},'issue'),/mesmo sem resposta/);
+ assert.match(feedErrorMessage({},'export'),/conexão/);
 });
