@@ -1507,21 +1507,44 @@ const action =
 
 function normalizeData(stored: any): D {
   const merged = { ...blank, ...stored };
+  const bottleNumberRemaps = new Map<number, Map<number, number>>();
   const normalizedProducts = (merged.products || []).map((p: P) => {
     const parsed = parseBottleMarker(p.name);
     const storedCurrent = Math.max(0, Number(p.bottleNumber) || 0);
-    const historyCurrent = Array.isArray(p.bottleHistory)
-      ? Math.max(
-          0,
-          ...p.bottleHistory.map((entry) => Number(entry.number) || 0),
-        )
+    const rawHistory = Array.isArray(p.bottleHistory)
+      ? p.bottleHistory.map((entry) => ({
+          ...entry,
+          number: Math.max(1, Number(entry.number) || 1),
+        }))
+      : [];
+    const historyCurrent = rawHistory.length
+      ? Math.max(0, ...rawHistory.map((entry) => entry.number))
       : 0;
+    // Se o usuário corrigiu manualmente o frasco atual para um número menor,
+    // essa informação é soberana. O histórico acima desse número era uma
+    // numeração incorreta e deve acompanhar o frasco corrigido.
     const inferredNumber = Math.max(
       1,
-      storedCurrent,
-      historyCurrent,
-      parsed.number || 0,
+      storedCurrent || parsed.number || historyCurrent || 1,
     );
+    let historyForCurrent = rawHistory;
+    if (historyCurrent > inferredNumber) {
+      const staleEntries = rawHistory
+        .filter((entry) => entry.number > inferredNumber)
+        .sort((a, b) => b.number - a.number);
+      const staleCurrent = staleEntries[0];
+      const remap = new Map<number, number>();
+      staleEntries.forEach((entry) => remap.set(entry.number, inferredNumber));
+      bottleNumberRemaps.set(p.id, remap);
+      historyForCurrent = [
+        ...rawHistory.filter((entry) => entry.number < inferredNumber),
+        {
+          ...(staleCurrent || {}),
+          number: inferredNumber,
+          assumedSold: false,
+        },
+      ];
+    }
     return {
       ...p,
       name: parsed.name,
@@ -1530,9 +1553,15 @@ function normalizeData(stored: any): D {
       apc: p.apc ?? 1,
       bottleNumber: inferredNumber,
       bottleHistory:
-        parsed.number && !(Array.isArray(p.bottleHistory) && p.bottleHistory.length)
-          ? [{ number: parsed.number }]
-          : normalizeBottleHistory(p, inferredNumber),
+        parsed.number && !rawHistory.length
+          ? normalizeBottleHistory(
+              { ...p, bottleHistory: [{ number: parsed.number }] },
+              inferredNumber,
+            )
+          : normalizeBottleHistory(
+              { ...p, bottleHistory: historyForCurrent },
+              inferredNumber,
+            ),
     };
   });
 
@@ -1559,16 +1588,43 @@ function normalizeData(stored: any): D {
         bottleByOldNumber.set(entry.number, entry.number),
       );
       const currentBottle = Math.max(1, Number(product.bottleNumber) || 1);
+      const detectedRemap = bottleNumberRemaps.get(product.id);
+      detectedRemap?.forEach((newNumber, oldNumber) =>
+        bottleByOldNumber.set(oldNumber, newNumber),
+      );
+
+      const isVibrato =
+        perfumeIdentity(product.brand, product.name) === "sospiro vibrato";
+      if (isVibrato && currentBottle >= 4) {
+        // Estes pedidos foram registrados antes do controle correto de frascos
+        // e pertencem ao frasco imediatamente anterior ao atual (frasco 3).
+        bottleByOldNumber.set(1, currentBottle - 1);
+      }
+
       productAliases.set(product.id, {
         productId: product.id,
         bottleByOldNumber,
-        // Vendas antigas sem número de frasco pertencem ao primeiro frasco.
+        // Registros sem numeração pertencem ao último frasco encerrado.
         fallbackBottle:
-          (product.bottleHistory?.length || 0) > 1 ? 1 : currentBottle,
+          (product.bottleHistory?.length || 0) > 1
+            ? Math.max(1, currentBottle - 1)
+            : currentBottle,
       });
+
+      const normalizedHistory = normalizeBottleHistory(product, currentBottle);
       products.push({
         ...product,
-        bottleHistory: normalizeBottleHistory(product, currentBottle),
+        bottleHistory: isVibrato && currentBottle >= 4
+          ? normalizedHistory.map((entry) => ({
+              ...entry,
+              assumedSold:
+                entry.number < currentBottle - 1
+                  ? true
+                  : entry.number === currentBottle - 1
+                    ? false
+                    : entry.assumedSold,
+            }))
+          : normalizedHistory,
       });
       return;
     }
@@ -9174,6 +9230,7 @@ function Form({
   const [saleVolumes, setSaleVolumes] = useState<number[]>(
     existingSale?.items.map((item) => item.ml) || [],
   );
+  const stockWarningActive = useRef<Record<number, boolean>>({});
   const [clientDraft, setClientDraft] = useState({
     name: existingClient?.name || "",
     phone: formatClientPhone(existingClient?.phone || ""),
@@ -9370,10 +9427,33 @@ function Form({
         const previousHistory = existingProduct?.bottleHistory?.length
           ? [...existingProduct.bottleHistory]
           : normalizeBottleHistory(existingProduct || {}, bottleNumber);
+        const previousBottleNumber = Math.max(
+          1,
+          Number(existingProduct?.bottleNumber) || bottleNumber,
+        );
+        const reducingBottleNumber =
+          Boolean(existingProduct) && bottleNumber < previousBottleNumber;
+        const previousCurrentEntry = reducingBottleNumber
+          ? previousHistory.find(
+              (entry) => entry.number === previousBottleNumber,
+            )
+          : undefined;
+        const historySource = reducingBottleNumber
+          ? [
+              ...previousHistory.filter(
+                (entry) => entry.number < bottleNumber,
+              ),
+              {
+                ...(previousCurrentEntry || {}),
+                number: bottleNumber,
+                assumedSold: false,
+              },
+            ]
+          : previousHistory;
         const bottleHistory = normalizeBottleHistory(
           {
             ...(existingProduct || {}),
-            bottleHistory: previousHistory,
+            bottleHistory: historySource,
           },
           bottleNumber,
         );
@@ -9384,9 +9464,23 @@ function Form({
           bottleHistory,
         };
         const brands = x.brands.includes(brand) ? x.brands : [...x.brands, brand];
+        const sales =
+          existingProduct && reducingBottleNumber
+            ? x.sales.map((sale) => ({
+                ...sale,
+                items: sale.items.map((item) =>
+                  item.productId === existingProduct.id &&
+                  (item.bottleNumber || previousBottleNumber) ===
+                    previousBottleNumber
+                    ? { ...item, bottleNumber }
+                    : item,
+                ),
+              }))
+            : x.sales;
         return {
           ...x,
           brands,
+          sales,
           products: existingProduct
             ? x.products.map((p) => (p.id === product.id ? product : p))
             : [...x.products, product],
@@ -10090,12 +10184,87 @@ function Form({
                     l="Volume (ml)"
                     decimalOnly
                     v={existingSale?.items[i]?.ml}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const nextValue = Math.max(
+                        0,
+                        parseDecimal(event.target.value),
+                      );
                       setSaleVolumes((current) => {
                         const next = [...current];
-                        next[i] = parseDecimal(event.target.value);
+                        next[i] = nextValue;
                         return next;
-                      })
+                      });
+
+                      const form = event.currentTarget.form;
+                      const typedProduct = String(
+                        (
+                          form?.elements.namedItem(
+                            "productName" + i,
+                          ) as HTMLInputElement | null
+                        )?.value || "",
+                      );
+                      const product = d.products.find(
+                        (candidate) =>
+                          `${candidate.brand} ${candidate.name}` ===
+                          typedProduct,
+                      );
+                      if (!product || !form) {
+                        stockWarningActive.current[i] = false;
+                        return;
+                      }
+
+                      const requestedTotal = Array.from(
+                        { length: lines },
+                        (_, lineIndex) => {
+                          const lineProduct = String(
+                            (
+                              form.elements.namedItem(
+                                "productName" + lineIndex,
+                              ) as HTMLInputElement | null
+                            )?.value || "",
+                          );
+                          if (lineProduct !== typedProduct) return 0;
+                          if (lineIndex === i) return nextValue;
+                          return Math.max(
+                            0,
+                            parseDecimal(
+                              (
+                                form.elements.namedItem(
+                                  "ml" + lineIndex,
+                                ) as HTMLInputElement | null
+                              )?.value,
+                            ),
+                          );
+                        },
+                      ).reduce((sum, value) => sum + value, 0);
+
+                      const restoredMl =
+                        existingSale && existingSale.status !== "cancelled"
+                          ? existingSale.items
+                              .filter(
+                                (item) => item.productId === product.id,
+                              )
+                              .reduce((sum, item) => sum + item.ml, 0)
+                          : 0;
+                      const availableMl = Math.max(
+                        0,
+                        product.stock + restoredMl,
+                      );
+
+                      if (requestedTotal > availableMl + 0.0001) {
+                        if (!stockWarningActive.current[i]) {
+                          stockWarningActive.current[i] = true;
+                          const formatStockMl = (value: number) =>
+                            value.toLocaleString("pt-BR", {
+                              maximumFractionDigits: 2,
+                            });
+                          window.alert(
+                            `Não há volume suficiente de ${product.brand} ${product.name}. Você está tentando lançar ${formatStockMl(requestedTotal)} ml, mas há apenas ${formatStockMl(availableMl)} ml disponíveis em estoque.`,
+                          );
+                        }
+                      } else {
+                        stockWarningActive.current[i] = false;
+                      }
                     }
                   />
                   <button
