@@ -36,3 +36,9 @@ Uma simulação local de merge com fabio encontrou três conflitos: imports do c
 Definir com o mantenedor se a integração será levada primeiro a fabio ou se o trabalho dessa branch será integrado à main. Não resolver isso substituindo App.tsx antigo. Validar o modelo de saldo por frasco antes de liberar APC de produtos agregados. Somente depois, com autorização de ativação, instalar o SQL em ambiente de teste, configurar o token no CRM e realizar teste controlado de WhatsApp. Nenhuma migração, dado de produção, pareamento ou mensagem real foi executada nesta revisão.
 
 O contrato v2 também é exigido na requisição (`p_contract_version`), não apenas na resposta. A assinatura antiga do RPC é mantida sem permissão de uso; clientes antigos falham de forma segura em vez de ignorar os frascos agregados. Na ativação, publicar primeiro o CRM consolidado com envio desabilitado. Os testes incluem rejeição do consumidor antigo e da versão de contrato incorreta.
+
+## Atualização de 8/10 — finalização
+
+O usuário confirmou esta PR como branch oficial, encerrando por ora o acompanhamento de fabio. A main foi reconferida e não avançou. As instruções de alinhar/incorporar essa outra branch acima são históricas, não uma pendência operacional desta versão.
+
+A revisão pontual encontrou também na main a soma de compras sem evidência de frasco. O CRM agora bloqueia saldo não validado, além dos agregados explícitos; não inventa saldo individual. O SQL v2 e as quatro linhas do App.tsx permaneceram intactos nesta execução. O relatório atual é `CRM-VALIDACAO-2026-10-08.md`; ele prevalece para o estado de validação, preview e próxima etapa, preservando as decisões arquiteturais anteriores.

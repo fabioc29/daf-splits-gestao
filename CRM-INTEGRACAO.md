@@ -39,3 +39,11 @@ Com Node compatível com a execução de TypeScript nativo e as dependências do
 A main foi verificada antes e depois da revisão. O trabalho recente de Fábio está na branch `fabio`, não na main. Antes de integrar com ela, consulte `CRM-CHECKPOINT.md` e o patch de quatro linhas para seu App.tsx. Não substitua seu App.tsx pelo arquivo desta branch.
 
 O pedido à API exige `p_contract_version=daf-crm-feed-v2`. A assinatura antiga com apenas token é preservada, mas seu acesso é revogado e ela rejeita a operação: isso impede o CRM antigo de consumir silenciosamente dados cujo histórico de frascos ele ignora. Na ativação, publicar primeiro o CRM consolidado com envios desabilitados; configurar a leitura e verificar os bloqueios antes de qualquer pareamento/envio autorizado.
+
+## Finalização de 8/10 — branch oficial e lotes não comprovados
+
+A branch oficial para esta integração é `crm/read-only-feed-20261006`, PR #17 sobre main. O acompanhamento de fabio mencionado acima pertence ao checkpoint histórico; não é uma ação pendente desta entrega. A main continua em `0ffcfd65edf9141f44c0fd31c1370b226438bf9c`.
+
+A própria main soma novas compras a um produto encontrado por marca/nome, sem guardar evidência de cada frasco. Portanto, ausência de bottleHistory não comprova um lote. O consumidor consolidado marca o saldo como não validado, mantendo-o visível e bloqueando copies/APC. Só evidencia explícita de um único frasco com volume válido autoriza esse uso. Não preencher histórico fictício nem repartir ml por inferência. A modelagem autoritativa por lote é desenvolvimento pendente; uma chave de leitura não a substitui.
+
+A tela de integração distingue carregamento, função ausente, autorização, base vazia e resposta de rede incerta. Operações de token com resposta perdida devem ser conferidas antes de repetir. O CRM que acompanha a PR foi consolidado com tráfego real de saída e entrada desabilitado. Consulte `CRM-VALIDACAO-2026-10-08.md` para testes, preview, pendências e limites de revisão.
