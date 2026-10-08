@@ -447,11 +447,15 @@ const parseDecimal = (value: unknown) =>
 
 function parseBottleMarker(value: unknown) {
   const original = String(value || "").trim();
-  const match = original.match(/\s*\(\s*frasco\s*(\d+)\s*\)\s*$/i);
+  const explicitMatch = original.match(/\s*\(\s*frasco\s*(\d+)\s*\)\s*$/i);
+  const legacyMatch = original.match(/\s*\(\s*(\d{1,2})\s*\)\s*$/);
+  const legacyNumber = legacyMatch ? Number(legacyMatch[1]) : 0;
+  const match =
+    explicitMatch || (legacyMatch && legacyNumber >= 1 && legacyNumber <= 20
+      ? legacyMatch
+      : null);
   const number = match ? Math.max(1, Number(match[1]) || 1) : undefined;
-  const name = original
-    .replace(/\s*\(\s*frasco\s*\d+\s*\)\s*$/i, "")
-    .trim();
+  const name = match ? original.slice(0, match.index).trim() : original;
   return { name, number };
 }
 
@@ -1481,7 +1485,7 @@ const action =
 
 function normalizeData(stored: any): D {
   const merged = { ...blank, ...stored };
-  const products = (merged.products || []).map((p: P) => {
+  const normalizedProducts = (merged.products || []).map((p: P) => {
     const parsed = parseBottleMarker(p.name);
     const storedCurrent = Math.max(0, Number(p.bottleNumber) || 0);
     const historyCurrent = Array.isArray(p.bottleHistory)
@@ -1506,6 +1510,149 @@ function normalizeData(stored: any): D {
       bottleHistory: normalizeBottleHistory(p, inferredNumber),
     };
   });
+
+  type ProductAlias = {
+    productId: number;
+    bottleByOldNumber: Map<number, number>;
+    fallbackBottle: number;
+  };
+  const productAliases = new Map<number, ProductAlias>();
+  const productGroups = new Map<string, P[]>();
+  normalizedProducts.forEach((product: P) => {
+    const key = perfumeIdentity(product.brand, product.name);
+    const current = productGroups.get(key) || [];
+    current.push(product);
+    productGroups.set(key, current);
+  });
+
+  const products: P[] = [];
+  productGroups.forEach((group) => {
+    if (group.length === 1) {
+      const product = group[0];
+      const bottleByOldNumber = new Map<number, number>();
+      (product.bottleHistory || []).forEach((entry) =>
+        bottleByOldNumber.set(entry.number, entry.number),
+      );
+      const currentBottle = Math.max(1, Number(product.bottleNumber) || 1);
+      productAliases.set(product.id, {
+        productId: product.id,
+        bottleByOldNumber,
+        // Vendas antigas sem número de frasco pertencem ao primeiro frasco.
+        fallbackBottle:
+          (product.bottleHistory?.length || 0) > 1 ? 1 : currentBottle,
+      });
+      products.push(product);
+      return;
+    }
+
+    const tokens = group.flatMap((product) => {
+      const history = product.bottleHistory?.length
+        ? product.bottleHistory
+        : [{ number: Math.max(1, Number(product.bottleNumber) || 1) }];
+      return history.map((entry, historyIndex) => ({
+        sourceId: product.id,
+        oldNumber: Math.max(1, Number(entry.number) || 1),
+        sourceCurrent: Math.max(1, Number(product.bottleNumber) || 1),
+        sourceIndex: historyIndex,
+        entry,
+      }));
+    });
+
+    tokens.sort((a, b) => {
+      const aDate = String(a.entry.date || "");
+      const bDate = String(b.entry.date || "");
+      if (aDate && bDate && aDate !== bDate) return aDate.localeCompare(bDate);
+      if (aDate && !bDate) return 1;
+      if (!aDate && bDate) return -1;
+      return a.sourceId - b.sourceId || a.sourceIndex - b.sourceIndex;
+    });
+
+    const purchaseBottleNumbers = new Map<number, number>();
+    const sourceBottleMaps = new Map<number, Map<number, number>>();
+    const mergedHistory: BottleHistoryEntry[] = [];
+    let nextBottleNumber = 1;
+
+    tokens.forEach((token) => {
+      const purchaseId = token.entry.purchaseId
+        ? Number(token.entry.purchaseId)
+        : undefined;
+      let newNumber =
+        purchaseId && purchaseBottleNumbers.has(purchaseId)
+          ? purchaseBottleNumbers.get(purchaseId)!
+          : nextBottleNumber++;
+
+      if (purchaseId && !purchaseBottleNumbers.has(purchaseId)) {
+        purchaseBottleNumbers.set(purchaseId, newNumber);
+      }
+      if (!sourceBottleMaps.has(token.sourceId)) {
+        sourceBottleMaps.set(token.sourceId, new Map<number, number>());
+      }
+      sourceBottleMaps.get(token.sourceId)!.set(token.oldNumber, newNumber);
+
+      if (!mergedHistory.some((entry) => entry.number === newNumber)) {
+        mergedHistory.push({
+          number: newNumber,
+          date: token.entry.date,
+          purchaseId,
+          ml: token.entry.ml ? Number(token.entry.ml) : undefined,
+        });
+      }
+    });
+
+    const sourceCurrentBottle = (product: P) => {
+      const map = sourceBottleMaps.get(product.id) || new Map<number, number>();
+      return (
+        map.get(Math.max(1, Number(product.bottleNumber) || 1)) ||
+        Math.max(1, ...Array.from(map.values()))
+      );
+    };
+
+    const canonical = [...group].sort((a, b) => {
+      const bottleDelta = sourceCurrentBottle(b) - sourceCurrentBottle(a);
+      if (bottleDelta) return bottleDelta;
+      const activeDelta = Number(b.stock > 0) - Number(a.stock > 0);
+      if (activeDelta) return activeDelta;
+      return b.id - a.id;
+    })[0];
+
+    group.forEach((product) => {
+      productAliases.set(product.id, {
+        productId: canonical.id,
+        bottleByOldNumber:
+          sourceBottleMaps.get(product.id) || new Map<number, number>(),
+        fallbackBottle: sourceCurrentBottle(product),
+      });
+    });
+
+    const positiveVolume = group.reduce(
+      (sum, product) => sum + Math.max(0, Number(product.stock) || 0),
+      0,
+    );
+    const weightedCost =
+      positiveVolume > 0
+        ? group.reduce(
+            (sum, product) =>
+              sum +
+              Math.max(0, Number(product.stock) || 0) *
+                Math.max(0, Number(product.cost) || 0),
+            0,
+          ) / positiveVolume
+        : Math.max(0, Number(canonical.cost) || 0);
+
+    products.push({
+      ...canonical,
+      name: parseBottleMarker(canonical.name).name,
+      stock: positiveVolume,
+      cost: weightedCost,
+      apc: group.some((product) => Number(product.apc) > 0) ? 1 : 0,
+      bottleNumber: Math.max(
+        1,
+        ...mergedHistory.map((entry) => entry.number),
+      ),
+      bottleHistory: mergedHistory.sort((a, b) => a.number - b.number),
+    });
+  });
+
   const brands = Array.from(
     new Set([
       ...(merged.brands || []),
@@ -1652,17 +1799,30 @@ function normalizeData(stored: any): D {
       historical:
         Boolean(s.historical) ||
         (!marketplaceSale && (s.items || []).length === 0),
-      items: (s.items || []).map((item: L) => ({
-        ...item,
-        isApc: Boolean(item.isApc),
-        bottleNumber: item.bottleNumber
+      items: (s.items || []).map((item: L) => {
+        const alias = productAliases.get(item.productId);
+        const oldBottleNumber = item.bottleNumber
           ? Math.max(1, Number(item.bottleNumber))
-          : undefined,
-        unitCost:
-          item.unitCost ??
-          products.find((p: P) => p.id === item.productId)?.cost ??
-          0,
-      })),
+          : undefined;
+        const bottleNumber = alias
+          ? oldBottleNumber
+            ? alias.bottleByOldNumber.get(oldBottleNumber) ||
+              alias.fallbackBottle
+            : alias.fallbackBottle
+          : oldBottleNumber;
+        return {
+          ...item,
+          productId: alias?.productId || item.productId,
+          isApc: Boolean(item.isApc),
+          bottleNumber,
+          unitCost:
+            item.unitCost ??
+            normalizedProducts.find((p: P) => p.id === item.productId)?.cost ??
+            products.find((p: P) => p.id === (alias?.productId || item.productId))
+              ?.cost ??
+            0,
+        };
+      }),
       installments: s.installments?.length
         ? s.installments
         : s.dueDate
@@ -6701,7 +6861,10 @@ function Stock({
     [brand, setBrand] = useState("Todas"),
     [query, setQuery] = useState(""),
     [productHistoryPickerOpen, setProductHistoryPickerOpen] = useState(false),
-    [productHistoryId, setProductHistoryId] = useState<number | null>(null);
+    [productHistoryId, setProductHistoryId] = useState<number | null>(null),
+    [productHistoryBottle, setProductHistoryBottle] = useState<number | null>(
+      null,
+    );
   const view = mode === "supplies" ? "supplies" : apcOnly ? "apc" : "perfumes";
   const brands = Array.from(new Set(d.products.map((p) => p.brand))).sort(
     (a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }),
@@ -6713,6 +6876,17 @@ function Stock({
   const historyProduct = productHistoryId
     ? d.products.find((product) => product.id === productHistoryId)
     : undefined;
+  const selectedBottleNumber =
+    productHistoryBottle || historyProduct?.bottleNumber || 1;
+
+  useEffect(() => {
+    if (!historyProduct) {
+      setProductHistoryBottle(null);
+      return;
+    }
+    setProductHistoryBottle(historyProduct.bottleNumber || 1);
+  }, [productHistoryId, historyProduct?.bottleNumber]);
+
   const productHistoryRows = historyProduct
     ? d.sales
         .filter(
@@ -6723,7 +6897,9 @@ function Stock({
         )
         .map((sale) => {
           const matchingItems = sale.items.filter(
-            (item) => item.productId === historyProduct.id,
+            (item) =>
+              item.productId === historyProduct.id &&
+              (item.bottleNumber || 1) === selectedBottleNumber,
           );
           return {
             sale,
@@ -6731,13 +6907,12 @@ function Stock({
             hasApc: matchingItems.some((item) => item.isApc),
             bottleNumbers: Array.from(
               new Set(
-                matchingItems
-                  .map((item) => item.bottleNumber)
-                  .filter((number): number is number => Boolean(number)),
+                matchingItems.map((item) => item.bottleNumber || 1),
               ),
             ).sort((a, b) => a - b),
           };
         })
+        .filter((row) => row.ml > 0)
         .sort(
           (a, b) =>
             b.sale.date.localeCompare(a.sale.date) || b.sale.id - a.sale.id,
@@ -6747,9 +6922,20 @@ function Stock({
     (sum, row) => sum + row.ml,
     0,
   );
-  const historyRegisteredMl = historyProduct
-    ? Math.max(0, historyProduct.stock) + historySoldMl
+  const selectedBottleEntry = historyProduct?.bottleHistory?.find(
+    (entry) => entry.number === selectedBottleNumber,
+  );
+  const currentBottleNumber = historyProduct?.bottleNumber || 1;
+  const historyRemainingMl = historyProduct
+    ? selectedBottleNumber === currentBottleNumber
+      ? Math.max(0, historyProduct.stock)
+      : Math.max(
+          0,
+          Number(selectedBottleEntry?.ml || historySoldMl) - historySoldMl,
+        )
     : 0;
+  const historyRegisteredMl =
+    Number(selectedBottleEntry?.ml) || historyRemainingMl + historySoldMl;
   const formatMl = (value: number) =>
     `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ml`;
   const formatCopyMl = (value: number) =>
@@ -6766,9 +6952,7 @@ function Stock({
         `${formatCopyMl(ml)} — ${saleCustomer(sale, d)}`,
     );
     lines.push(
-      `📊 ESTOQUE: ${formatCopyMl(
-        Math.max(0, historyProduct.stock),
-      )} disponíveis`,
+      `📊 ESTOQUE: ${formatCopyMl(historyRemainingMl)} disponíveis`,
     );
     const text = lines.join("\n");
     try {
@@ -6784,17 +6968,25 @@ function Stock({
       document.execCommand("copy");
       textarea.remove();
     }
-    notify("Pedidos do perfume copiados.");
+    notify(
+      `Pedidos do frasco nº ${selectedBottleNumber} copiados.`,
+    );
   }
 
-  const filtered = d.products.filter(
-    (p) =>
-      p.stock > 0 &&
-      (!apcOnly || p.apc > 0) &&
-      (category === "Todos" || p.category === category) &&
-      (brand === "Todas" || p.brand === brand) &&
-      `${p.brand} ${p.name}`.toLowerCase().includes(query.toLowerCase()),
-  );
+  const filtered = d.products
+    .filter(
+      (p) =>
+        p.stock > 0 &&
+        (!apcOnly || p.apc > 0) &&
+        (category === "Todos" || p.category === category) &&
+        (brand === "Todas" || p.brand === brand) &&
+        `${p.brand} ${p.name}`.toLowerCase().includes(query.toLowerCase()),
+    )
+    .sort((a, b) =>
+      `${a.brand} ${a.name}`.localeCompare(`${b.brand} ${b.name}`, "pt-BR", {
+        sensitivity: "base",
+      }),
+    );
   function removeProduct(id: number) {
     if (!window.confirm("Excluir este perfume do estoque?")) return;
     set((x: D) => ({ ...x, products: x.products.filter((p) => p.id !== id) }));
@@ -6899,46 +7091,68 @@ function Stock({
               {apcOnly ? "Somente APC" : "Filtrar APC"}
             </button>
           </div>
-          <div className="products">
-            {filtered.map((p) => (
-              <div key={p.id}>
-                <span>
-                  {p.category} · {p.gender || "Unissex"}
-                </span>
-                <h3>
-                  {p.brand} {p.name}
-                </h3>
-                <p>
-                  {p.stock} ml · {brl(p.cost)} por ml
-                </p>
-                <p className="productBottleLine">
-                  Identificação do frasco: nº {p.bottleNumber || 1}
-                </p>
-                <p className={p.apc ? "apcAvailable" : "apcUnavailable"}>
-                  APC: {p.apc ? "1 disponível" : "indisponível"}
-                </p>
-                <div className="tableActions">
-                  <button className="iconButton" onClick={() => edit(p.id)}>
-                    <Pencil />
-                    Editar
-                  </button>
-                  <button
-                    className="iconButton danger"
-                    onClick={() => removeProduct(p.id)}
-                  >
-                    <Trash2 />
-                    Excluir
-                  </button>
-                  <button
-                    className="iconButton productCardHistoryButton"
-                    onClick={() => setProductHistoryId(p.id)}
-                  >
-                    <ReceiptText />
-                    Histórico
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="panel table productStockTablePanel">
+            <table className="productStockTable">
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Categoria</th>
+                  <th>Preço do custo do ml</th>
+                  <th>Mls disponíveis</th>
+                  <th>Frasco atual</th>
+                  <th>APC</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((p) => (
+                  <tr key={p.id}>
+                    <td className="productStockName">
+                      <strong>{p.brand} {p.name}</strong>
+                      <small>{p.gender || "Unissex"}</small>
+                    </td>
+                    <td>{p.category}</td>
+                    <td>{brl(p.cost)}</td>
+                    <td>
+                      <strong>{formatMl(Math.max(0, p.stock))}</strong>
+                    </td>
+                    <td>Frasco nº {p.bottleNumber || 1}</td>
+                    <td>
+                      <span className={p.apc ? "apcAvailable" : "apcUnavailable"}>
+                        {p.apc ? "Disponível" : "Indisponível"}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="tableActions productStockActions">
+                        <button className="iconButton" onClick={() => edit(p.id)}>
+                          <Pencil />
+                          Editar
+                        </button>
+                        <button
+                          className="iconButton danger"
+                          onClick={() => removeProduct(p.id)}
+                        >
+                          <Trash2 />
+                          Excluir
+                        </button>
+                        <button
+                          className="iconButton productCardHistoryButton"
+                          onClick={() => setProductHistoryId(p.id)}
+                        >
+                          <ReceiptText />
+                          Histórico
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!filtered.length ? (
+              <p className="empty productStockEmpty">
+                Nenhum perfume encontrado com os filtros selecionados.
+              </p>
+            ) : null}
           </div>
         </>
       ) : (
@@ -7050,24 +7264,30 @@ function Stock({
               </div>
               <div className="productBottleSequence">
                 {(historyProduct.bottleHistory || []).map((entry) => (
-                  <span
+                  <button
+                    type="button"
                     key={entry.number}
-                    className={
+                    onClick={() => setProductHistoryBottle(entry.number)}
+                    className={[
                       entry.number === (historyProduct.bottleNumber || 1)
                         ? "current"
-                        : ""
-                    }
+                        : "",
+                      entry.number === selectedBottleNumber ? "selected" : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    aria-pressed={entry.number === selectedBottleNumber}
                   >
                     Frasco nº {entry.number}
                     {entry.date ? <small>{dateBR(entry.date)}</small> : null}
-                  </span>
+                  </button>
                 ))}
               </div>
             </div>
 
             <div className="productHistoryStats">
               <div>
-                <span>ML cadastrados</span>
+                <span>ML cadastrados · Frasco nº {selectedBottleNumber}</span>
                 <b>{formatMl(historyRegisteredMl)}</b>
               </div>
               <div>
@@ -7075,8 +7295,8 @@ function Stock({
                 <b>{formatMl(historySoldMl)}</b>
               </div>
               <div>
-                <span>ML restantes</span>
-                <b>{formatMl(Math.max(0, historyProduct.stock))}</b>
+                <span>ML restantes · Frasco nº {selectedBottleNumber}</span>
+                <b>{formatMl(historyRemainingMl)}</b>
               </div>
             </div>
 
