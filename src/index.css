@@ -9545,3 +9545,142 @@ aside nav {
     justify-content: center;
   }
 }
+
+
+/* Estoque de perfumes em lista vertical */
+.productStockTablePanel {
+  padding: 0 !important;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.productStockTable {
+  width: 100%;
+  min-width: 1040px;
+  border-collapse: collapse;
+}
+
+.productStockTable th,
+.productStockTable td {
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.productStockTable th {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.productStockTable td {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.productStockTable tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.productStockTable tbody tr:hover {
+  background: var(--hover);
+}
+
+.productStockName strong,
+.productStockName small {
+  display: block;
+}
+
+.productStockName strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.productStockName small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.productStockTable .apcAvailable,
+.productStockTable .apcUnavailable {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.productStockTable .apcAvailable {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+
+.productStockTable .apcUnavailable {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.productStockActions {
+  min-width: 280px;
+  justify-content: flex-end;
+}
+
+.productStockEmpty {
+  margin: 0;
+  padding: 18px;
+}
+
+/* Frascos do histórico agora funcionam como filtro */
+.productBottleSequence > button {
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid #d8dde5;
+  border-radius: 9px;
+  background: #fff;
+  color: #647185;
+  font-size: 9px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.productBottleSequence > button:hover {
+  border-color: var(--accent);
+}
+
+.productBottleSequence > button.current {
+  border-color: #d8ae43;
+  background: #fff8e4;
+  color: #8b6500;
+}
+
+.productBottleSequence > button.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.productBottleSequence > button.current.selected {
+  outline-color: #d8ae43;
+}
+
+.productBottleSequence > button small {
+  display: block;
+  margin-top: 2px;
+  font-size: 7px;
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .productStockTable {
+    min-width: 960px;
+  }
+
+  .productStockActions {
+    min-width: 245px;
+  }
+}
