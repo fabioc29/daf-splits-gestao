@@ -10184,89 +10184,13 @@ function Form({
                     l="Volume (ml)"
                     decimalOnly
                     v={existingSale?.items[i]?.ml}
-                    onChange={(event) => {
-                      const nextValue = Math.max(
-                        0,
-                        parseDecimal(event.target.value),
-                      );
+                    onChange={(event) =>
                       setSaleVolumes((current) => {
                         const next = [...current];
-                        next[i] = nextValue;
+                        next[i] = parseDecimal(event.target.value);
                         return next;
-                      });
-
-                      const form = event.currentTarget.form;
-                      const typedProduct = String(
-                        (
-                          form?.elements.namedItem(
-                            "productName" + i,
-                          ) as HTMLInputElement | null
-                        )?.value || "",
-                      );
-                      const product = d.products.find(
-                        (candidate) =>
-                          `${candidate.brand} ${candidate.name}` ===
-                          typedProduct,
-                      );
-                      if (!product || !form) {
-                        stockWarningActive.current[i] = false;
-                        return;
-                      }
-
-                      const requestedTotal = Array.from(
-                        { length: lines },
-                        (_, lineIndex) => {
-                          const lineProduct = String(
-                            (
-                              form.elements.namedItem(
-                                "productName" + lineIndex,
-                              ) as HTMLInputElement | null
-                            )?.value || "",
-                          );
-                          if (lineProduct !== typedProduct) return 0;
-                          if (lineIndex === i) return nextValue;
-                          return Math.max(
-                            0,
-                            parseDecimal(
-                              (
-                                form.elements.namedItem(
-                                  "ml" + lineIndex,
-                                ) as HTMLInputElement | null
-                              )?.value,
-                            ),
-                          );
-                        },
-                      ).reduce((sum, value) => sum + value, 0);
-
-                      const restoredMl =
-                        existingSale && existingSale.status !== "cancelled"
-                          ? existingSale.items
-                              .filter(
-                                (item) => item.productId === product.id,
-                              )
-                              .reduce((sum, item) => sum + item.ml, 0)
-                          : 0;
-                      const availableMl = Math.max(
-                        0,
-                        product.stock + restoredMl,
-                      );
-
-                      if (requestedTotal > availableMl + 0.0001) {
-                        if (!stockWarningActive.current[i]) {
-                          stockWarningActive.current[i] = true;
-                          const formatStockMl = (value: number) =>
-                            value.toLocaleString("pt-BR", {
-                              maximumFractionDigits: 2,
-                            });
-                          window.alert(
-                            `Não há volume suficiente de ${product.brand} ${product.name}. Você está tentando lançar ${formatStockMl(requestedTotal)} ml, mas há apenas ${formatStockMl(availableMl)} ml disponíveis em estoque.`,
-                          );
-                        }
-                      } else {
-                        stockWarningActive.current[i] = false;
-                      }
-                    }
-                  />
+                      })
+                    }                  />
                   <button
                     type="button"
                     className={apcLines[i] ? "apcButton active" : "apcButton"}
@@ -11510,4 +11434,3 @@ const apcCount = completedSales.reduce(
   );
 }
 
-// build retry 21
