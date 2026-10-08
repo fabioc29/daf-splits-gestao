@@ -9469,11 +9469,22 @@ aside nav {
 .clientSaleAddressRow {
   display: grid;
   grid-template-columns:
-    minmax(260px, 2fr)
-    minmax(145px, .75fr)
-    minmax(110px, .55fr)
-    minmax(180px, 1fr);
+    minmax(0, 2.15fr)
+    minmax(0, 1fr)
+    minmax(0, .72fr)
+    minmax(0, 1.25fr);
+  align-items: end;
   gap: 12px;
+}
+
+.clientSaleAddressRow > label {
+  min-width: 0;
+}
+
+.clientSaleAddressRow > label > input,
+.clientSaleAddressRow > label > select {
+  width: 100%;
+  min-width: 0;
 }
 
 .addressRow.clientAddressRow {
@@ -9682,5 +9693,39 @@ aside nav {
 
   .productStockActions {
     min-width: 245px;
+  }
+}
+
+
+/* Estoque de insumos usa o mesmo padrão visual do estoque de perfumes */
+.supplyStockTable {
+  min-width: 980px;
+}
+
+.supplyStockTable .productStockActions {
+  min-width: 190px;
+}
+
+.supplyNextLot {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.productBottleSequence > button small {
+  line-height: 1.2;
+}
+
+.productBottleSequence > button:not(.current) small {
+  color: inherit;
+}
+
+@media (max-width: 900px) {
+  .clientSaleAddressRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .supplyStockTable {
+    min-width: 900px;
   }
 }
