@@ -1,0 +1,66 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {PGlite} from '@electric-sql/pglite';
+import {crmProjection} from '../src/crm/projection.ts';
+import {readState,saveState,StateConflict,newIdentities} from '../src/crm/state-persistence.ts';
+const owner='00000000-0000-4000-8000-000000000001';
+const original={products:[{id:7,name:'Vibrato',brand:'DAF',category:'Nicho',stock:44,apc:1,bottleNumber:1,bottleHistory:[{number:1,ml:100}],cost:99}],clients:[{id:3,name:'Cliente fictício',phone:'31999990000',cep:'30000000',addresses:[],cpf:'PRIVATE'}],sales:[{id:1,clientId:3,date:'2026-10-08',total:100,paid:100,payment:'Pix',historicalReceivable:false,prepared:true,sent:false,items:[{productId:7,ml:10}]}],purchases:[{id:1,qty:1,total:900}],expenses:[{id:1,total:8}],supplies:[]};
+const strip=d=>Object.fromEntries(Object.entries(d).map(([k,rows])=>[k,Array.isArray(rows)?rows.map(({externalId,legacyIds,...r})=>r):rows]));
+test('additive CAS, authorized identity adoption, conditional v2 and legacy-writer compatibility',async()=>{
+ const db=new PGlite();try{
+ await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key);
+ create function auth.uid() returns uuid language sql as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
+ grant usage on schema public,auth to anon,authenticated;insert into auth.users values('${owner}');`);
+ for(const path of ['202609050001_create_app_state.sql','20261007233000_crm_read_feed.sql','20261008110000_app_state_cas.sql','20261008113000_crm_conditional_feed.sql'])await db.exec(readFileSync('supabase/migrations/'+path,'utf8'));
+ await db.exec('grant select,insert,update,delete on public.app_state to authenticated,anon');
+ await db.query('insert into public.app_state(user_id,data) values($1,$2)',[owner,original]);
+ await db.exec(`set role authenticated;set "request.jwt.claim.sub"='${owner}';`);
+ const first=(await db.query('select public.daf_read_app_state() r')).rows[0].r;
+ assert.equal(first.revision,'1');assert.equal(first.identitiesReady,false);
+ const dry=(await db.query('select public.daf_adopt_external_ids($1,true) r',['1'])).rows[0].r;
+ assert.equal(dry.adopted,3);assert.equal((await db.query('select public.daf_read_app_state() r')).rows[0].r.revision,'1');
+ await assert.rejects(db.query('select public.daf_save_app_state($1,$2)',['1',original]),/ADOPTION_REQUIRED/);
+ await db.query('select public.daf_adopt_external_ids($1,false)',['1']);
+ const adopted=(await db.query('select public.daf_read_app_state() r')).rows[0].r;
+ assert.equal(adopted.revision,'2');assert.equal(adopted.identitiesReady,true);assert.deepEqual(strip(adopted.data),original);
+ assert.equal((await db.query('select public.daf_adopt_external_ids($1,false) r',['2'])).rows[0].r.adopted,0);
+ const b=structuredClone(adopted.data),a=structuredClone(adopted.data);a.products[0].stock=27;
+ const winner=(await db.query('select public.daf_save_app_state($1,$2) r',['2',a])).rows[0].r;
+ assert.equal(winner.revision,'3');
+ b.products[0].stock=32;await assert.rejects(db.query('select public.daf_save_app_state($1,$2)',['2',b]),/REVISION_CONFLICT/);
+ assert.equal((await db.query('select public.daf_read_app_state() r')).rows[0].r.data.products[0].stock,27);
+ const token=(await db.query('select public.daf_crm_issue_token() t')).rows[0].t;
+ await db.exec('set role anon;set "request.jwt.claim.sub"=\'\';');
+ const feed=(await db.query('select public.daf_crm_feed($1,$2) f',[token,'daf-crm-feed-v2'])).rows[0].f;
+ assert.equal(feed.meta.stateVersion,'3');assert.equal(feed.meta.writerPolicy,'compatibility');assert.equal(feed.data.products[0].stock,27);
+ assert.equal(feed.data.clients[0].cep,'30000000');assert.equal(feed.data.clients[0].cpf,undefined);assert.equal(feed.data.products[0].cost,undefined);
+ const projected=crmProjection(winner.data);const comparable=x=>JSON.parse(JSON.stringify(x));
+ assert.deepEqual(comparable(projected),feed.data);
+ const unchanged=(await db.query('select public.daf_crm_sync_feed($1,$2,$3,$4) f',[token,'daf-crm-feed-v2',feed.meta.revision,'3'])).rows[0].f;
+ assert.equal(unchanged.changed,false);assert.equal(unchanged.data,undefined);assert.equal(unchanged.meta.snapshotHash,feed.meta.snapshotHash);
+ await assert.rejects(db.query('select public.daf_save_app_state($1,$2)',['3',a]),/permission denied/);
+ await db.exec(`set role authenticated;set "request.jwt.claim.sub"='${owner}';`);
+ // Compatibility means the old app can still save until explicit maintenance cutover.
+ await db.query('update public.app_state set data=$1 where user_id=$2',[a,owner]);
+ assert.equal((await db.query('select public.daf_read_app_state() r')).rows[0].r.revision,'4');
+ await db.exec('reset role');await db.exec(readFileSync('scripts/activate-cas-only.sql','utf8'));
+ await db.exec(`set role authenticated;set "request.jwt.claim.sub"='${owner}';`);
+ await assert.rejects(db.query('update public.app_state set data=$1',[a]),/permission denied/);
+ const current=(await db.query('select public.daf_read_app_state() r')).rows[0].r;
+ const reused=structuredClone(current.data);const oldUUID=reused.sales[0].externalId;reused.sales[0]={...reused.sales[0],externalId:crypto.randomUUID(),total:123};
+ await db.query('select public.daf_save_app_state($1,$2)',[current.revision,reused]);
+ const changed=(await db.query('select public.daf_crm_sync_feed($1,$2,$3,$4) f',[token,'daf-crm-feed-v2',feed.meta.revision,'3'])).rows[0].f;
+ assert.equal(changed.changed,true);assert.notEqual(changed.data.sales[0].externalId,oldUUID);assert.equal(changed.meta.writerPolicy,'cas-only');
+ await db.query('select public.daf_crm_revoke_token()');await assert.rejects(db.query('select public.daf_crm_sync_feed($1,$2,$3,$4)',[token,'daf-crm-feed-v2',feed.meta.revision,'3']),/Invalid read/);
+ }finally{await db.close();}
+});
+test('dashboard client never replaces the expected revision of a stale stock draft',async()=>{
+ let request;const client={rpc:async(name,args)=>{request=args;return {data:null,error:{code:'40001',message:'REVISION_CONFLICT'}};}};
+ await assert.rejects(saveState(client,'9007199254740993',{products:[{stock:44}]}),StateConflict);
+ assert.equal(request.p_expected_revision,'9007199254740993');
+ const previous={products:[{id:1,externalId:'existing'}],clients:[],sales:[]};
+ const newData=newIdentities({products:[{id:1,name:'edited'},{id:2,name:'new'}],clients:[],sales:[]},previous);
+ assert.equal(newData.products[0].externalId,'existing');assert.match(newData.products[1].externalId,/^[a-f0-9-]{36}$/);
+ assert.equal(previous.products[0].name,undefined);
+});

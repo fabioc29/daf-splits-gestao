@@ -31,8 +31,11 @@ import { automaticPackaging, packaging, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import { CRMFeedPanel } from "./crm/CRMFeedPanel";
+import {readState,saveState,StateConflict,newIdentities} from "./crm/state-persistence";
 
 type P = {
+  externalId?: string;
+  legacyIds?: number[];
   id: number;
   brand: string;
   name: string;
@@ -53,6 +56,8 @@ type S = {
   cost?: number;
 };
 type C = {
+  externalId?: string;
+  legacyIds?: number[];
   id: number;
   name: string;
   phone: string;
@@ -64,6 +69,8 @@ type C = {
 type L = { productId: number; ml: number; isApc?: boolean; unitCost?: number };
 type Installment = { date: string; amount: number; paid?: boolean };
 type V = {
+  externalId?: string;
+  legacyIds?: number[];
   id: number;
   date: string;
   clientId: number;
@@ -281,6 +288,9 @@ function System({ session }: { session: Session }) {
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const saveRevisionRef = useRef(0);
   const saveInFlightRef = useRef(false);
+  const serverRevisionRef = useRef("0"), saveBlockedRef = useRef(false);
+  const [saveProblem,setSaveProblem] = useState("");
+  const revisionKey = "daf-v4-server-revision:"+session.user.id;
   const [page, setPage] = useState("dashboard"),
     [modal, setModal] = useState<Modal>(null),
     [history, setHistory] = useState(0),
@@ -291,7 +301,7 @@ function System({ session }: { session: Session }) {
   }
   function setData(update: D | ((current: D) => D)) {
     setDataState((current) => {
-      const next = typeof update === "function" ? update(current) : update;
+      const next = newIdentities(typeof update === "function" ? update(current) : update, current);
       dataRef.current = next;
       localStorage.setItem("daf-v4", JSON.stringify(next));
       localStorage.setItem("daf-v4-pending", "1");
@@ -309,169 +319,67 @@ function System({ session }: { session: Session }) {
   useEffect(() => {
     let active = true;
     (async () => {
-      const local = readLocal();
-      const hasPendingLocalChanges =
-        localStorage.getItem("daf-v4-pending") === "1";
-      const { data: remote, error } = await supabase
-        .from("app_state")
-        .select("data")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      if (!active) return;
-      if (error) {
-        dataRef.current = local;
-        setDataState(local);
-        setReady(true);
-        setSync("error");
-        return;
-      }
-      const remoteData =
-        remote?.data && Object.keys(remote.data).length
-          ? normalizeData(remote.data)
-          : null;
-      let storedBaseline: D | null = null;
+      const local=readLocal(), pending=localStorage.getItem("daf-v4-pending")==="1";
       try {
-        const rawBaseline = localStorage.getItem("daf-v4-baseline");
-        storedBaseline = rawBaseline
-          ? normalizeData(JSON.parse(rawBaseline))
-          : null;
-      } catch {
-        storedBaseline = null;
-      }
-      const chosen = hasPendingLocalChanges
-        ? remoteData && storedBaseline
-          ? mergeDataChanges(storedBaseline, local, remoteData)
-          : local
-        : remoteData || local;
-      if (hasPendingLocalChanges || !remoteData) {
-        const { error: saveError } = await supabase
-          .from("app_state")
-          .upsert({ user_id: session.user.id, data: chosen });
-        if (saveError) {
-          dataRef.current = chosen;
-          setDataState(chosen);
-          setReady(true);
-          setSync("error");
-          return;
+        const remote=await readState(supabase);if(!active)return;
+        serverRevisionRef.current=remote.revision;
+        const chosen=remote.data?normalizeData(remote.data):local;
+        if(pending && remote.data && localStorage.getItem(revisionKey)!==remote.revision){
+          saveBlockedRef.current=true;setSaveProblem("Outra sessão ou a atualização estrutural alterou a base. O rascunho local foi preservado; exporte-o antes de carregar a versão do servidor.");
+          dataRef.current=local;setDataState(local);setReady(true);setSync("error");return;
         }
-        localStorage.removeItem("daf-v4-pending");
-      }
-      const serialized = JSON.stringify(chosen);
-      dataRef.current = chosen;
-      lastSyncedRef.current = serialized;
-      localStorage.setItem("daf-v4", serialized);
-      localStorage.setItem("daf-v4-baseline", serialized);
-      setDataState(chosen);
-      setReady(true);
-      setSync("saved");
-    })();
-    return () => {
-      active = false;
-    };
-  }, [session.user.id]);
+        const serialized=JSON.stringify(chosen);
+        if(!pending&&remote.data){lastSyncedRef.current=serialized;localStorage.removeItem("daf-v4-pending");}
+        localStorage.setItem(revisionKey,remote.revision);localStorage.setItem("daf-v4",serialized);
+        localStorage.setItem("daf-v4-baseline",serialized);dataRef.current=chosen;setDataState(pending?local:chosen);setReady(true);setSync("saved");
+      } catch {if(active){saveBlockedRef.current=true;dataRef.current=local;setDataState(local);setReady(true);setSync("error");setSaveProblem("Salvamento CAS indisponível. Aplique/valide a migration aditiva em ambiente autorizado antes de usar esta versão. O rascunho local permanece intacto.");}}
+    })();return()=>{active=false;};
+  },[session.user.id]);
   useEffect(() => {
-    dataRef.current = data;
-    const serialized = JSON.stringify(data);
-    localStorage.setItem("daf-v4", serialized);
-    if (!ready) return;
-    if (serialized === lastSyncedRef.current) return;
-    const revision = ++saveRevisionRef.current;
-    const baseline = lastSyncedRef.current
-      ? normalizeData(JSON.parse(lastSyncedRef.current))
-      : data;
-    localStorage.setItem("daf-v4-pending", "1");
-    setSync("loading");
-    saveInFlightRef.current = true;
-    saveQueueRef.current = saveQueueRef.current.catch(() => undefined).then(async () => {
-      const { data: latestRow, error: readError } = await supabase
-        .from("app_state")
-        .select("data")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      if (readError) {
-        if (revision === saveRevisionRef.current) {
-          setSync("error");
-          notify("Não foi possível salvar. O sistema tentará novamente.");
-        }
-        return;
-      }
-      const payload = latestRow?.data
-        ? mergeDataChanges(baseline, data, normalizeData(latestRow.data))
-        : data;
-      const { error } = await supabase
-        .from("app_state")
-        .upsert({ user_id: session.user.id, data: payload });
-      if (error) {
-        if (revision === saveRevisionRef.current) {
-          setSync("error");
-          notify("Não foi possível salvar. O sistema tentará novamente.");
-        }
-        return;
-      }
-      if (revision === saveRevisionRef.current) {
-        const saved = JSON.stringify(payload);
-        lastSyncedRef.current = saved;
-        dataRef.current = payload;
-        localStorage.setItem("daf-v4", saved);
-        localStorage.setItem("daf-v4-baseline", saved);
-        localStorage.removeItem("daf-v4-pending");
-        setDataState(payload);
-        setSync("saved");
-      }
-    }).catch(() => {
-      if (revision === saveRevisionRef.current) {
+    dataRef.current=data;const serialized=JSON.stringify(data);localStorage.setItem("daf-v4",serialized);
+    if(!ready||serialized===lastSyncedRef.current||saveBlockedRef.current)return;
+    const localRevision=++saveRevisionRef.current;localStorage.setItem("daf-v4-pending","1");setSync("loading");saveInFlightRef.current=true;
+    saveQueueRef.current=saveQueueRef.current.catch(()=>undefined).then(async()=>{
+      if(saveBlockedRef.current)return;
+      try {
+        const result=await saveState(supabase,serverRevisionRef.current,data);
+        serverRevisionRef.current=result.revision;localStorage.setItem(revisionKey,result.revision);
+        const payload=normalizeData(result.data), saved=JSON.stringify(payload);lastSyncedRef.current=saved;
+        localStorage.setItem("daf-v4-baseline",saved);
+        if(localRevision===saveRevisionRef.current){dataRef.current=payload;localStorage.setItem("daf-v4",saved);localStorage.removeItem("daf-v4-pending");setDataState(payload);setSync("saved");}
+      } catch(e) {
         setSync("error");
-        notify("Não foi possível salvar. O sistema tentará novamente.");
+        if(e instanceof StateConflict){saveBlockedRef.current=true;setSaveProblem("Conflito de revisão: outra sessão salvou primeiro. Nenhuma venda ou saldo remoto foi sobrescrito. Exporte seu rascunho e revise a base atual.");}
+        else if(String(e).includes("IDENTITIES_ADOPTION_REQUIRED")){saveBlockedRef.current=true;setSaveProblem("Adoção de identidades pendente. Faça dry-run/backup e autorize a preparação de UUIDs; esta tela não transforma dados automaticamente.");}
+        else notify("Não foi possível salvar. Rascunho preservado; tente novamente após recuperar a conexão.");
       }
-    }).finally(() => {
-      saveInFlightRef.current = false;
-    });
-  }, [data, ready, session.user.id]);
-  useEffect(() => {
-    if (!ready) return;
-    let active = true;
-    async function refreshFromCloud() {
-      if (
-        !active ||
-        document.hidden ||
-        localStorage.getItem("daf-v4-pending") === "1"
-      )
-        return;
-      const { data: remote, error } = await supabase
-        .from("app_state")
-        .select("data")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      if (!active || error || !remote?.data) return;
-      const incoming = normalizeData(remote.data);
-      const serialized = JSON.stringify(incoming);
-      if (serialized === lastSyncedRef.current) return;
-      lastSyncedRef.current = serialized;
-      dataRef.current = incoming;
-      localStorage.setItem("daf-v4", serialized);
-      localStorage.setItem("daf-v4-baseline", serialized);
-      setDataState(incoming);
-      setSync("saved");
+    }).finally(()=>{saveInFlightRef.current=false;});
+  },[data,ready,session.user.id]);
+  useEffect(()=>{
+    if(!ready)return;let active=true;
+    async function refresh(){
+      if(!active||document.hidden||saveBlockedRef.current||localStorage.getItem("daf-v4-pending")==="1")return;
+      try{const remote=await readState(supabase);if(!active||!remote.data||remote.revision===serverRevisionRef.current)return;
+        // An edit started while the request was in flight must not be discarded.
+        if(localStorage.getItem("daf-v4-pending")==="1")return;
+        const incoming=normalizeData(remote.data),serialized=JSON.stringify(incoming);serverRevisionRef.current=remote.revision;
+        lastSyncedRef.current=serialized;dataRef.current=incoming;localStorage.setItem(revisionKey,remote.revision);
+        localStorage.setItem("daf-v4",serialized);localStorage.setItem("daf-v4-baseline",serialized);setDataState(incoming);setSync("saved");
+      }catch{/* Keep the valid local view. */}
     }
-    function handleFocus() {
-      if (localStorage.getItem("daf-v4-pending") === "1") {
-        retryPendingSave();
-      } else {
-        void refreshFromCloud();
-      }
-    }
-    const interval = window.setInterval(handleFocus, 5000);
-    window.addEventListener("focus", handleFocus);
-    window.addEventListener("online", retryPendingSave);
-    document.addEventListener("visibilitychange", handleFocus);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
-      window.removeEventListener("online", retryPendingSave);
-      document.removeEventListener("visibilitychange", handleFocus);
-    };
-  }, [ready, session.user.id]);
+    function focus(){if(!saveBlockedRef.current&&localStorage.getItem("daf-v4-pending")==="1")retryPendingSave();else void refresh();}
+    const timer=window.setInterval(focus,5000);window.addEventListener("focus",focus);window.addEventListener("online",focus);document.addEventListener("visibilitychange",focus);
+    return()=>{active=false;clearInterval(timer);window.removeEventListener("focus",focus);window.removeEventListener("online",focus);document.removeEventListener("visibilitychange",focus);};
+  },[ready,session.user.id]);
+  function exportDraft(){const url=URL.createObjectURL(new Blob([JSON.stringify(dataRef.current,null,2)],{type:"application/json"}));const link=document.createElement("a");link.href=url;link.download="daf-rascunho-conflito.json";link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+  async function loadCurrent(){
+    if(!window.confirm("Já exportou/revisou seu rascunho? Carregar o servidor substitui somente o rascunho local."))return;
+    try{const remote=await readState(supabase);if(!remote.data)throw Error();const incoming=normalizeData(remote.data),serialized=JSON.stringify(incoming);
+      serverRevisionRef.current=remote.revision;lastSyncedRef.current=serialized;localStorage.setItem(revisionKey,remote.revision);
+      localStorage.setItem("daf-v4",serialized);localStorage.setItem("daf-v4-baseline",serialized);localStorage.removeItem("daf-v4-pending");
+      saveBlockedRef.current=false;setSaveProblem("");dataRef.current=incoming;setDataState(incoming);setSync("saved");
+    }catch{notify("Não foi possível carregar a versão atual. Rascunho mantido.");}
+  }
   const totals = useMemo(
     () => {
       const active = data.sales.filter(
@@ -613,6 +521,7 @@ function System({ session }: { session: Session }) {
           </div>
         </header>
         <section className="content">
+          {saveProblem&&<div role="alert" className="sync error"><p>{saveProblem}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={()=>void loadCurrent()}>Carregar versão atual</button></div>}
           {page === "dashboard" ? (
             <Dash d={data} totals={totals} />
           ) : page === "sales" ? (
