@@ -1507,7 +1507,10 @@ function normalizeData(stored: any): D {
       gender: p.gender || "Unissex",
       apc: p.apc ?? 1,
       bottleNumber: inferredNumber,
-      bottleHistory: normalizeBottleHistory(p, inferredNumber),
+      bottleHistory:
+        parsed.number && !(Array.isArray(p.bottleHistory) && p.bottleHistory.length)
+          ? [{ number: parsed.number }]
+          : normalizeBottleHistory(p, inferredNumber),
     };
   });
 
