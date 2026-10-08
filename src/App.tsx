@@ -9316,6 +9316,76 @@ function Form({
       setClientLookupMessage("Não foi possível localizar este CEP.");
     }
   }
+  function handleSaleVolumeChange(index: number, event: any) {
+    const nextValue = Math.max(0, parseDecimal(event.target.value));
+    setSaleVolumes((current) => {
+      const next = [...current];
+      next[index] = nextValue;
+      return next;
+    });
+
+    const form = event.currentTarget.form as HTMLFormElement | null;
+    if (!form) return;
+
+    const typedProduct = String(
+      (form.elements.namedItem("productName" + index) as HTMLInputElement | null)
+        ?.value || "",
+    );
+    const product = d.products.find(
+      (candidate) => `${candidate.brand} ${candidate.name}` === typedProduct,
+    );
+    if (!product) {
+      stockWarningActive.current[index] = false;
+      return;
+    }
+
+    let requestedTotal = 0;
+    for (let lineIndex = 0; lineIndex < lines; lineIndex += 1) {
+      const lineProduct = String(
+        (
+          form.elements.namedItem(
+            "productName" + lineIndex,
+          ) as HTMLInputElement | null
+        )?.value || "",
+      );
+      if (lineProduct !== typedProduct) continue;
+      requestedTotal +=
+        lineIndex === index
+          ? nextValue
+          : Math.max(
+              0,
+              parseDecimal(
+                (
+                  form.elements.namedItem(
+                    "ml" + lineIndex,
+                  ) as HTMLInputElement | null
+                )?.value,
+              ),
+            );
+    }
+
+    const restoredMl =
+      existingSale && existingSale.status !== "cancelled"
+        ? existingSale.items
+            .filter((item) => item.productId === product.id)
+            .reduce((sum, item) => sum + item.ml, 0)
+        : 0;
+    const availableMl = Math.max(0, product.stock + restoredMl);
+
+    if (requestedTotal > availableMl + 0.0001) {
+      if (!stockWarningActive.current[index]) {
+        stockWarningActive.current[index] = true;
+        const formatStockMl = (value: number) =>
+          value.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+        window.alert(
+          `Não há volume suficiente de ${product.brand} ${product.name}. Você está tentando lançar ${formatStockMl(requestedTotal)} ml, mas há apenas ${formatStockMl(availableMl)} ml disponíveis em estoque.`,
+        );
+      }
+      return;
+    }
+    stockWarningActive.current[index] = false;
+  }
+
   function submit(e: any) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
@@ -10185,11 +10255,7 @@ function Form({
                     decimalOnly
                     v={existingSale?.items[i]?.ml}
                     onChange={(event) =>
-                      setSaleVolumes((current) => {
-                        const next = [...current];
-                        next[i] = parseDecimal(event.target.value);
-                        return next;
-                      })
+                      handleSaleVolumeChange(i, event)
                     }                  />
                   <button
                     type="button"
