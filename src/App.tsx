@@ -106,6 +106,7 @@ type C = {
   cpf: string;
   cep: string;
   number?: string;
+  complement?: string;
   district?: string;
   city?: string;
   state?: string;
@@ -114,6 +115,7 @@ type C = {
   addresses: {
     label: string;
     value: string;
+    complement?: string;
     district?: string;
     city?: string;
     state?: string;
@@ -6747,6 +6749,41 @@ function Stock({
     : 0;
   const formatMl = (value: number) =>
     `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ml`;
+  const formatCopyMl = (value: number) =>
+    `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}ml`;
+
+  async function copyProductOrders() {
+    if (!historyProduct) return;
+    const orderedRows = [...productHistoryRows].sort(
+      (a, b) =>
+        a.sale.date.localeCompare(b.sale.date) || a.sale.id - b.sale.id,
+    );
+    const lines = orderedRows.map(
+      ({ sale, ml }) =>
+        `${formatCopyMl(ml)} — ${saleCustomer(sale, d)}`,
+    );
+    lines.push(
+      `📊 ESTOQUE: ${formatCopyMl(
+        Math.max(0, historyProduct.stock),
+      )} disponíveis`,
+    );
+    const text = lines.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    notify("Pedidos do perfume copiados.");
+  }
+
   const filtered = d.products.filter(
     (p) =>
       p.stock > 0 &&
@@ -7086,6 +7123,14 @@ function Stock({
                 }}
               >
                 Trocar perfume
+              </button>
+              <button
+                type="button"
+                className="productHistoryCopyButton"
+                onClick={copyProductOrders}
+              >
+                <Copy />
+                Copiar pedidos
               </button>
               <button
                 type="button"
@@ -8815,6 +8860,10 @@ function Form({
     cep: existingClient?.cep || "",
     address: existingClient?.addresses[0]?.value || "",
     number: existingClient?.number || "",
+    complement:
+      existingClient?.complement ||
+      existingClient?.addresses[0]?.complement ||
+      "",
     district: existingClient?.district || "",
     city: existingClient?.city || "",
     state: existingClient?.state || "",
@@ -8859,6 +8908,7 @@ function Form({
       cep: found.cep,
       address: found.addresses[0]?.value || "",
       number: found.number || "",
+      complement: found.complement || found.addresses[0]?.complement || "",
       district: found.district || "",
       city: found.city || "",
       state: found.state || "",
@@ -8950,15 +9000,28 @@ function Form({
         );
         const bottleNumber = Math.max(
           1,
-          Number(existingProduct?.bottleNumber) || parsedName.number || 1,
+          Math.round(
+            Number(f.bottleNumber) ||
+              Number(existingProduct?.bottleNumber) ||
+              parsedName.number ||
+              1,
+          ),
         );
+        const previousHistory = existingProduct?.bottleHistory?.length
+          ? [...existingProduct.bottleHistory]
+          : normalizeBottleHistory(existingProduct || {}, bottleNumber);
+        const bottleHistory = previousHistory.some(
+          (entry) => entry.number === bottleNumber,
+        )
+          ? previousHistory
+          : [...previousHistory, { number: bottleNumber }].sort(
+              (a, b) => a.number - b.number,
+            );
         const product: P = {
           ...baseProduct,
           name: parsedName.name,
           bottleNumber,
-          bottleHistory: existingProduct?.bottleHistory?.length
-            ? existingProduct.bottleHistory
-            : normalizeBottleHistory(existingProduct || {}, bottleNumber),
+          bottleHistory,
         };
         const brands = x.brands.includes(brand) ? x.brands : [...x.brands, brand];
         return {
@@ -9058,8 +9121,15 @@ function Form({
               cpf: formatCpf(f.newCpf),
               cep: String(f.newCep || ""),
               number: String(f.newNumber || ""),
+              complement: String(f.newComplement || ""),
               date: String(f.date),
-              addresses: address ? [{ label: "Principal", value: address }] : [],
+              addresses: address
+                ? [{
+                    label: "Principal",
+                    value: address,
+                    complement: String(f.newComplement || ""),
+                  }]
+                : [],
             },
           ];
         }
@@ -9309,6 +9379,7 @@ function Form({
               cpf: "",
               cep: "",
               number: "",
+              complement: "",
               district: "",
               city: "",
               state: "",
@@ -9332,6 +9403,7 @@ function Form({
             cpf: formatCpf(f.newCpf),
             cep: String(f.newCep || ""),
             number: String(f.newNumber || ""),
+            complement: String(f.newComplement || ""),
             district: String(f.newDistrict || ""),
             city: String(f.newCity || ""),
             state: String(f.newState || ""),
@@ -9342,6 +9414,7 @@ function Form({
             addresses: address ? [{
               label: "Principal",
               value: address,
+              complement: String(f.newComplement || ""),
               district: String(f.newDistrict || ""),
               city: String(f.newCity || ""),
               state: String(f.newState || ""),
@@ -9511,10 +9584,16 @@ function Form({
                     maxLength={14}
                   />
                 </div>
-                <div className="row">
+                <div className="clientSaleAddressRow">
                   <Field n="newAddress" l="Endereço (opcional)" required={false} />
-                  <Field n="newNumber" l="Número (opcional)" required={false} />
                   <Field n="newCep" l="CEP (opcional)" required={false} />
+                  <Field n="newNumber" l="Número (opcional)" required={false} />
+                  <Field
+                    n="newComplement"
+                    l="Complemento (opcional)"
+                    p="Apto, bloco, sala..."
+                    required={false}
+                  />
                 </div>
                 <Select
                   n="newLeadSource"
@@ -9597,10 +9676,11 @@ function Form({
                       <label><span>WhatsApp (opcional)</span><input name="newPhone" inputMode="tel" value={clientDraft.phone} onChange={(e) => setClientDraft((c) => ({ ...c, phone: formatClientPhone(e.target.value) }))} /></label>
                       <label><span>CPF (opcional)</span><input name="newCpf" inputMode="numeric" maxLength={14} value={clientDraft.cpf} onChange={(e) => setClientDraft((c) => ({ ...c, cpf: formatCpf(e.target.value) }))} onBlur={(e) => findClientByCpf(e.target.value)} /></label>
                     </div>
-                    <div className="row">
+                    <div className="clientSaleAddressRow">
                       <label><span>Endereço (opcional)</span><input name="newAddress" value={clientDraft.address} onChange={(e) => setClientDraft((c) => ({ ...c, address: e.target.value }))} /></label>
                       <label><span>CEP (opcional)</span><input name="newCep" value={clientDraft.cep} onChange={(e) => setClientDraft((c) => ({ ...c, cep: e.target.value }))} onBlur={(e) => fillAddressFromCep(e.target.value)} /></label>
                       <label><span>Número (opcional)</span><input name="newNumber" value={clientDraft.number} onChange={(e) => setClientDraft((c) => ({ ...c, number: e.target.value }))} /></label>
+                      <label><span>Complemento (opcional)</span><input name="newComplement" value={clientDraft.complement} onChange={(e) => setClientDraft((c) => ({ ...c, complement: e.target.value }))} placeholder="Apto, bloco, sala..." /></label>
                     </div>
                     <div className="row three">
                       <label><span>Bairro (opcional)</span><input name="newDistrict" value={clientDraft.district} onChange={(e) => setClientDraft((c) => ({ ...c, district: e.target.value }))} /></label>
@@ -10108,6 +10188,21 @@ function Form({
                 />
               </label>
               <label>
+                <span>Complemento</span>
+                <input
+                  name="complement"
+                  value={clientDraft.complement}
+                  onChange={(event) =>
+                    setClientDraft((current) => ({
+                      ...current,
+                      complement: event.target.value,
+                    }))
+                  }
+                  placeholder="Apto, bloco, sala..."
+                  required={false}
+                />
+              </label>
+              <label>
                 <span>Identificação</span>
                 <input
                   name="label0"
@@ -10169,13 +10264,19 @@ function Form({
                   required={false}
                 />
                 <Field
+                  n={"complement" + i}
+                  l="Complemento"
+                  p="Apto, bloco, sala..."
+                  v={existingClient?.addresses[i]?.complement}
+                  required={false}
+                />
+                <Field
                   n={"label" + i}
                   l="Identificação"
                   p="Casa, trabalho..."
                   v={existingClient?.addresses[i]?.label}
                   required={false}
                 />
-                <span />
               </div>
               );
             })}
@@ -10313,6 +10414,7 @@ const mkC = (f: any, n: number, id = Date.now()): C => ({
   cpf: formatCpf(f.cpf),
   cep: String(f.cep),
   number: String(f.number || ""),
+  complement: String(f.complement || ""),
   district: String(f.district || ""),
   city: String(f.city || ""),
   state: String(f.state || ""),
@@ -10323,6 +10425,9 @@ const mkC = (f: any, n: number, id = Date.now()): C => ({
   addresses: Array.from({ length: n }, (_, i) => ({
     label: String(f["label" + i] || ""),
     value: String(f["address" + i] || ""),
+    complement: String(
+      i === 0 ? f.complement || "" : f["complement" + i] || "",
+    ),
   })).filter((a) => a.value),
 });
 function BrandFields({
@@ -10459,10 +10564,19 @@ function ProductFields({
         a={["Sim", "Não"]}
         v={product ? (product.apc ? "Sim" : "Não") : "Sim"}
       />
-      <div className="row">
+      <div className="row three">
         <Field n="stock" l="Estoque (ml)" t="number" v={product?.stock} />
         <Field n="cost" l="Custo por ml" t="number" v={product?.cost} />
+        <Field
+          n="bottleNumber"
+          l="Numeração do frasco"
+          t="number"
+          v={product?.bottleNumber || 1}
+        />
       </div>
+      <small className="fieldHint">
+        Você pode corrigir manualmente qual é o frasco atual sem alterar o nome do perfume.
+      </small>
     </>
   );
 }
