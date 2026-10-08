@@ -976,7 +976,10 @@ function System({ session }: { session: Session }) {
             // Snapshot público: somente dados seguros do estoque.
             // Falhas aqui não interrompem o salvamento administrativo.
             const catalogItems = await enrichCatalogItemsWithImages(
-              catalogItemsFromProducts(data.products),
+              catalogItemsFromProducts(
+                data.products,
+                data.catalogSettings.manualImages,
+              ),
             );
             await supabase
               .from("public_catalogs")
