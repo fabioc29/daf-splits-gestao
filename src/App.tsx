@@ -9230,7 +9230,7 @@ function Form({
   const [saleVolumes, setSaleVolumes] = useState<number[]>(
     existingSale?.items.map((item) => item.ml) || [],
   );
-  const stockWarningActive = useRef<Record<number, boolean>>({});
+  const [stockWarnings, setStockWarnings] = useState<Record<number, string>>({});
   const [clientDraft, setClientDraft] = useState({
     name: existingClient?.name || "",
     phone: formatClientPhone(existingClient?.phone || ""),
@@ -9316,42 +9316,33 @@ function Form({
       setClientLookupMessage("Não foi possível localizar este CEP.");
     }
   }
-  function handleSaleVolumeChange(index: number, event: any) {
-    const nextValue = Math.max(0, parseDecimal(event.target.value));
-    setSaleVolumes((current) => {
-      const next = [...current];
-      next[index] = nextValue;
-      return next;
-    });
+  function collectSaleStockWarnings(
+    form: HTMLFormElement,
+    overrideIndex?: number,
+    overrideValue?: number,
+  ) {
+    const requestedByProduct = new Map<
+      number,
+      { product: P; total: number; lineIndexes: number[] }
+    >();
 
-    const form = event.currentTarget.form as HTMLFormElement | null;
-    if (!form) return;
-
-    const typedProduct = String(
-      (form.elements.namedItem("productName" + index) as HTMLInputElement | null)
-        ?.value || "",
-    );
-    const product = d.products.find(
-      (candidate) => `${candidate.brand} ${candidate.name}` === typedProduct,
-    );
-    if (!product) {
-      stockWarningActive.current[index] = false;
-      return;
-    }
-
-    let requestedTotal = 0;
     for (let lineIndex = 0; lineIndex < lines; lineIndex += 1) {
-      const lineProduct = String(
+      const typedProduct = String(
         (
           form.elements.namedItem(
             "productName" + lineIndex,
           ) as HTMLInputElement | null
         )?.value || "",
       );
-      if (lineProduct !== typedProduct) continue;
-      requestedTotal +=
-        lineIndex === index
-          ? nextValue
+      const product = d.products.find(
+        (candidate) =>
+          `${candidate.brand} ${candidate.name}` === typedProduct,
+      );
+      if (!product) continue;
+
+      const value =
+        lineIndex === overrideIndex
+          ? Math.max(0, Number(overrideValue) || 0)
           : Math.max(
               0,
               parseDecimal(
@@ -9362,28 +9353,59 @@ function Form({
                 )?.value,
               ),
             );
+
+      const current = requestedByProduct.get(product.id) || {
+        product,
+        total: 0,
+        lineIndexes: [],
+      };
+      current.total += value;
+      current.lineIndexes.push(lineIndex);
+      requestedByProduct.set(product.id, current);
     }
 
-    const restoredMl =
-      existingSale && existingSale.status !== "cancelled"
-        ? existingSale.items
-            .filter((item) => item.productId === product.id)
-            .reduce((sum, item) => sum + item.ml, 0)
-        : 0;
-    const availableMl = Math.max(0, product.stock + restoredMl);
+    const warnings: Record<number, string> = {};
+    requestedByProduct.forEach(({ product, total, lineIndexes }) => {
+      const restoredMl =
+        existingSale && existingSale.status !== "cancelled"
+          ? existingSale.items
+              .filter((item) => item.productId === product.id)
+              .reduce((sum, item) => sum + item.ml, 0)
+          : 0;
+      const availableMl = Math.max(0, product.stock + restoredMl);
+      if (total <= availableMl + 0.0001) return;
 
-    if (requestedTotal > availableMl + 0.0001) {
-      if (!stockWarningActive.current[index]) {
-        stockWarningActive.current[index] = true;
-        const formatStockMl = (value: number) =>
-          value.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
-        window.alert(
-          `Não há volume suficiente de ${product.brand} ${product.name}. Você está tentando lançar ${formatStockMl(requestedTotal)} ml, mas há apenas ${formatStockMl(availableMl)} ml disponíveis em estoque.`,
-        );
-      }
-      return;
-    }
-    stockWarningActive.current[index] = false;
+      const formatStockMl = (value: number) =>
+        value.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+      const message =
+        `Você está tentando lançar ${formatStockMl(total)} ml, mas há apenas ${formatStockMl(availableMl)} ml disponíveis em estoque.`;
+      lineIndexes.forEach((lineIndex) => {
+        warnings[lineIndex] = message;
+      });
+    });
+
+    return warnings;
+  }
+
+  function handleSaleVolumeChange(index: number, event: any) {
+    const nextValue = Math.max(0, parseDecimal(event.target.value));
+    setSaleVolumes((current) => {
+      const next = [...current];
+      next[index] = nextValue;
+      return next;
+    });
+
+    const form = event.currentTarget.form as HTMLFormElement | null;
+    if (!form) return;
+    setStockWarnings(collectSaleStockWarnings(form, index, nextValue));
+  }
+
+  function handleSaleProductChange(event: any) {
+    const form = event.currentTarget.form as HTMLFormElement | null;
+    if (!form) return;
+    window.setTimeout(() => {
+      setStockWarnings(collectSaleStockWarnings(form));
+    }, 0);
   }
 
   function submit(e: any) {
@@ -9401,44 +9423,22 @@ function Form({
         );
         return;
       }
-      const requestedByProduct = new Map<number, number>();
-      Array.from({ length: lines }, (_, i) => {
-        const typed = String(f["productName" + i] || "");
-        const product = d.products.find(
-          (candidate) => `${candidate.brand} ${candidate.name}` === typed,
-        );
-        if (!product) return;
-        const requestedMl = Math.max(0, parseDecimal(f["ml" + i]));
-        requestedByProduct.set(
-          product.id,
-          (requestedByProduct.get(product.id) || 0) + requestedMl,
-        );
-      });
-      const insufficientStock = Array.from(requestedByProduct.entries())
-        .map(([productId, requestedMl]) => {
-          const product = d.products.find((candidate) => candidate.id === productId);
-          if (!product) return null;
-          const restoredMl =
-            existingSale && existingSale.status !== "cancelled"
-              ? existingSale.items
-                  .filter((item) => item.productId === productId)
-                  .reduce((sum, item) => sum + item.ml, 0)
-              : 0;
-          const availableMl = Math.max(0, product.stock + restoredMl);
-          return requestedMl > availableMl + 0.0001
-            ? { product, requestedMl, availableMl }
-            : null;
-        })
-        .find(Boolean);
-      if (insufficientStock) {
-        const { product, requestedMl, availableMl } = insufficientStock;
-        const formatStockMl = (value: number) =>
-          value.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
-        window.alert(
-          `Não há volume suficiente de ${product.brand} ${product.name}. Você tentou lançar ${formatStockMl(requestedMl)} ml, mas há apenas ${formatStockMl(availableMl)} ml disponíveis em estoque.`,
-        );
+      const formElement = e.currentTarget as HTMLFormElement;
+      const submitStockWarnings = collectSaleStockWarnings(formElement);
+      if (Object.keys(submitStockWarnings).length) {
+        setStockWarnings(submitStockWarnings);
+        const firstWarningIndex = Number(Object.keys(submitStockWarnings)[0]);
+        const firstWarningInput = formElement.elements.namedItem(
+          "ml" + firstWarningIndex,
+        ) as HTMLInputElement | null;
+        firstWarningInput?.focus();
+        firstWarningInput?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
         return;
       }
+      setStockWarnings({});
 
       const apcProducts = Array.from({ length: lines }, (_, i) => {
         if (!apcLines[i]) return null;
@@ -10247,16 +10247,26 @@ function Form({
                       existingSale?.items.some((x) => x.productId === p.id),
                   )}
                   value={existingSale?.items[i]?.productId}
+                  onChange={handleSaleProductChange}
                 />
                 <div className="volumeApc">
-                  <Field
-                    n={"ml" + i}
-                    l="Volume (ml)"
-                    decimalOnly
-                    v={existingSale?.items[i]?.ml}
-                    onChange={(event) =>
-                      handleSaleVolumeChange(i, event)
-                    }                  />
+                  <div className="saleVolumeField">
+                    <Field
+                      n={"ml" + i}
+                      l="Volume (ml)"
+                      decimalOnly
+                      v={existingSale?.items[i]?.ml}
+                      onChange={(event) =>
+                        handleSaleVolumeChange(i, event)
+                      }
+                    />
+                    {stockWarnings[i] ? (
+                      <div className="saleStockWarning" role="alert">
+                        <b>Volume indisponível</b>
+                        <span>{stockWarnings[i]}</span>
+                      </div>
+                    ) : null}
+                  </div>
                   <button
                     type="button"
                     className={apcLines[i] ? "apcButton active" : "apcButton"}
@@ -11103,10 +11113,12 @@ function ProductSearch({
   index,
   products,
   value,
+  onChange,
 }: {
   index: number;
   products: P[];
   value?: number;
+  onChange?: (event: any) => void;
 }) {
   const selected = products.find((p) => p.id === value);
   return (
@@ -11118,6 +11130,7 @@ function ProductSearch({
         defaultValue={selected ? `${selected.brand} ${selected.name}` : ""}
         placeholder="Digite para buscar..."
         required
+        onChange={onChange}
       />
       <datalist id={"products" + index}>
         {products.map((p) => (
