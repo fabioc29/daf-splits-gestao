@@ -31,7 +31,7 @@ import { automaticPackaging, packaging, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import { CRMFeedPanel } from "./crm/CRMFeedPanel";
-import {readState,saveState,StateConflict,newIdentities} from "./crm/state-persistence";
+import {readState,initializeState,saveState,StateConflict,newIdentities} from "./crm/state-persistence";
 
 type P = {
   externalId?: string;
@@ -321,7 +321,7 @@ function System({ session }: { session: Session }) {
     (async () => {
       const local=readLocal(), pending=localStorage.getItem("daf-v4-pending")==="1";
       try {
-        const remote=await readState(supabase);if(!active)return;
+        const remote=await initializeState(supabase);if(!active)return;
         serverRevisionRef.current=remote.revision;
         const chosen=remote.data?normalizeData(remote.data):local;
         if(pending && remote.data && localStorage.getItem(revisionKey)!==remote.revision){

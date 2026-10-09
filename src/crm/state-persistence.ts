@@ -6,6 +6,14 @@ export async function readState(client:StateClient){
  if(!data||typeof data.revision!=='string'||!/^\d+$/.test(data.revision))throw Error('INVALID_STATE_REVISION');
  return data as {revision:string;data:any;identitiesReady:boolean};
 }
+/** Explicit first-session bootstrap; read/feed RPCs remain read-only. */
+export async function initializeState(client:StateClient){
+ const current=await readState(client);if(current.data!==null)return current;
+ const {data,error}=await client.rpc('daf_bootstrap_app_state');
+ if(error){if(error.code==='40001')throw new StateConflict();throw Error(error.message||'STATE_BOOTSTRAP_FAILED');}
+ if(!data||typeof data.revision!=='string'||!/^\d+$/.test(data.revision)||data.data===null)throw Error('INVALID_STATE_BOOTSTRAP');
+ return data as {revision:string;data:any;identitiesReady:boolean};
+}
 export async function saveState(client:StateClient,revision:string,data:unknown){
  const result=await client.rpc('daf_save_app_state',{p_expected_revision:revision,p_data:data});
  if(result.error){if(result.error.code==='40001'||result.error.message?.includes('REVISION_CONFLICT'))throw new StateConflict();throw Error(result.error.message||'STATE_SAVE_FAILED');}
