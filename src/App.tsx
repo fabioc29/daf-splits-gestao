@@ -5289,6 +5289,7 @@ function Shipping({
                           ? "Definido automaticamente pela origem da venda."
                           : "Você pode ajustar antes do despacho."}
                       </small>
+                    </div>
                     {mandaBemEligibleSale(sale) ? (
                       <div className="sentDeliveryCard mandaBemDeliveryCard">
                         <span>MandaBem</span>
@@ -5312,7 +5313,6 @@ function Shipping({
                         </button>
                       </div>
                     ) : null}
-                    </div>
                   </div>
                 )}
               </details>
@@ -5607,7 +5607,7 @@ function MandaBem({
   notify: (s: string) => void;
 }) {
   const [section, setSection] = useState<
-    "overview" | "quote" | "labels" | "tracking" | "balance"
+    "overview" | "quote" | "generate" | "labels" | "tracking" | "balance"
   >("overview");
   const [status, setStatus] = useState<any>(null);
   const [busy, setBusy] = useState("");
@@ -5631,6 +5631,8 @@ function MandaBem({
   const [labels, setLabels] = useState<any[]>([]);
   const [trackingKey, setTrackingKey] = useState("");
   const [tracking, setTracking] = useState<any>(null);
+  const [generateSaleId, setGenerateSaleId] = useState("");
+  const [generateBusy, setGenerateBusy] = useState(false);
 
   useEffect(() => {
     mandaBemRequest("status")
@@ -5716,6 +5718,102 @@ function MandaBem({
     }
   }
 
+  async function generateFromHub() {
+    const sale = d.sales.find((item) => item.id === Number(generateSaleId));
+    if (!sale) {
+      setError("Selecione um pedido para gerar o envio.");
+      return;
+    }
+    const client = d.clients.find((item) => item.id === sale.clientId);
+    const address = client?.addresses[0];
+    if (
+      !client?.cep ||
+      !address?.value ||
+      !client?.number ||
+      !(address?.district || client?.district) ||
+      !(address?.city || client?.city) ||
+      !(address?.state || client?.state)
+    ) {
+      setError(
+        "O pedido selecionado não possui todos os dados obrigatórios de entrega. Complete-os em Controle de envios.",
+      );
+      return;
+    }
+
+    setGenerateBusy(true);
+    setError("");
+    try {
+      const averagePrice = Math.max(
+        0.01,
+        Number(sale.total || 0) / Math.max(1, sale.items.length),
+      );
+      const response = await mandaBemRequest("generate", {
+        destinatario: saleCustomer(sale, d),
+        forma_envio: mandaBemServiceFromSale(sale),
+        cep: client.cep,
+        logradouro: address.value,
+        numero: client.number,
+        complemento: address.complement || client.complement || "",
+        bairro: address.district || client.district || "",
+        cidade: address.city || client.city || "",
+        estado: address.state || client.state || "",
+        peso: mandaBemSuggestedWeight(sale),
+        cpf_destinatario: client.cpf || "",
+        ref_id: orderNo(sale.id),
+        integration: "DAF Splits",
+        produtos: sale.items.map((item) => {
+          const product = d.products.find(
+            (candidate) => candidate.id === item.productId,
+          );
+          return {
+            nome: `${product ? product.brand + " " + product.name : "Perfume"} · ${item.ml} ml${item.isApc ? " · APC" : ""}`,
+            quantidade: 1,
+            preco: Number(averagePrice.toFixed(2)),
+          };
+        }),
+      });
+      const result = mandaBemResult(response);
+      if (String(result?.sucesso || "").toLowerCase() === "false") {
+        throw new Error(result?.erro || "A MandaBem recusou a geração do envio.");
+      }
+      const envioId = String(result?.envio_id || result?.id || "");
+      set((state: D) => ({
+        ...state,
+        sales: state.sales.map((item) =>
+          item.id === sale.id
+            ? {
+                ...item,
+                mandaBem: {
+                  envioId,
+                  service: mandaBemServiceFromSale(sale),
+                  status: result?.mensagem || "Envio gerado",
+                  createdAt: today(),
+                },
+              }
+            : item,
+        ),
+      }));
+      notify(
+        envioId
+          ? `Envio MandaBem #${envioId} gerado para o pedido #${orderNo(sale.id)}.`
+          : `Envio MandaBem gerado para o pedido #${orderNo(sale.id)}.`,
+      );
+      setGenerateSaleId("");
+    } catch (err: any) {
+      setError(err?.message || "Não foi possível gerar o envio.");
+    } finally {
+      setGenerateBusy(false);
+    }
+  }
+
+  const eligibleHubSales = d.sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      sale.prepared &&
+      !sale.sent &&
+      mandaBemEligibleSale(sale),
+  );
+
   const generatedSales = d.sales.filter((sale) => sale.mandaBem?.envioId);
 
   return (
@@ -5744,6 +5842,7 @@ function MandaBem({
         {([
           ["overview", "Visão geral"],
           ["quote", "Cotação"],
+          ["generate", "Gerar envio"],
           ["labels", "Etiquetas"],
           ["tracking", "Acompanhamento"],
           ["balance", "Saldo e recarga"],
@@ -5927,6 +6026,86 @@ function MandaBem({
               {quoteResult?.erro ? <small>{quoteResult.erro}</small> : null}
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {section === "generate" ? (
+        <div className="panel mandaBemWorkspace">
+          <div className="panelHeading">
+            <div>
+              <h2>Gerar novo envio</h2>
+              <p>
+                Selecione um pedido preparado. Os dados do cliente e o peso são
+                preenchidos automaticamente.
+              </p>
+            </div>
+          </div>
+          <div className="mandaBemGenerateWorkspace">
+            <label>
+              <span>Pedido</span>
+              <select
+                value={generateSaleId}
+                onChange={(e) => setGenerateSaleId(e.target.value)}
+              >
+                <option value="">Selecione...</option>
+                {eligibleHubSales.map((sale) => (
+                  <option key={sale.id} value={sale.id}>
+                    #{orderNo(sale.id)} · {saleCustomer(sale, d)} ·{" "}
+                    {sale.shippingMethod || "Envio"}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {generateSaleId ? (() => {
+              const sale = d.sales.find(
+                (item) => item.id === Number(generateSaleId),
+              );
+              if (!sale) return null;
+              const client = d.clients.find(
+                (item) => item.id === sale.clientId,
+              );
+              const address = client?.addresses[0];
+              return (
+                <div className="mandaBemGeneratePreview">
+                  <div>
+                    <span>Destinatário</span>
+                    <b>{saleCustomer(sale, d)}</b>
+                  </div>
+                  <div>
+                    <span>Forma de envio</span>
+                    <b>{mandaBemServiceFromSale(sale)}</b>
+                  </div>
+                  <div>
+                    <span>Peso sugerido</span>
+                    <b>
+                      {mandaBemSuggestedWeight(sale) === 0.3
+                        ? "Até 300 g"
+                        : mandaBemSuggestedWeight(sale) === 1
+                          ? "De 300 g a 1 kg"
+                          : "De 1 a 2 kg"}
+                    </b>
+                  </div>
+                  <div>
+                    <span>Destino</span>
+                    <b>
+                      {address?.value || "Endereço não informado"}
+                      {client?.number ? `, ${client.number}` : ""}
+                    </b>
+                  </div>
+                </div>
+              );
+            })() : null}
+
+            <button
+              type="button"
+              className="primary mandaBemActionButton"
+              disabled={!generateSaleId || generateBusy}
+              onClick={generateFromHub}
+            >
+              {generateBusy ? "Gerando..." : "Gerar envio no MandaBem"}
+            </button>
+          </div>
         </div>
       ) : null}
 
