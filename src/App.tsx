@@ -4167,6 +4167,10 @@ function Prepare({
       { sensitivity: "base" },
     ),
   );
+  const simplifiedTotalDecants = simplifiedDecants.reduce(
+    (sum, item) => sum + item.totalDecants,
+    0,
+  );
 
   return (
     <>
@@ -4268,27 +4272,47 @@ function Prepare({
               <X />
             </button>
           </header>
-          <p>
-            Apenas pedidos marcados como <b>A preparar</b>. APC's não entram
-            nesta contagem.
-          </p>
+          <div className="simplifiedPrepareIntro">
+            <p>
+              Somente pedidos em <b>A preparar</b>. APCs ficam fora desta
+              contagem.
+            </p>
+            <div className="simplifiedPrepareSummary">
+              <div>
+                <span>Perfumes</span>
+                <b>{simplifiedDecants.length}</b>
+              </div>
+              <div>
+                <span>Decantes</span>
+                <b>{simplifiedTotalDecants}</b>
+              </div>
+            </div>
+          </div>
           <div className="simplifiedPrepareList">
             {simplifiedDecants.map(({ product, volumes, totalDecants }) => (
-              <div key={product.id}>
-                <div>
-                  <b>{product.brand} {product.name}</b>
-                  <span>{totalDecants} decante(s)</span>
+              <article className="simplifiedPrepareCard" key={product.id}>
+                <div className="simplifiedPrepareCardHead">
+                  <div>
+                    <small>{product.brand}</small>
+                    <b>{product.name}</b>
+                  </div>
+                  <span className="simplifiedPrepareTotal">
+                    {totalDecants} {totalDecants === 1 ? "decante" : "decantes"}
+                  </span>
                 </div>
                 <div className="simplifiedVolumes">
                   {Array.from(volumes.entries())
                     .sort(([a], [b]) => a - b)
                     .map(([ml, quantity]) => (
                       <span key={ml}>
-                        <b>{ml} ml</b> · {quantity} decante(s)
+                        <b>{ml} ml</b>
+                        <small>
+                          {quantity} {quantity === 1 ? "unidade" : "unidades"}
+                        </small>
                       </span>
                     ))}
                 </div>
-              </div>
+              </article>
             ))}
             {!simplifiedDecants.length ? (
               <p className="empty">Nenhum decante marcado como A preparar.</p>
