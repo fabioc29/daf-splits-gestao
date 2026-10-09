@@ -10067,3 +10067,507 @@ aside nav {
 .shippingNavGroup .stockSubnav button {
   justify-content: space-between;
 }
+
+
+/* =========================================================
+   MandaBem — hub logístico e geração de etiquetas
+   ========================================================= */
+.mandaBemHub {
+  display: grid;
+  gap: 14px;
+}
+
+.mandaBemHero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.mandaBemHero h2 {
+  margin: 3px 0 5px;
+  font-size: 24px;
+}
+
+.mandaBemHero p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.mandaBemHero > div:first-child > small,
+.mandaBemBalance > div > small {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+
+.mandaBemConnection {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 8px 11px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.mandaBemConnection > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+
+.mandaBemConnection.connected {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 45%, var(--line));
+}
+
+.mandaBemConnection.connected > span {
+  background: var(--success);
+}
+
+.mandaBemNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--panel);
+}
+
+:root[data-theme="dark"] .mandaBemNav {
+  border-color: rgb(255 255 255 / 45%);
+}
+
+.mandaBemNav button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 9px;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mandaBemNav button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.mandaBemNav button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.mandaBemOverviewGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mandaBemOverviewGrid > .panel {
+  min-height: 128px;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.mandaBemOverviewGrid > .panel > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.mandaBemOverviewGrid > .panel > b {
+  color: var(--text);
+  font-size: 24px;
+}
+
+.mandaBemOverviewGrid > .panel > small,
+.mandaBemOverviewWide p {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.mandaBemOverviewWide {
+  grid-column: 1 / -1;
+  min-height: auto !important;
+}
+
+.mandaBemOverviewWide b {
+  font-size: 14px !important;
+}
+
+.mandaBemOverviewWide p {
+  margin: 0;
+  font-size: 11px;
+}
+
+.mandaBemWorkspace {
+  display: grid;
+  gap: 16px;
+}
+
+.mandaBemFormGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mandaBemFormGrid label,
+.mandaBemDimensions label,
+.mandaBemDateFilter label,
+.mandaBemGenerateWorkspace > label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mandaBemFormGrid label > span,
+.mandaBemDimensions label > span,
+.mandaBemDateFilter label > span,
+.mandaBemGenerateWorkspace > label > span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.mandaBemFormGrid input,
+.mandaBemFormGrid select,
+.mandaBemDimensions input,
+.mandaBemDateFilter input,
+.mandaBemGenerateWorkspace select,
+.mandaBemTrackingSearch input {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--input);
+  color: var(--text);
+  padding: 0 11px;
+  font: inherit;
+}
+
+.mandaBemDimensions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mandaBemActionButton {
+  justify-self: start;
+  min-height: 42px;
+  padding-inline: 17px;
+}
+
+.mandaBemResult {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 9px;
+  padding-top: 4px;
+}
+
+.mandaBemResult > div {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  padding: 11px;
+  display: grid;
+  gap: 4px;
+}
+
+.mandaBemResult > div b {
+  color: var(--text);
+}
+
+.mandaBemResult > div span,
+.mandaBemResult > small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.mandaBemGenerateWorkspace {
+  display: grid;
+  gap: 14px;
+}
+
+.mandaBemGeneratePreview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.mandaBemGeneratePreview > div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  padding: 11px;
+  display: grid;
+  gap: 4px;
+}
+
+.mandaBemGeneratePreview span,
+.mandaBemTrackingCard span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.mandaBemGeneratePreview b,
+.mandaBemTrackingCard b {
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.mandaBemDateFilter {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(150px, 220px) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.mandaBemDateFilter button {
+  min-height: 42px;
+}
+
+.mandaBemTableWrap {
+  overflow-x: auto;
+}
+
+.mandaBemTableWrap table {
+  min-width: 760px;
+  margin: 0;
+}
+
+.mandaBemTrackingSearch {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 9px;
+}
+
+.mandaBemTrackingSearch button {
+  min-height: 42px;
+}
+
+.mandaBemTrackingCard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.mandaBemTrackingCard > div {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  padding: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.mandaBemBalance {
+  min-height: 230px;
+  align-content: center;
+  justify-items: start;
+  gap: 16px;
+}
+
+.mandaBemBalance h2 {
+  margin: 5px 0 7px;
+}
+
+.mandaBemBalance p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.mandaBemError {
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--line));
+  border-radius: 10px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  padding: 10px 12px;
+  font-size: 10px;
+  font-weight: 750;
+}
+
+/* Botão de geração dentro do Controle de envios */
+.pendingDeliverySummary .mandaBemDeliveryCard {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 14px;
+}
+
+.mandaBemDeliveryCard > span,
+.mandaBemDeliveryCard > b,
+.mandaBemDeliveryCard > small {
+  grid-column: 1;
+}
+
+.mandaBemGenerateButton {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  min-height: 40px;
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  padding: 0 14px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.mandaBemGenerateButton:hover {
+  background: var(--accent-strong);
+}
+
+/* Modal de geração de envio */
+.mandaBemLabelDialog {
+  width: min(900px, calc(100vw - 30px));
+  max-height: min(92dvh, 880px);
+  overflow: hidden !important;
+}
+
+.mandaBemLabelDialog > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mandaBemLabelScroll {
+  max-height: 62dvh;
+  overflow-y: auto;
+  display: grid;
+  gap: 13px;
+  padding-right: 5px;
+}
+
+.mandaBemFormSection {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+:root[data-theme="dark"] .mandaBemFormSection {
+  border-color: rgb(255 255 255 / 32%);
+}
+
+.mandaBemFormSection h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.mandaBemSectionTitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mandaBemSectionTitle small {
+  color: var(--muted);
+}
+
+.mandaBemLabelFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.mandaBemLabelFooter button {
+  min-height: 41px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  padding: 0 14px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 850;
+}
+
+.mandaBemLabelFooter .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.mandaBemLabelFooter button:disabled,
+.mandaBemActionButton:disabled,
+.mandaBemDateFilter button:disabled,
+.mandaBemTrackingSearch button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+
+@media (max-width: 900px) {
+  .mandaBemOverviewGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mandaBemGeneratePreview,
+  .mandaBemTrackingCard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .mandaBemHero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .mandaBemConnection {
+    align-self: stretch;
+    justify-content: center;
+  }
+
+  .mandaBemNav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mandaBemOverviewGrid,
+  .mandaBemFormGrid,
+  .mandaBemGeneratePreview,
+  .mandaBemTrackingCard,
+  .mandaBemDimensions,
+  .mandaBemDateFilter,
+  .mandaBemTrackingSearch {
+    grid-template-columns: 1fr;
+  }
+
+  .pendingDeliverySummary .mandaBemDeliveryCard {
+    grid-template-columns: 1fr;
+  }
+
+  .mandaBemGenerateButton {
+    grid-column: 1;
+    grid-row: auto;
+    margin-top: 7px;
+  }
+
+  .mandaBemLabelDialog {
+    width: calc(100vw - 20px) !important;
+  }
+}
