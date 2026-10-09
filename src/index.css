@@ -9469,11 +9469,22 @@ aside nav {
 .clientSaleAddressRow {
   display: grid;
   grid-template-columns:
-    minmax(260px, 2fr)
-    minmax(145px, .75fr)
-    minmax(110px, .55fr)
-    minmax(180px, 1fr);
+    minmax(0, 2.15fr)
+    minmax(0, 1fr)
+    minmax(0, .72fr)
+    minmax(0, 1.25fr);
+  align-items: end;
   gap: 12px;
+}
+
+.clientSaleAddressRow > label {
+  min-width: 0;
+}
+
+.clientSaleAddressRow > label > input,
+.clientSaleAddressRow > label > select {
+  width: 100%;
+  min-width: 0;
 }
 
 .addressRow.clientAddressRow {
@@ -9683,4 +9694,81 @@ aside nav {
   .productStockActions {
     min-width: 245px;
   }
+}
+
+
+/* Estoque de insumos usa o mesmo padrão visual do estoque de perfumes */
+.supplyStockTable {
+  min-width: 980px;
+}
+
+.supplyStockTable .productStockActions {
+  min-width: 190px;
+}
+
+.supplyNextLot {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.productBottleSequence > button small {
+  line-height: 1.2;
+}
+
+.productBottleSequence > button:not(.current) small {
+  color: inherit;
+}
+
+@media (max-width: 900px) {
+  .clientSaleAddressRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .supplyStockTable {
+    min-width: 900px;
+  }
+}
+
+
+/* Validação visual de volume no lançamento de vendas */
+.saleVolumeField {
+  min-width: 0;
+}
+
+.volumeApc {
+  align-items: start;
+}
+
+.volumeApc > .apcButton {
+  margin-top: 17px;
+}
+
+.saleVolumeField:has(.saleStockWarning) input {
+  border-color: #ef6670 !important;
+  box-shadow: 0 0 0 2px rgb(239 102 112 / 12%);
+}
+
+.saleStockWarning {
+  margin-top: 7px;
+  padding: 9px 10px;
+  border: 1px solid rgb(239 102 112 / 55%);
+  border-radius: 9px;
+  background: rgb(239 102 112 / 10%);
+  color: #f5a0a7;
+  display: grid;
+  gap: 3px;
+  line-height: 1.35;
+}
+
+.saleStockWarning b {
+  color: #ffb0b6;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.saleStockWarning span {
+  color: #e9a6ac;
+  font-size: 9px;
+  font-weight: 650;
 }
