@@ -9772,3 +9772,298 @@ aside nav {
   font-size: 9px;
   font-weight: 650;
 }
+
+
+/* =========================================================
+   DAF — contornos de superfícies escuras e preparação simplificada
+   ========================================================= */
+
+/* Em tema escuro, todo box principal recebe o contorno claro solicitado. */
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .cards > div,
+:root[data-theme="dark"] .products > div,
+:root[data-theme="dark"] .clients > div,
+:root[data-theme="dark"] .overlay > form,
+:root[data-theme="dark"] .overlay > .systemDialog,
+:root[data-theme="dark"] .overlay > .history,
+:root[data-theme="dark"] .overlay .systemDialog,
+:root[data-theme="dark"] .costEditor,
+:root[data-theme="dark"] .clientHistory,
+:root[data-theme="dark"] .supplierHistory,
+:root[data-theme="dark"] .stockReportDialog,
+:root[data-theme="dark"] .productSalesHistoryDialog {
+  border: 1px solid rgb(255 255 255 / 68%) !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 4%),
+    var(--soft-shadow);
+}
+
+/* Boxes internos também ganham separação clara, sem competir com o contorno principal. */
+:root[data-theme="dark"] .prepare > div,
+:root[data-theme="dark"] .shipping details,
+:root[data-theme="dark"] .forecastList > div,
+:root[data-theme="dark"] .brandProductsList > div,
+:root[data-theme="dark"] .brandProductsSummary > div,
+:root[data-theme="dark"] .quickQuoteCard,
+:root[data-theme="dark"] .saleSupplies,
+:root[data-theme="dark"] .saleSupplyList > div,
+:root[data-theme="dark"] .shippingCostBox,
+:root[data-theme="dark"] .installmentSummary,
+:root[data-theme="dark"] .costEditorSection,
+:root[data-theme="dark"] .clientHistoryStats > div,
+:root[data-theme="dark"] .supplierHistoryStats > div,
+:root[data-theme="dark"] .profitControl > .cards > div {
+  border: 1px solid rgb(255 255 255 / 38%) !important;
+}
+
+/* Visualização simplificada: hierarquia limpa e leitura rápida. */
+.simplifiedPrepareDialog {
+  width: min(960px, calc(100vw - 32px));
+  max-height: min(90dvh, 820px);
+  padding: 26px !important;
+  gap: 18px;
+  overflow: hidden !important;
+}
+
+:root[data-theme="dark"] .simplifiedPrepareDialog {
+  border: 1px solid rgb(255 255 255 / 78%) !important;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 7%),
+    0 28px 80px rgb(0 0 0 / 48%) !important;
+}
+
+.simplifiedPrepareDialog > header {
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgb(255 255 255 / 28%);
+}
+
+.simplifiedPrepareDialog > header h2 {
+  margin-top: 5px;
+  font-size: clamp(24px, 3vw, 34px);
+  letter-spacing: -.035em;
+}
+
+.simplifiedPrepareIntro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+}
+
+.simplifiedPrepareIntro > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.simplifiedPrepareIntro > p b {
+  color: var(--text);
+}
+
+.simplifiedPrepareSummary {
+  display: flex;
+  gap: 8px;
+}
+
+.simplifiedPrepareSummary > div {
+  min-width: 96px;
+  padding: 9px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  background: var(--panel-2);
+  display: grid;
+  gap: 2px;
+}
+
+:root[data-theme="dark"] .simplifiedPrepareSummary > div {
+  border-color: rgb(255 255 255 / 38%);
+}
+
+.simplifiedPrepareSummary span {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+
+.simplifiedPrepareSummary b {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.simplifiedPrepareList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 12px;
+  max-height: min(61dvh, 570px);
+  padding: 2px 8px 2px 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+.simplifiedPrepareList::-webkit-scrollbar {
+  width: 8px;
+}
+
+.simplifiedPrepareList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.simplifiedPrepareList::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(255 255 255 / 30%);
+}
+
+.simplifiedPrepareList > .simplifiedPrepareCard {
+  min-width: 0;
+  padding: 15px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: grid;
+  gap: 13px;
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .simplifiedPrepareList > .simplifiedPrepareCard {
+  border-color: rgb(255 255 255 / 42%) !important;
+  background: var(--panel-2) !important;
+}
+
+.simplifiedPrepareCardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.simplifiedPrepareCardHead > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.simplifiedPrepareCardHead small {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.simplifiedPrepareCardHead b {
+  color: var(--text) !important;
+  font-size: 14px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.simplifiedPrepareTotal {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent) !important;
+  font-size: 9px !important;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.simplifiedVolumes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 7px;
+}
+
+.simplifiedVolumes > span {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input) !important;
+  color: var(--text) !important;
+  display: grid;
+  gap: 2px;
+}
+
+:root[data-theme="dark"] .simplifiedVolumes > span {
+  border-color: rgb(255 255 255 / 28%);
+}
+
+.simplifiedVolumes > span b {
+  color: var(--text) !important;
+  font-size: 12px;
+}
+
+.simplifiedVolumes > span small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.simplifiedPrepareList > .empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 28px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .simplifiedPrepareDialog {
+    padding: 17px !important;
+    gap: 14px;
+  }
+
+  .simplifiedPrepareIntro {
+    grid-template-columns: 1fr;
+  }
+
+  .simplifiedPrepareSummary {
+    width: 100%;
+  }
+
+  .simplifiedPrepareSummary > div {
+    flex: 1;
+  }
+
+  .simplifiedPrepareList {
+    grid-template-columns: 1fr;
+    max-height: 62dvh;
+    padding-right: 4px;
+  }
+}
+
+
+/* Envios: pedidos individuais sem contorno externo */
+:root[data-theme="dark"] .shipping .shippingItem,
+:root[data-theme="dark"] .shipping .shippingItem > details,
+.shipping .shippingItem,
+.shipping .shippingItem > details {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.shipping .shippingItem {
+  background: var(--panel-2);
+}
+
+.prepareGroupedOrders {
+  margin: 3px 0 5px;
+  color: var(--accent) !important;
+  font-weight: 800;
+}
+
+.mandaBemPlaceholder {
+  min-height: 220px;
+}
+
+.shippingNavGroup .stockSubnav button {
+  justify-content: space-between;
+}
