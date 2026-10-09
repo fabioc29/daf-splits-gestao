@@ -9729,3 +9729,46 @@ aside nav {
     min-width: 900px;
   }
 }
+
+
+/* Validação visual de volume no lançamento de vendas */
+.saleVolumeField {
+  min-width: 0;
+}
+
+.volumeApc {
+  align-items: start;
+}
+
+.volumeApc > .apcButton {
+  margin-top: 17px;
+}
+
+.saleVolumeField:has(.saleStockWarning) input {
+  border-color: #ef6670 !important;
+  box-shadow: 0 0 0 2px rgb(239 102 112 / 12%);
+}
+
+.saleStockWarning {
+  margin-top: 7px;
+  padding: 9px 10px;
+  border: 1px solid rgb(239 102 112 / 55%);
+  border-radius: 9px;
+  background: rgb(239 102 112 / 10%);
+  color: #f5a0a7;
+  display: grid;
+  gap: 3px;
+  line-height: 1.35;
+}
+
+.saleStockWarning b {
+  color: #ffb0b6;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.saleStockWarning span {
+  color: #e9a6ac;
+  font-size: 9px;
+  font-weight: 650;
+}
