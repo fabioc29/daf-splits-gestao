@@ -166,15 +166,6 @@ type V = {
     | "Shopee";
   accumulatingDecants?: boolean;
   preparationStatus?: "preparing" | "accumulating" | "waiting";
-  melhorEnvio?: {
-    orderId: string;
-    printUrl?: string;
-    tracking?: string;
-    serviceId?: number;
-    serviceName?: string;
-    price?: number;
-    createdAt?: string;
-  };
   historical?: boolean;
   description?: string;
 };
@@ -875,6 +866,7 @@ function System({ session }: { session: Session }) {
     [toast, setToast] = useState("");
   const [stockMenuOpen, setStockMenuOpen] = useState(false);
   const [financeMenuOpen, setFinanceMenuOpen] = useState(false);
+  const [shippingMenuOpen, setShippingMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [localUi, setLocalUi] = useState<LocalUiSettings>(() =>
     readLocalUiSettings(),
@@ -1126,6 +1118,8 @@ const action =
   const stockSectionActive =
     page === "stock" || page === "stock-supplies" || page === "catalog";
   const financeSectionActive = page === "finance" || page === "receivables";
+  const shippingSectionActive =
+    page === "shipping" || page === "shipping-mandabem";
   const orderedNav = [...nav].sort((a, b) => {
     const aIndex = localUi.menuOrder.indexOf(a[0]);
     const bIndex = localUi.menuOrder.indexOf(b[0]);
@@ -1143,7 +1137,9 @@ const action =
           ? "Catálogo"
           : page === "receivables"
             ? "Vendas a receber"
-            : nav.find((item) => item[0] === page)?.[1] || "Painel";
+            : page === "shipping-mandabem"
+              ? "MandaBem"
+              : nav.find((item) => item[0] === page)?.[1] || "Painel";
   if (!ready && sync !== "error")
     return (
       <div className="authPage">
@@ -1210,6 +1206,59 @@ const action =
                         onClick={() => setPage("catalog")}
                       >
                         Catálogo
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+
+            if (id === "shipping") {
+              return (
+                <div className="stockNavGroup shippingNavGroup" key={id}>
+                  <button
+                    className={
+                      shippingSectionActive ? "on stockParent" : "stockParent"
+                    }
+                    onClick={() => setShippingMenuOpen((open) => !open)}
+                    aria-expanded={shippingMenuOpen}
+                  >
+                    <Icon />
+                    {label}
+                    {navAlerts.shipping ? (
+                      <span className="navAlertGroup">
+                        <span
+                          className="navAlert"
+                          aria-label={String(navAlerts.shipping) + " pendente(s)"}
+                        >
+                          {navAlerts.shipping}
+                        </span>
+                      </span>
+                    ) : null}
+                    <ChevronDown
+                      className={
+                        "stockNavChevron" + (shippingMenuOpen ? " open" : "")
+                      }
+                    />
+                  </button>
+                  {shippingMenuOpen ? (
+                    <div className="stockSubnav">
+                      <button
+                        className={page === "shipping" ? "on" : ""}
+                        onClick={() => setPage("shipping")}
+                      >
+                        Controle de envios
+                        {navAlerts.shipping ? (
+                          <span className="subnavCount">
+                            {navAlerts.shipping}
+                          </span>
+                        ) : null}
+                      </button>
+                      <button
+                        className={page === "shipping-mandabem" ? "on" : ""}
+                        onClick={() => setPage("shipping-mandabem")}
+                      >
+                        MandaBem
                       </button>
                     </div>
                   ) : null}
@@ -1392,6 +1441,8 @@ const action =
             <Prepare d={data} set={setData} notify={notify} />
           ) : page === "shipping" ? (
             <Shipping d={data} set={setData} notify={notify} />
+          ) : page === "shipping-mandabem" ? (
+            <div className="panel mandaBemPlaceholder" aria-label="MandaBem" />
           ) : page === "receivables" ? (
             <Receivables
               d={data}
@@ -4043,74 +4094,155 @@ function Prepare({
   set: any;
   notify: (s: string) => void;
 }) {
+  type PreparationStatus = "preparing" | "accumulating" | "waiting";
+  type PreparationGroup = {
+    key: string;
+    sales: V[];
+    customer: string;
+    status: PreparationStatus;
+  };
+
   const [tab, setTab] = useState("pending");
-  const [shippingSale, setShippingSale] = useState<V | null>(null);
+  const [shippingGroup, setShippingGroup] = useState<V[]>([]);
   const [simplifiedOpen, setSimplifiedOpen] = useState(false);
   const [correiosModeOpen, setCorreiosModeOpen] = useState(false);
-  const list = d.sales.filter((s) => {
-    if (s.status === "cancelled" || isHistoricalSale(s)) return false;
-    if (tab === "done") return s.prepared;
-    if (s.prepared) return false;
-    const status = getPreparationStatus(s);
-    if (tab === "accumulating") return status === "accumulating";
-    return status !== "accumulating";
+
+  const operationalSales = d.sales.filter(
+    (sale) => sale.status !== "cancelled" && !isHistoricalSale(sale),
+  );
+  const pendingSales = operationalSales.filter((sale) => !sale.prepared);
+  const groupedPendingMap = new Map<string, PreparationGroup>();
+
+  pendingSales.forEach((sale) => {
+    const customer = saleCustomer(sale, d);
+    const customerKey = sale.clientId
+      ? `client:${sale.clientId}`
+      : `name:${customer.trim().toLowerCase()}`;
+    const originKey = isMarketplaceSale(sale)
+      ? `marketplace:${sale.marketplace || "marketplace"}`
+      : "direct";
+    const key = `${customerKey}|${originKey}`;
+    const existing = groupedPendingMap.get(key);
+    if (existing) {
+      existing.sales.push(sale);
+      const statuses = existing.sales.map(getPreparationStatus);
+      existing.status = statuses.includes("accumulating")
+        ? "accumulating"
+        : statuses.includes("waiting")
+          ? "waiting"
+          : "preparing";
+      return;
+    }
+    groupedPendingMap.set(key, {
+      key,
+      sales: [sale],
+      customer,
+      status: getPreparationStatus(sale),
+    });
   });
-  function toggle(s: V) {
-    const done = !s.prepared;
-    set((x: D) => ({
-      ...x,
-      sales: x.sales.map((v) =>
-        v.id === s.id
-          ? { ...v, prepared: done, sent: done ? v.sent : false }
-          : v,
+
+  const pendingGroups = Array.from(groupedPendingMap.values()).map((group) => ({
+    ...group,
+    sales: [...group.sales].sort(
+      (a, b) => a.date.localeCompare(b.date) || a.id - b.id,
+    ),
+  }));
+  const doneGroups: PreparationGroup[] = operationalSales
+    .filter((sale) => sale.prepared)
+    .map((sale) => ({
+      key: `done:${sale.id}`,
+      sales: [sale],
+      customer: saleCustomer(sale, d),
+      status: getPreparationStatus(sale),
+    }));
+
+  const list =
+    tab === "done"
+      ? doneGroups
+      : pendingGroups.filter((group) =>
+          tab === "accumulating"
+            ? group.status === "accumulating"
+            : group.status !== "accumulating",
+        );
+
+  function toggleGroup(group: PreparationGroup) {
+    const saleIds = new Set(group.sales.map((sale) => sale.id));
+    const done = !group.sales.every((sale) => sale.prepared);
+    set((state: D) => ({
+      ...state,
+      sales: state.sales.map((sale) =>
+        saleIds.has(sale.id)
+          ? {
+              ...sale,
+              prepared: done,
+              sent: done ? sale.sent : false,
+            }
+          : sale,
       ),
     }));
     notify(
       done
-        ? `Pedido #${orderNo(s.id)} movido para Finalizados.`
-        : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
+        ? `${group.sales.length > 1 ? "Pedidos" : "Pedido"} de ${group.customer} movido(s) para Finalizados.`
+        : `${group.sales.length > 1 ? "Pedidos" : "Pedido"} de ${group.customer} voltou(aram) para A preparar.`,
     );
   }
-  function prepareSale(s: V) {
-    if (isMarketplaceSale(s)) {
-      const shippingMethod = s.marketplace || "TikTok Shop";
+
+  function prepareGroup(group: PreparationGroup) {
+    const marketplaceSales = group.sales.filter(isMarketplaceSale);
+    if (
+      marketplaceSales.length === group.sales.length &&
+      marketplaceSales.length > 0
+    ) {
+      const saleIds = new Set(group.sales.map((sale) => sale.id));
       set((state: D) => ({
         ...state,
         sales: state.sales.map((sale) =>
-          sale.id === s.id
-            ? { ...sale, prepared: true, sent: false, shippingMethod }
+          saleIds.has(sale.id)
+            ? {
+                ...sale,
+                prepared: true,
+                sent: false,
+                shippingMethod: sale.marketplace || "TikTok Shop",
+              }
             : sale,
         ),
       }));
       notify(
-        `Pedido #${orderNo(s.id)} finalizado para envio pela ${shippingMethod}.`,
+        `Pedidos de ${group.customer} finalizados para envio pelo marketplace.`,
       );
       return;
     }
-    setShippingSale(s);
+    setShippingGroup(group.sales);
   }
+
   function finishWithShipping(method: V["shippingMethod"]) {
-    if (!shippingSale || !method) return;
+    if (!shippingGroup.length || !method) return;
+    const saleIds = new Set(shippingGroup.map((sale) => sale.id));
+    const customer = saleCustomer(shippingGroup[0], d);
     set((state: D) => ({
       ...state,
       sales: state.sales.map((sale) =>
-        sale.id === shippingSale.id
+        saleIds.has(sale.id)
           ? { ...sale, prepared: true, sent: false, shippingMethod: method }
           : sale,
       ),
     }));
-    notify(`Pedido #${orderNo(shippingSale.id)} finalizado para envio por ${method}.`);
+    notify(
+      `${shippingGroup.length > 1 ? "Pedidos" : "Pedido"} de ${customer} finalizado(s) para envio por ${method}.`,
+    );
     setCorreiosModeOpen(false);
-    setShippingSale(null);
+    setShippingGroup([]);
   }
+
   function setPreparationStatus(
-    s: V,
-    preparationStatus: "preparing" | "accumulating" | "waiting",
+    group: PreparationGroup,
+    preparationStatus: PreparationStatus,
   ) {
+    const saleIds = new Set(group.sales.map((sale) => sale.id));
     set((state: D) => ({
       ...state,
       sales: state.sales.map((sale) =>
-        sale.id === s.id
+        saleIds.has(sale.id)
           ? {
               ...sale,
               preparationStatus,
@@ -4121,10 +4253,10 @@ function Prepare({
     }));
     notify(
       preparationStatus === "accumulating"
-        ? `Pedido #${orderNo(s.id)} marcado para acumular mais decantes.`
+        ? `Pedidos de ${group.customer} marcados para acumular mais decantes.`
         : preparationStatus === "waiting"
-          ? `Pedido #${orderNo(s.id)} marcado como Vai esperar.`
-          : `Pedido #${orderNo(s.id)} voltou para A preparar.`,
+          ? `Pedidos de ${group.customer} marcados como Vai esperar.`
+          : `Pedidos de ${group.customer} voltaram para A preparar.`,
     );
   }
   const simplifiedMap = new Map<
@@ -4209,50 +4341,66 @@ function Prepare({
         </button>
       </div>
       <div className="prepare">
-        {list.map((s) => (
-          <div key={s.id} className={s.prepared ? "done" : ""}>
-            <button
-              className="checkButton"
-              aria-label={s.prepared ? "Reabrir pedido" : "Finalizar pedido"}
-              onClick={() => (s.prepared ? toggle(s) : prepareSale(s))}
-            >
-              {s.prepared ? <Check /> : null}
-            </button>
-            <span>
-              <b>{saleCustomer(s, d)}</b>
-              {s.items.map((x, i) => (
-                <small key={i}>
-                  {d.products.find((p) => p.id === x.productId)?.name} — {x.ml}{" "}
-                  ml{x.isApc ? " · APC" : ""}
-                </small>
-              ))}
-            </span>
-            {saleOriginBadge(s)}
-            <span className="prepareActions">
-              {s.prepared ? <em>Finalizado</em> : (
-                <label className="preparationStatus">
-                  <select
-                    aria-label={`Situação do pedido #${orderNo(s.id)}`}
-                    value={getPreparationStatus(s)}
-                    onChange={(event) =>
-                      setPreparationStatus(
-                        s,
-                        event.target.value as
-                          | "preparing"
-                          | "accumulating"
-                          | "waiting",
-                      )
-                    }
-                  >
-                    <option value="preparing">A preparar</option>
-                    <option value="accumulating">Vai acumular</option>
-                    <option value="waiting">Vai esperar</option>
-                  </select>
-                </label>
-              )}
-            </span>
-          </div>
-        ))}
+        {list.map((group) => {
+          const representative = group.sales[0];
+          const items = group.sales.flatMap((sale) =>
+            sale.items.map((item) => ({ sale, item })),
+          );
+          const done = group.sales.every((sale) => sale.prepared);
+          return (
+            <div key={group.key} className={done ? "done" : ""}>
+              <button
+                className="checkButton"
+                aria-label={done ? "Reabrir pedido" : "Finalizar pedido"}
+                onClick={() =>
+                  done ? toggleGroup(group) : prepareGroup(group)
+                }
+              >
+                {done ? <Check /> : null}
+              </button>
+              <span>
+                <b>{group.customer}</b>
+                {group.sales.length > 1 ? (
+                  <small className="prepareGroupedOrders">
+                    {group.sales.length} pedidos reunidos ·{" "}
+                    {group.sales
+                      .map((sale) => "#" + orderNo(sale.id))
+                      .join(" · ")}
+                  </small>
+                ) : null}
+                {items.map(({ sale, item }, index) => (
+                  <small key={`${sale.id}-${index}`}>
+                    {d.products.find((p) => p.id === item.productId)?.name} —{" "}
+                    {item.ml} ml{item.isApc ? " · APC" : ""}
+                  </small>
+                ))}
+              </span>
+              {saleOriginBadge(representative)}
+              <span className="prepareActions">
+                {done ? (
+                  <em>Finalizado</em>
+                ) : (
+                  <label className="preparationStatus">
+                    <select
+                      aria-label={`Situação dos pedidos de ${group.customer}`}
+                      value={group.status}
+                      onChange={(event) =>
+                        setPreparationStatus(
+                          group,
+                          event.target.value as PreparationStatus,
+                        )
+                      }
+                    >
+                      <option value="preparing">A preparar</option>
+                      <option value="accumulating">Vai acumular</option>
+                      <option value="waiting">Vai esperar</option>
+                    </select>
+                  </label>
+                )}
+              </span>
+            </div>
+          );
+        })}
         {!list.length ? <p>Nenhum pedido nesta lista.</p> : null}
       </div>
     </div>
@@ -4321,7 +4469,7 @@ function Prepare({
         </div>
       </div>
     ) : null}
-    {shippingSale ? (
+    {shippingGroup.length ? (
       <div className="overlay">
         <div className="systemDialog">
           <header>
@@ -4330,13 +4478,18 @@ function Prepare({
               type="button"
               onClick={() => {
                 setCorreiosModeOpen(false);
-                setShippingSale(null);
+                setShippingGroup([]);
               }}
             >
               <X />
             </button>
           </header>
-          <p>Pedido #{orderNo(shippingSale.id)} · {saleCustomer(shippingSale, d)}</p>
+          <p>
+            {shippingGroup.length > 1
+              ? `${shippingGroup.length} pedidos reunidos`
+              : `Pedido #${orderNo(shippingGroup[0].id)}`}{" "}
+            · {saleCustomer(shippingGroup[0], d)}
+          </p>
           <div className="shippingChoices">
             <button
               type="button"
@@ -4353,7 +4506,7 @@ function Prepare({
         </div>
       </div>
     ) : null}
-    {shippingSale && correiosModeOpen ? (
+    {shippingGroup.length && correiosModeOpen ? (
       <div className="overlay nestedOverlay">
         <div className="systemDialog correiosModeDialog">
           <header>
@@ -4370,7 +4523,10 @@ function Prepare({
             </button>
           </header>
           <p>
-            Pedido #{orderNo(shippingSale.id)} · {saleCustomer(shippingSale, d)}
+            {shippingGroup.length > 1
+              ? `${shippingGroup.length} pedidos reunidos`
+              : `Pedido #${orderNo(shippingGroup[0].id)}`}{" "}
+            · {saleCustomer(shippingGroup[0], d)}
           </p>
           <div className="shippingChoices correiosChoices">
             <button
@@ -4408,80 +4564,10 @@ function Shipping({
   set: any;
   notify: (s: string) => void;
 }) {
-  type MeStatus = {
-    loading: boolean;
-    configured: boolean;
-    connected: boolean;
-    environment?: string;
-    user?: { name?: string; email?: string };
-    reason?: string;
-  };
-  type MeQuote = {
-    id: number;
-    name: string;
-    company: string;
-    price: number;
-    deliveryTime: number;
-  };
-  type Sender = {
-    name: string;
-    email: string;
-    phone: string;
-    document: string;
-    postal_code: string;
-    address: string;
-    number: string;
-    complement: string;
-    district: string;
-    city: string;
-    state_abbr: string;
-  };
-
   const [tab, setTab] = useState("pending");
   const [addressIndex, setAddressIndex] = useState<Record<number, number>>({});
-  const [meStatus, setMeStatus] = useState<MeStatus>({
-    loading: true,
-    configured: false,
-    connected: false,
-  });
-  const [labelSale, setLabelSale] = useState<V | null>(null);
-  const [recipientEmail, setRecipientEmail] = useState("");
-  const [quotes, setQuotes] = useState<MeQuote[]>([]);
-  const [selectedService, setSelectedService] = useState<number | null>(null);
-  const [contentValues, setContentValues] = useState<number[]>([]);
-  const [meBusy, setMeBusy] = useState("");
-  const [meError, setMeError] = useState("");
-  const [sender, setSender] = useState<Sender>({
-    name: "",
-    email: "",
-    phone: "",
-    document: "",
-    postal_code: "",
-    address: "",
-    number: "",
-    complement: "",
-    district: "",
-    city: "",
-    state_abbr: "",
-  });
-  const [packageData, setPackageData] = useState({
-    width: "11",
-    height: "3",
-    length: "16",
-    weight: "",
-  });
   const [shippingQuery, setShippingQuery] = useState("");
   const [shippingMonth, setShippingMonth] = useState(today().slice(0, 7));
-  const [trackingSale, setTrackingSale] = useState<V | null>(null);
-  const [trackingInfo, setTrackingInfo] = useState<any>(null);
-  const [trackingBusy, setTrackingBusy] = useState(false);
-  const [trackingError, setTrackingError] = useState("");
-  const [quickQuoteOpen, setQuickQuoteOpen] = useState(false);
-  const [quickQuoteToPostalCode, setQuickQuoteToPostalCode] = useState("");
-  const [quickQuoteInsuranceValue, setQuickQuoteInsuranceValue] = useState("");
-  const [quickQuotes, setQuickQuotes] = useState<MeQuote[]>([]);
-  const [quickQuoteBusy, setQuickQuoteBusy] = useState(false);
-  const [quickQuoteError, setQuickQuoteError] = useState("");
 
   const shippingMonthLabel = new Intl.DateTimeFormat("pt-BR", {
     month: "long",
@@ -4497,38 +4583,57 @@ function Shipping({
   }
 
   const list = d.sales.filter(
-    (s) =>
-      s.status !== "cancelled" &&
-      s.prepared &&
-      !isHistoricalSale(s) &&
-      s.date.startsWith(shippingMonth) &&
-      (tab === "sent" ? s.sent : !s.sent) &&
-      saleCustomer(s, d)
+    (sale) =>
+      sale.status !== "cancelled" &&
+      sale.prepared &&
+      !isHistoricalSale(sale) &&
+      sale.date.startsWith(shippingMonth) &&
+      (tab === "sent" ? sale.sent : !sale.sent) &&
+      saleCustomer(sale, d)
         .toLowerCase()
         .includes(shippingQuery.trim().toLowerCase()),
   );
 
-  function labelUnavailableReason(sale: V) {
-    const method = String(
-      isMarketplaceSale(sale)
-        ? sale.marketplace || sale.shippingMethod || ""
-        : sale.shippingMethod || "",
-    ).toLowerCase();
-    if (method.includes("uber") || method.includes("pessoalmente")) {
-      return "Indisponível para pedidos Uber/Pessoalmente.";
-    }
-    if (method.includes("tiktok")) {
-      return "Indisponível para pedidos do TikTok Shop.";
-    }
-    if (method.includes("shopee")) {
-      return "Indisponível para pedidos da Shopee.";
-    }
-    return "";
+  function toggle(sale: V) {
+    const sent = !sale.sent;
+    set((state: D) => ({
+      ...state,
+      sales: state.sales.map((item) =>
+        item.id === sale.id ? { ...item, sent } : item,
+      ),
+    }));
+    notify(
+      sent
+        ? `Pedido #${orderNo(sale.id)} movido para Enviados.`
+        : `Pedido #${orderNo(sale.id)} voltou para A enviar.`,
+    );
+  }
+
+  function changeShippingMethod(
+    saleId: number,
+    shippingMethod: V["shippingMethod"],
+  ) {
+    set((state: D) => ({
+      ...state,
+      sales: state.sales.map((sale) =>
+        sale.id === saleId ? { ...sale, shippingMethod } : sale,
+      ),
+    }));
+    notify("Forma de envio atualizada.");
   }
 
   function updateShippingClientField(
     clientId: number,
-    field: "name" | "phone" | "cpf" | "cep" | "number" | "district" | "city" | "state",
+    field:
+      | "name"
+      | "phone"
+      | "cpf"
+      | "cep"
+      | "number"
+      | "complement"
+      | "district"
+      | "city"
+      | "state",
     value: string,
   ) {
     const nextValue =
@@ -4561,7 +4666,7 @@ function Shipping({
   function updateShippingAddress(
     clientId: number,
     index: number,
-    field: "value" | "label" | "district" | "city" | "state",
+    field: "value" | "label" | "district" | "city" | "state" | "complement",
     value: string,
   ) {
     set((state: D) => ({
@@ -4578,1569 +4683,441 @@ function Shipping({
     }));
   }
 
-  async function refreshMeStatus() {
-    setMeStatus((current) => ({ ...current, loading: true }));
-    try {
-      const response = await fetch("/api/melhor-envio/status", {
-        credentials: "include",
-      });
-      const data = await response.json();
-      setMeStatus({
-        loading: false,
-        configured: Boolean(data.configured),
-        connected: Boolean(data.connected),
-        environment: data.environment,
-        user: data.user,
-        reason: data.reason,
-      });
-    } catch {
-      setMeStatus({
-        loading: false,
-        configured: false,
-        connected: false,
-        reason: "Não foi possível consultar a integração.",
-      });
-    }
-  }
-
-  useEffect(() => {
-    try {
-      const storedSender = localStorage.getItem("daf-me-sender-v1");
-      if (storedSender) {
-        setSender((current) => ({
-          ...current,
-          ...JSON.parse(storedSender),
-        }));
-      }
-      const storedPackage = localStorage.getItem("daf-me-package-v1");
-      if (storedPackage) {
-        setPackageData((current) => ({
-          ...current,
-          ...JSON.parse(storedPackage),
-        }));
-      }
-    } catch {
-      // Mantém os campos vazios caso o navegador não permita armazenamento local.
-    }
-
-    const query = new URLSearchParams(window.location.search);
-    if (query.get("melhor_envio") === "connected") {
-      notify("Melhor Envio conectado com sucesso.");
-      window.history.replaceState({}, "", window.location.pathname);
-    } else if (query.get("melhor_envio") === "error") {
-      notify("Não foi possível conectar o Melhor Envio.");
-      window.history.replaceState({}, "", window.location.pathname);
-    }
-    refreshMeStatus();
-  }, []);
-
-  function toggle(s: V) {
-    const sent = !s.sent;
-    set((x: D) => ({
-      ...x,
-      sales: x.sales.map((v) => (v.id === s.id ? { ...v, sent } : v)),
-    }));
-    notify(
-      sent
-        ? `Pedido #${orderNo(s.id)} movido para Enviados.`
-        : `Pedido #${orderNo(s.id)} voltou para A enviar.`,
-    );
-  }
-
-  function changeShippingMethod(
-    saleId: number,
-    shippingMethod: V["shippingMethod"],
-  ) {
-    set((state: D) => ({
-      ...state,
-      sales: state.sales.map((sale) =>
-        sale.id === saleId ? { ...sale, shippingMethod } : sale,
-      ),
-    }));
-    notify("Forma de envio atualizada.");
-  }
-
-  function connectMelhorEnvio() {
-    window.location.href = "/api/melhor-envio/auth";
-  }
-
-  async function disconnectMelhorEnvio() {
-    if (!window.confirm("Desconectar a conta do Melhor Envio deste navegador?"))
-      return;
-    await fetch("/api/melhor-envio/disconnect", {
-      method: "POST",
-      credentials: "include",
-    });
-    await refreshMeStatus();
-    notify("Melhor Envio desconectado.");
-  }
-
-  function openLabelDialog(sale: V) {
-    const unavailableReason = labelUnavailableReason(sale);
-    if (unavailableReason) {
-      notify(unavailableReason);
-      return;
-    }
-    if (!meStatus.connected) {
-      connectMelhorEnvio();
-      return;
-    }
-    setLabelSale(sale);
-    setRecipientEmail("");
-    setQuotes([]);
-    setSelectedService(null);
-    setMeError("");
-    const hasApc = sale.items.some((item) => item.isApc);
-    setPackageData({
-      width: hasApc ? "20" : "11",
-      height: "3",
-      length: hasApc ? "30" : "16",
-      weight: "",
-    });
-    const count = Math.max(1, sale.items.length);
-    const average = Math.max(0.01, sale.total / count);
-    setContentValues(sale.items.map(() => Number(average.toFixed(2))));
-  }
-
-  function closeLabelDialog() {
-    if (meBusy) return;
-    setLabelSale(null);
-    setQuotes([]);
-    setSelectedService(null);
-    setMeError("");
-  }
-
-  function updateSender(field: keyof Sender, value: string) {
-    setSender((current) => ({ ...current, [field]: value }));
-  }
-
-  function saveLabelDefaults() {
-    try {
-      localStorage.setItem("daf-me-sender-v1", JSON.stringify(sender));
-      localStorage.setItem("daf-me-package-v1", JSON.stringify(packageData));
-    } catch {
-      // A integração continua funcionando mesmo sem persistência local.
-    }
-  }
-
-  async function quoteMelhorEnvio() {
-    if (!labelSale) return;
-    const client = d.clients.find((item) => item.id === labelSale.clientId);
-    if (!client?.cep) {
-      setMeError("O cliente precisa ter um CEP cadastrado.");
-      return;
-    }
-    setMeBusy("quote");
-    setMeError("");
-    saveLabelDefaults();
-    try {
-      const response = await fetch("/api/melhor-envio/quote", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromPostalCode: sender.postal_code,
-          toPostalCode: client.cep,
-          width: packageData.width,
-          height: packageData.height,
-          length: packageData.length,
-          weight: packageData.weight,
-          insuranceValue: contentValues.reduce(
-            (sum, value) => sum + Math.max(0, Number(value) || 0),
-            0,
-          ),
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível cotar o frete.");
-      }
-      setQuotes(data.services || []);
-      setSelectedService(null);
-      if (!(data.services || []).length) {
-        setMeError("Nenhum serviço disponível para este envio.");
-      }
-    } catch (error: any) {
-      setMeError(error?.message || "Falha ao cotar frete.");
-    } finally {
-      setMeBusy("");
-    }
-  }
-
-  async function quoteQuickFreight() {
-    if (!meStatus.connected) {
-      connectMelhorEnvio();
-      return;
-    }
-    setQuickQuoteBusy(true);
-    setQuickQuoteError("");
-    setQuickQuotes([]);
-    saveLabelDefaults();
-    try {
-      const response = await fetch("/api/melhor-envio/quote", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromPostalCode: sender.postal_code,
-          toPostalCode: quickQuoteToPostalCode,
-          width: packageData.width,
-          height: packageData.height,
-          length: packageData.length,
-          weight: packageData.weight,
-          insuranceValue: quickQuoteInsuranceValue,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível cotar o frete.");
-      }
-      setQuickQuotes(data.services || []);
-      if (!(data.services || []).length) {
-        setQuickQuoteError("Nenhum serviço disponível para esta rota.");
-      }
-    } catch (error: any) {
-      setQuickQuoteError(error?.message || "Falha ao cotar frete.");
-    } finally {
-      setQuickQuoteBusy(false);
-    }
-  }
-
-  async function generateMelhorEnvioLabel() {
-    if (!labelSale || !selectedService) return;
-    const client = d.clients.find((item) => item.id === labelSale.clientId);
-    const selectedAddress =
-      client?.addresses[addressIndex[labelSale.id] || 0] ||
-      client?.addresses[0];
-    if (!client || !selectedAddress) {
-      setMeError("O cliente precisa ter um endereço cadastrado.");
-      return;
-    }
-    if (!recipientEmail.trim()) {
-      setMeError("Informe o e-mail do destinatário.");
-      return;
-    }
-    if (!client.cpf?.trim()) {
-      setMeError(
-        "O CPF do cliente é obrigatório para a declaração de conteúdo do Melhor Envio.",
-      );
-      return;
-    }
-    const selectedQuote = quotes.find(
-      (quote) => quote.id === selectedService,
-    );
-    if (
-      !window.confirm(
-        `Confirmar a compra da etiqueta ${selectedQuote ? "por " + brl(selectedQuote.price) : ""}? O valor será debitado da carteira do Melhor Envio.`,
-      )
-    )
-      return;
-
-    setMeBusy("label");
-    setMeError("");
-    saveLabelDefaults();
-    try {
-      const products = labelSale.items.map((item, index) => {
-        const product = d.products.find(
-          (candidate) => candidate.id === item.productId,
-        );
-        return {
-          name: `${product ? product.brand + " " + product.name : "Perfume"} · ${item.ml} ml${item.isApc ? " · APC" : ""}`,
-          quantity: 1,
-          unitary_value: Math.max(
-            0.01,
-            Number(contentValues[index] || 0),
-          ),
-        };
-      });
-      const response = await fetch("/api/melhor-envio/label", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          confirmPurchase: true,
-          service: selectedService,
-          orderNumber: orderNo(labelSale.id),
-          from: sender,
-          to: {
-            name: saleCustomer(labelSale, d),
-            email: recipientEmail.trim(),
-            phone: client.phone,
-            document: client.cpf,
-            postal_code: client.cep,
-            address: selectedAddress.value,
-            number: client.number || "",
-            complement: "",
-            district:
-              selectedAddress.district || client.district || "",
-            city: selectedAddress.city || client.city || "",
-            state_abbr: selectedAddress.state || client.state || "",
-          },
-          products,
-          volume: packageData,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(
-          data.error ||
-            data.details?.message ||
-            "Não foi possível gerar a etiqueta.",
-        );
-      }
-
-      const metadata = {
-        orderId: String(data.orderId),
-        printUrl: data.printUrl || "",
-        tracking: data.tracking || "",
-        serviceId: selectedService,
-        serviceName: selectedQuote
-          ? `${selectedQuote.company} · ${selectedQuote.name}`
-          : "Melhor Envio",
-        price: selectedQuote?.price || Number(data.price || 0),
-        createdAt: today(),
-      };
-      set((state: D) => ({
-        ...state,
-        sales: state.sales.map((sale) =>
-          sale.id === labelSale.id
-            ? { ...sale, melhorEnvio: metadata }
-            : sale,
-        ),
-      }));
-
-      if (data.pendingPrint) {
-        notify(
-          "Etiqueta comprada. O Melhor Envio ainda está processando o arquivo de impressão.",
-        );
-      } else {
-        notify("Etiqueta do Melhor Envio gerada com sucesso.");
-      }
-      setLabelSale(null);
-      setQuotes([]);
-      setSelectedService(null);
-    } catch (error: any) {
-      setMeError(error?.message || "Falha ao gerar etiqueta.");
-    } finally {
-      setMeBusy("");
-    }
-  }
-
-  function trackingStatusLabel(status?: string) {
-    const labels: Record<string, string> = {
-      pending: "Pendente",
-      released: "Liberado",
-      paid: "Pago",
-      generated: "Etiqueta gerada",
-      received: "Recebido",
-      posted: "Postado",
-      delivered: "Entregue",
-      undelivered: "Não entregue",
-      suspended: "Suspenso",
-      paused: "Pausado",
-      canceled: "Cancelado",
-      cancelled: "Cancelado",
-    };
-    return labels[String(status || "").toLowerCase()] || status || "Não informado";
-  }
-
-  async function openTrackingStatus(sale: V) {
-    if (!sale.melhorEnvio?.orderId) {
-      notify("Este pedido não possui uma etiqueta do Melhor Envio vinculada.");
-      return;
-    }
-    if (!meStatus.connected) {
-      connectMelhorEnvio();
-      return;
-    }
-    setTrackingSale(sale);
-    setTrackingInfo(null);
-    setTrackingError("");
-    setTrackingBusy(true);
-    try {
-      const response = await fetch("/api/melhor-envio/tracking", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: sale.melhorEnvio.orderId }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || "Não foi possível consultar o rastreio.");
-      }
-      setTrackingInfo(data.tracking);
-    } catch (error: any) {
-      setTrackingError(error?.message || "Falha ao consultar o status da entrega.");
-    } finally {
-      setTrackingBusy(false);
-    }
-  }
-
-  async function fetchPrintUrl(sale: V) {
-    if (!sale.melhorEnvio?.orderId) return;
-    try {
-      const response = await fetch("/api/melhor-envio/print", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: sale.melhorEnvio.orderId }),
-      });
-      const data = await response.json();
-      if (!response.ok || !data.printUrl) {
-        throw new Error(data.error || "A etiqueta ainda não está pronta.");
-      }
-      set((state: D) => ({
-        ...state,
-        sales: state.sales.map((item) =>
-          item.id === sale.id && item.melhorEnvio
-            ? {
-                ...item,
-                melhorEnvio: {
-                  ...item.melhorEnvio,
-                  printUrl: data.printUrl,
-                },
-              }
-            : item,
-        ),
-      }));
-      window.open(data.printUrl, "_blank", "noopener,noreferrer");
-    } catch (error: any) {
-      notify(error?.message || "Não foi possível abrir a etiqueta.");
-    }
-  }
-
-  const labelClient = labelSale
-    ? d.clients.find((client) => client.id === labelSale.clientId)
-    : undefined;
-  const labelAddress = labelSale
-    ? labelClient?.addresses[addressIndex[labelSale.id] || 0] ||
-      labelClient?.addresses[0]
-    : undefined;
-
   return (
-    <>
-      <div className="panel">
-        <div className="shippingPageHead">
-          <div>
-            <h2>Envios</h2>
-            <p>Apenas pedidos já preparados aparecem aqui.</p>
-          </div>
-          <div
-            className={
-              "melhorEnvioStatus " +
-              (meStatus.connected ? "connected" : "")
-            }
-          >
-            <span />
-            {meStatus.loading
-              ? "Melhor Envio: verificando..."
-              : !meStatus.configured
-                ? "Melhor Envio: configurar chaves"
-                : meStatus.connected
-                  ? `Melhor Envio conectado${meStatus.environment === "sandbox" ? " · Sandbox" : ""}`
-                  : "Melhor Envio desconectado"}
-          </div>
+    <div className="panel shippingControlPanel">
+      <div className="shippingPageHead">
+        <div>
+          <h2>Controle de envios</h2>
+          <p>Apenas pedidos já preparados aparecem aqui.</p>
         </div>
-        <div className="shippingTabsRow">
-          <div className="segmented">
-            <button
-              className={tab === "pending" ? "active" : ""}
-              onClick={() => setTab("pending")}
-            >
-              A enviar
-            </button>
-            <button
-              className={tab === "sent" ? "active" : ""}
-              onClick={() => setTab("sent")}
-            >
-              Enviados
-            </button>
-          </div>
+      </div>
+
+      <div className="shippingTabsRow">
+        <div className="segmented">
           <button
-            type="button"
-            className="quickQuoteButton"
-            onClick={() => {
-              setQuickQuoteError("");
-              setQuickQuotes([]);
-              setPackageData({
-                width: "11",
-                height: "3",
-                length: "16",
-                weight: "",
-              });
-              setQuickQuoteOpen(true);
-            }}
+            className={tab === "pending" ? "active" : ""}
+            onClick={() => setTab("pending")}
           >
-            Cotar frete
+            A enviar
+          </button>
+          <button
+            className={tab === "sent" ? "active" : ""}
+            onClick={() => setTab("sent")}
+          >
+            Enviados
           </button>
         </div>
+      </div>
 
-        <div className="shippingToolbar">
-          <label className="shippingSearch">
-            <Search />
-            <input
-              value={shippingQuery}
-              onChange={(event) => setShippingQuery(event.target.value)}
-              placeholder="Pesquisar pelo nome do cliente"
-              aria-label="Pesquisar cliente nos envios"
-            />
-          </label>
-          <div className="monthPicker shippingMonthPicker" aria-label="Mês dos envios">
-            <button
-              type="button"
-              onClick={() => shiftShippingMonth(-1)}
-              aria-label="Mês anterior"
-            >
-              <ChevronLeft />
-            </button>
-            <b>{shippingMonthLabel}</b>
-            <button
-              type="button"
-              onClick={() => shiftShippingMonth(1)}
-              aria-label="Próximo mês"
-            >
-              <ChevronRight />
-            </button>
-          </div>
+      <div className="shippingToolbar">
+        <label className="shippingSearch">
+          <Search />
+          <input
+            value={shippingQuery}
+            onChange={(event) => setShippingQuery(event.target.value)}
+            placeholder="Pesquisar pelo nome do cliente"
+            aria-label="Pesquisar cliente nos envios"
+          />
+        </label>
+        <div className="monthPicker shippingMonthPicker" aria-label="Mês dos envios">
+          <button
+            type="button"
+            onClick={() => shiftShippingMonth(-1)}
+            aria-label="Mês anterior"
+          >
+            <ChevronLeft />
+          </button>
+          <b>{shippingMonthLabel}</b>
+          <button
+            type="button"
+            onClick={() => shiftShippingMonth(1)}
+            aria-label="Próximo mês"
+          >
+            <ChevronRight />
+          </button>
         </div>
+      </div>
 
-        <div className="shipping">
-          {list.map((s) => {
-            const c = d.clients.find((x) => x.id === s.clientId);
-            const selectedAddressIndex = addressIndex[s.id] || 0;
-            return (
-              <div
-                className={`shippingItem ${s.sent ? "done" : ""}`}
-                key={s.id}
+      <div className="shipping">
+        {list.map((sale) => {
+          const client = d.clients.find((item) => item.id === sale.clientId);
+          const selectedAddressIndex = addressIndex[sale.id] || 0;
+          const selectedAddress =
+            client?.addresses[selectedAddressIndex] || client?.addresses[0];
+          return (
+            <div
+              className={`shippingItem ${sale.sent ? "done" : ""}`}
+              key={sale.id}
+            >
+              <button
+                className="checkButton"
+                aria-label={
+                  sale.sent ? "Marcar como não enviado" : "Marcar como enviado"
+                }
+                onClick={() => toggle(sale)}
               >
-                <button
-                  className="checkButton"
-                  aria-label={
-                    s.sent
-                      ? "Marcar como não enviado"
-                      : "Marcar como enviado"
-                  }
-                  onClick={() => toggle(s)}
-                >
-                  {s.sent ? <Check /> : null}
-                </button>
-                <details>
-                  <summary>
-                    <span className="shippingCustomer">
+                {sale.sent ? <Check /> : null}
+              </button>
+              <details>
+                <summary>
+                  <span className="shippingCustomer">
+                    <b>
+                      Pedido #{orderNo(sale.id)} · {saleCustomer(sale, d)}
+                    </b>
+                    <small>
+                      {sale.items
+                        .map(
+                          (item) =>
+                            `${d.products.find((product) => product.id === item.productId)?.name} — ${item.ml} ml`,
+                        )
+                        .join(" · ")}
+                    </small>
+                  </span>
+                  <strong
+                    className={`shippingMethod ${shippingClass(
+                      isMarketplaceSale(sale)
+                        ? sale.marketplace
+                        : sale.shippingMethod,
+                    )}`}
+                  >
+                    {isMarketplaceSale(sale)
+                      ? sale.marketplace || "Marketplace"
+                      : sale.shippingMethod || "Envio não informado"}
+                  </strong>
+                  <strong className="deliveryTitle">
+                    Informações de entrega
+                  </strong>
+                </summary>
+
+                {tab === "sent" ? (
+                  <div className="sentDeliverySummary">
+                    <div className="sentDeliveryCard customer">
+                      <span>Cliente</span>
+                      <b>{saleCustomer(sale, d)}</b>
+                      <small>
+                        {[client?.phone, client?.cpf].filter(Boolean).join(" · ") ||
+                          "Telefone e CPF não informados"}
+                      </small>
+                    </div>
+                    <div className="sentDeliveryCard address">
+                      <span>Endereço de entrega</span>
                       <b>
-                        Pedido #{orderNo(s.id)} · {saleCustomer(s, d)}
+                        {selectedAddress?.value || "Endereço não informado"}
+                        {client?.number ? `, ${client.number}` : ""}
+                        {client?.complement ? ` · ${client.complement}` : ""}
                       </b>
                       <small>
-                        {s.items
-                          .map(
-                            (x) =>
-                              `${d.products.find((p) => p.id === x.productId)?.name} — ${x.ml} ml`,
-                          )
-                          .join(" · ")}
-                      </small>
-                    </span>
-                    <strong
-                      className={`shippingMethod ${shippingClass(
-                        isMarketplaceSale(s)
-                          ? s.marketplace
-                          : s.shippingMethod,
-                      )}`}
-                    >
-                      {isMarketplaceSale(s)
-                        ? s.marketplace || "Marketplace"
-                        : s.shippingMethod || "Envio não informado"}
-                    </strong>
-                    <strong className="deliveryTitle">
-                      Informações de entrega
-                    </strong>
-                  </summary>
-                  {tab === "sent" ? (
-                    <div className="sentDeliverySummary">
-                      <div className="sentDeliveryCard customer">
-                        <span>Cliente</span>
-                        <b>{saleCustomer(s, d)}</b>
-                        <small>
-                          {[c?.phone, c?.cpf]
-                            .filter(Boolean)
-                            .join(" · ") || "Telefone e CPF não informados"}
-                        </small>
-                      </div>
-                      <div className="sentDeliveryCard address">
-                        <span>Endereço de entrega</span>
-                        <b>
-                          {c?.addresses[selectedAddressIndex]?.value ||
-                            c?.addresses[0]?.value ||
-                            "Endereço não informado"}
-                          {c?.number ? `, ${c.number}` : ""}
-                        </b>
-                        <small>
-                          {[
-                            c?.district,
-                            [c?.city, c?.state].filter(Boolean).join(" / "),
-                            c?.cep ? `CEP ${c.cep}` : "",
+                        {[
+                          selectedAddress?.district || client?.district,
+                          [
+                            selectedAddress?.city || client?.city,
+                            selectedAddress?.state || client?.state,
                           ]
                             .filter(Boolean)
-                            .join(" · ") || "Dados complementares não informados"}
-                        </small>
-                      </div>
-                      <div className="sentDeliveryCard shippingMethodCard">
-                        <span>Forma de envio</span>
-                        <b>
-                          {isMarketplaceSale(s)
-                            ? s.marketplace || "Marketplace"
-                            : s.shippingMethod || "Envio não informado"}
-                        </b>
-                        <small>Pedido já despachado</small>
-                      </div>
+                            .join(" / "),
+                          client?.cep ? `CEP ${client.cep}` : "",
+                        ]
+                          .filter(Boolean)
+                          .join(" · ") || "Dados complementares não informados"}
+                      </small>
                     </div>
-                  ) : (
-                    <div className="sentDeliverySummary pendingDeliverySummary">
-                      <div className="sentDeliveryCard editableDeliveryCard customer">
-                        <span>Cliente</span>
+                    <div className="sentDeliveryCard shippingMethodCard">
+                      <span>Forma de envio</span>
+                      <b>
+                        {isMarketplaceSale(sale)
+                          ? sale.marketplace || "Marketplace"
+                          : sale.shippingMethod || "Envio não informado"}
+                      </b>
+                      <small>Pedido já despachado</small>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="sentDeliverySummary pendingDeliverySummary">
+                    <div className="sentDeliveryCard editableDeliveryCard customer">
+                      <span>Cliente</span>
+                      <label>
+                        <small>Nome</small>
+                        <input
+                          value={saleCustomer(sale, d)}
+                          onChange={(event) =>
+                            updateShippingCustomerName(sale, event.target.value)
+                          }
+                        />
+                      </label>
+                      <div className="editableDeliveryFields two">
                         <label>
-                          <small>Nome</small>
+                          <small>CPF</small>
                           <input
-                            value={saleCustomer(s, d)}
+                            value={client?.cpf || ""}
                             onChange={(event) =>
-                              updateShippingCustomerName(s, event.target.value)
-                            }
-                          />
-                        </label>
-                        <div className="editableDeliveryFields two">
-                          <label>
-                            <small>CPF</small>
-                            <input
-                              value={c?.cpf || ""}
-                              onChange={(event) =>
-                                c
-                                  ? updateShippingClientField(
-                                      c.id,
-                                      "cpf",
-                                      event.target.value,
-                                    )
-                                  : undefined
-                              }
-                              placeholder="Não informado"
-                              disabled={!c}
-                            />
-                          </label>
-                          <label>
-                            <small>Telefone</small>
-                            <input
-                              value={c?.phone || ""}
-                              onChange={(event) =>
-                                c
-                                  ? updateShippingClientField(
-                                      c.id,
-                                      "phone",
-                                      event.target.value,
-                                    )
-                                  : undefined
-                              }
-                              placeholder="Não informado"
-                              disabled={!c}
-                            />
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="sentDeliveryCard editableDeliveryCard address">
-                        <span>Endereço de entrega</span>
-                        {c?.addresses.length ? (
-                          <label>
-                            <small>Endereço cadastrado</small>
-                            <select
-                              value={selectedAddressIndex}
-                              onChange={(event) =>
-                                setAddressIndex((current) => ({
-                                  ...current,
-                                  [s.id]: Number(event.target.value),
-                                }))
-                              }
-                            >
-                              {c.addresses.map((address, index) => (
-                                <option key={index} value={index}>
-                                  {address.label
-                                    ? `${address.label} — `
-                                    : ""}
-                                  {address.value}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                        ) : null}
-
-                        <label>
-                          <small>Logradouro</small>
-                          <input
-                            value={
-                              c?.addresses[selectedAddressIndex]?.value ||
-                              c?.addresses[0]?.value ||
-                              ""
-                            }
-                            onChange={(event) =>
-                              c
-                                ? updateShippingAddress(
-                                    c.id,
-                                    selectedAddressIndex,
-                                    "value",
+                              client
+                                ? updateShippingClientField(
+                                    client.id,
+                                    "cpf",
                                     event.target.value,
                                   )
                                 : undefined
                             }
-                            placeholder="Endereço não informado"
-                            disabled={!c}
+                            placeholder="Não informado"
+                            disabled={!client}
                           />
                         </label>
-
-                        <div className="editableDeliveryFields three">
-                          <label>
-                            <small>Número</small>
-                            <input
-                              value={c?.number || ""}
-                              onChange={(event) =>
-                                c
-                                  ? updateShippingClientField(
-                                      c.id,
-                                      "number",
-                                      event.target.value,
-                                    )
-                                  : undefined
-                              }
-                              placeholder="Não informado"
-                              disabled={!c}
-                            />
-                          </label>
-                          <label>
-                            <small>CEP</small>
-                            <input
-                              value={c?.cep || ""}
-                              onChange={(event) =>
-                                c
-                                  ? updateShippingClientField(
-                                      c.id,
-                                      "cep",
-                                      event.target.value,
-                                    )
-                                  : undefined
-                              }
-                              placeholder="Não informado"
-                              disabled={!c}
-                            />
-                          </label>
-                          <label>
-                            <small>Bairro</small>
-                            <input
-                              value={
-                                c?.addresses[selectedAddressIndex]?.district ||
-                                c?.district ||
-                                ""
-                              }
-                              onChange={(event) => {
-                                if (!c) return;
-                                updateShippingAddress(
-                                  c.id,
-                                  selectedAddressIndex,
-                                  "district",
-                                  event.target.value,
-                                );
-                                updateShippingClientField(
-                                  c.id,
-                                  "district",
-                                  event.target.value,
-                                );
-                              }}
-                              placeholder="Não informado"
-                              disabled={!c}
-                            />
-                          </label>
-                        </div>
-
-                        <div className="editableDeliveryFields two">
-                          <label>
-                            <small>Cidade</small>
-                            <input
-                              value={
-                                c?.addresses[selectedAddressIndex]?.city ||
-                                c?.city ||
-                                ""
-                              }
-                              onChange={(event) => {
-                                if (!c) return;
-                                updateShippingAddress(
-                                  c.id,
-                                  selectedAddressIndex,
-                                  "city",
-                                  event.target.value,
-                                );
-                                updateShippingClientField(
-                                  c.id,
-                                  "city",
-                                  event.target.value,
-                                );
-                              }}
-                              placeholder="Não informado"
-                              disabled={!c}
-                            />
-                          </label>
-                          <label>
-                            <small>Estado</small>
-                            <input
-                              maxLength={2}
-                              value={
-                                c?.addresses[selectedAddressIndex]?.state ||
-                                c?.state ||
-                                ""
-                              }
-                              onChange={(event) => {
-                                if (!c) return;
-                                const value = event.target.value.toUpperCase();
-                                updateShippingAddress(
-                                  c.id,
-                                  selectedAddressIndex,
-                                  "state",
-                                  value,
-                                );
-                                updateShippingClientField(c.id, "state", value);
-                              }}
-                              placeholder="UF"
-                              disabled={!c}
-                            />
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="sentDeliveryCard editableDeliveryCard shippingMethodCard">
-                        <span>Forma de envio</span>
                         <label>
-                          <small>Modalidade</small>
-                          <select
-                            value={
-                              isMarketplaceSale(s)
-                                ? s.marketplace || ""
-                                : s.shippingMethod || ""
-                            }
-                            disabled={isMarketplaceSale(s)}
+                          <small>Telefone</small>
+                          <input
+                            value={client?.phone || ""}
                             onChange={(event) =>
-                              changeShippingMethod(
-                                s.id,
-                                event.target.value as V["shippingMethod"],
-                              )
+                              client
+                                ? updateShippingClientField(
+                                    client.id,
+                                    "phone",
+                                    event.target.value,
+                                  )
+                                : undefined
+                            }
+                            placeholder="Não informado"
+                            disabled={!client}
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="sentDeliveryCard editableDeliveryCard address">
+                      <span>Endereço de entrega</span>
+                      {client?.addresses.length ? (
+                        <label>
+                          <small>Endereço cadastrado</small>
+                          <select
+                            value={selectedAddressIndex}
+                            onChange={(event) =>
+                              setAddressIndex((current) => ({
+                                ...current,
+                                [sale.id]: Number(event.target.value),
+                              }))
                             }
                           >
-                            <option value="" disabled>
-                              Selecione...
-                            </option>
-                            <option>Correios</option>
-                            <option>Correios Sedex</option>
-                            <option>Correios PAC</option>
-                            <option>Correios Mini</option>
-                            <option>Loggi</option>
-                            <option>Jadlog</option>
-                            <option>Uber/Pessoalmente</option>
-                            <option>TikTok Shop</option>
-                            <option>Shopee</option>
+                            {client.addresses.map((address, index) => (
+                              <option key={index} value={index}>
+                                {address.label ? `${address.label} — ` : ""}
+                                {address.value}
+                              </option>
+                            ))}
                           </select>
                         </label>
-                        <small>
-                          {isMarketplaceSale(s)
-                            ? "Definido automaticamente pela origem da venda."
-                            : "Você pode ajustar antes do despacho."}
-                        </small>
+                      ) : null}
+
+                      <label>
+                        <small>Logradouro</small>
+                        <input
+                          value={selectedAddress?.value || ""}
+                          onChange={(event) =>
+                            client
+                              ? updateShippingAddress(
+                                  client.id,
+                                  selectedAddressIndex,
+                                  "value",
+                                  event.target.value,
+                                )
+                              : undefined
+                          }
+                          placeholder="Endereço não informado"
+                          disabled={!client}
+                        />
+                      </label>
+
+                      <div className="editableDeliveryFields three">
+                        <label>
+                          <small>Número</small>
+                          <input
+                            value={client?.number || ""}
+                            onChange={(event) =>
+                              client
+                                ? updateShippingClientField(
+                                    client.id,
+                                    "number",
+                                    event.target.value,
+                                  )
+                                : undefined
+                            }
+                            placeholder="Não informado"
+                            disabled={!client}
+                          />
+                        </label>
+                        <label>
+                          <small>Complemento</small>
+                          <input
+                            value={
+                              selectedAddress?.complement ||
+                              client?.complement ||
+                              ""
+                            }
+                            onChange={(event) => {
+                              if (!client) return;
+                              updateShippingAddress(
+                                client.id,
+                                selectedAddressIndex,
+                                "complement",
+                                event.target.value,
+                              );
+                              updateShippingClientField(
+                                client.id,
+                                "complement",
+                                event.target.value,
+                              );
+                            }}
+                            placeholder="Não informado"
+                            disabled={!client}
+                          />
+                        </label>
+                        <label>
+                          <small>CEP</small>
+                          <input
+                            value={client?.cep || ""}
+                            onChange={(event) =>
+                              client
+                                ? updateShippingClientField(
+                                    client.id,
+                                    "cep",
+                                    event.target.value,
+                                  )
+                                : undefined
+                            }
+                            placeholder="Não informado"
+                            disabled={!client}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="editableDeliveryFields three">
+                        <label>
+                          <small>Bairro</small>
+                          <input
+                            value={
+                              selectedAddress?.district ||
+                              client?.district ||
+                              ""
+                            }
+                            onChange={(event) => {
+                              if (!client) return;
+                              updateShippingAddress(
+                                client.id,
+                                selectedAddressIndex,
+                                "district",
+                                event.target.value,
+                              );
+                              updateShippingClientField(
+                                client.id,
+                                "district",
+                                event.target.value,
+                              );
+                            }}
+                            placeholder="Não informado"
+                            disabled={!client}
+                          />
+                        </label>
+                        <label>
+                          <small>Cidade</small>
+                          <input
+                            value={
+                              selectedAddress?.city || client?.city || ""
+                            }
+                            onChange={(event) => {
+                              if (!client) return;
+                              updateShippingAddress(
+                                client.id,
+                                selectedAddressIndex,
+                                "city",
+                                event.target.value,
+                              );
+                              updateShippingClientField(
+                                client.id,
+                                "city",
+                                event.target.value,
+                              );
+                            }}
+                            placeholder="Não informado"
+                            disabled={!client}
+                          />
+                        </label>
+                        <label>
+                          <small>Estado</small>
+                          <input
+                            maxLength={2}
+                            value={
+                              selectedAddress?.state || client?.state || ""
+                            }
+                            onChange={(event) => {
+                              if (!client) return;
+                              const value = event.target.value.toUpperCase();
+                              updateShippingAddress(
+                                client.id,
+                                selectedAddressIndex,
+                                "state",
+                                value,
+                              );
+                              updateShippingClientField(
+                                client.id,
+                                "state",
+                                value,
+                              );
+                            }}
+                            placeholder="UF"
+                            disabled={!client}
+                          />
+                        </label>
                       </div>
                     </div>
-                  )}
 
-                  <div
-                    className={
-                      "melhorEnvioOrderPanel " +
-                      (labelUnavailableReason(s) ? "disabled" : "")
-                    }
-                  >
-                    <div>
-                      <b>
-                        {tab === "sent"
-                          ? "Acompanhamento da entrega"
-                          : "Etiqueta Melhor Envio"}
-                      </b>
+                    <div className="sentDeliveryCard editableDeliveryCard shippingMethodCard">
+                      <span>Forma de envio</span>
+                      <label>
+                        <small>Modalidade</small>
+                        <select
+                          value={
+                            isMarketplaceSale(sale)
+                              ? sale.marketplace || ""
+                              : sale.shippingMethod || ""
+                          }
+                          disabled={isMarketplaceSale(sale)}
+                          onChange={(event) =>
+                            changeShippingMethod(
+                              sale.id,
+                              event.target.value as V["shippingMethod"],
+                            )
+                          }
+                        >
+                          <option value="" disabled>
+                            Selecione...
+                          </option>
+                          <option>Correios</option>
+                          <option>Correios Sedex</option>
+                          <option>Correios PAC</option>
+                          <option>Correios Mini</option>
+                          <option>Loggi</option>
+                          <option>Jadlog</option>
+                          <option>Uber/Pessoalmente</option>
+                          <option>TikTok Shop</option>
+                          <option>Shopee</option>
+                        </select>
+                      </label>
                       <small>
-                        {tab === "sent"
-                          ? s.melhorEnvio?.orderId
-                            ? "Consulte o status atual da etiqueta vinculada a este pedido."
-                            : "Este pedido não possui etiqueta do Melhor Envio vinculada."
-                          : labelUnavailableReason(s)
-                            ? labelUnavailableReason(s)
-                            : s.melhorEnvio?.orderId
-                              ? `Etiqueta #${s.melhorEnvio.orderId}${s.melhorEnvio.serviceName ? " · " + s.melhorEnvio.serviceName : ""}`
-                              : meStatus.connected
-                                ? "Use os dados deste pedido para cotar e gerar a etiqueta."
-                                : "Conecte sua conta para gerar etiquetas sem sair do sistema."}
+                        {isMarketplaceSale(sale)
+                          ? "Definido automaticamente pela origem da venda."
+                          : "Você pode ajustar antes do despacho."}
                       </small>
-                      {s.melhorEnvio?.tracking ? (
-                        <small>
-                          Rastreio: {s.melhorEnvio.tracking}
-                        </small>
-                      ) : null}
-                    </div>
-                    <div>
-                      {tab === "sent" ? (
-                        <button
-                          type="button"
-                          className="meTrackingButton"
-                          disabled={
-                            !s.melhorEnvio?.orderId ||
-                            !meStatus.configured ||
-                            !meStatus.connected
-                          }
-                          title={
-                            !s.melhorEnvio?.orderId
-                              ? "Sem etiqueta vinculada"
-                              : !meStatus.connected
-                                ? "Conecte o Melhor Envio"
-                                : ""
-                          }
-                          onClick={() => openTrackingStatus(s)}
-                        >
-                          {s.melhorEnvio?.orderId
-                            ? "Status da entrega"
-                            : "Sem etiqueta vinculada"}
-                        </button>
-                      ) : !meStatus.configured ? (
-                        <span className="meConfigWarning">
-                          Chaves ainda não configuradas na Vercel
-                        </span>
-                      ) : !meStatus.connected ? (
-                        <button
-                          type="button"
-                          className="meConnectButton"
-                          onClick={connectMelhorEnvio}
-                          disabled={Boolean(labelUnavailableReason(s))}
-                        >
-                          Conectar Melhor Envio
-                        </button>
-                      ) : s.melhorEnvio?.printUrl ? (
-                        <a
-                          className="meLabelButton"
-                          href={s.melhorEnvio.printUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Abrir etiqueta
-                        </a>
-                      ) : s.melhorEnvio?.orderId ? (
-                        <button
-                          type="button"
-                          className="meLabelButton"
-                          onClick={() => fetchPrintUrl(s)}
-                        >
-                          Obter etiqueta
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="meLabelButton"
-                          disabled={Boolean(labelUnavailableReason(s))}
-                          title={labelUnavailableReason(s)}
-                          onClick={() => openLabelDialog(s)}
-                        >
-                          Gerar etiqueta
-                        </button>
-                      )}
-                      {meStatus.connected && tab !== "sent" ? (
-                        <button
-                          type="button"
-                          className="meDisconnectButton"
-                          onClick={disconnectMelhorEnvio}
-                        >
-                          Desconectar
-                        </button>
-                      ) : null}
                     </div>
                   </div>
-                </details>
-              </div>
-            );
-          })}
-          {!list.length ? <p>Nenhum pedido nesta lista.</p> : null}
-        </div>
-      </div>
-
-      {trackingSale ? (
-        <div className="overlay">
-          <div className="systemDialog trackingStatusDialog">
-            <header>
-              <div>
-                <small>MELHOR ENVIO</small>
-                <h2>Status da entrega</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (trackingBusy) return;
-                  setTrackingSale(null);
-                  setTrackingInfo(null);
-                  setTrackingError("");
-                }}
-                aria-label="Fechar status da entrega"
-              >
-                <X />
-              </button>
-            </header>
-
-            <div className="trackingStatusBody">
-              <div className="trackingOrderSummary">
-                <span>Pedido #{orderNo(trackingSale.id)}</span>
-                <b>{saleCustomer(trackingSale, d)}</b>
-                <small>
-                  {trackingSale.melhorEnvio?.serviceName || "Melhor Envio"}
-                </small>
-              </div>
-
-              {trackingBusy ? (
-                <div className="trackingLoading">Consultando status...</div>
-              ) : trackingError ? (
-                <div className="meError">{trackingError}</div>
-              ) : trackingInfo ? (
-                <>
-                  <div
-                    className={
-                      "trackingMainStatus " +
-                      String(trackingInfo.status || "unknown").toLowerCase()
-                    }
-                  >
-                    <span>Status atual</span>
-                    <b>{trackingStatusLabel(trackingInfo.status)}</b>
-                  </div>
-                  <div className="trackingDetailsGrid">
-                    <div>
-                      <span>Código de rastreio</span>
-                      <b>
-                        {trackingInfo.tracking ||
-                          trackingSale.melhorEnvio?.tracking ||
-                          "Ainda não disponível"}
-                      </b>
-                    </div>
-                    <div>
-                      <span>Protocolo</span>
-                      <b>{trackingInfo.protocol || "Não informado"}</b>
-                    </div>
-                    <div>
-                      <span>Postado em</span>
-                      <b>
-                        {trackingInfo.postedAt
-                          ? new Date(trackingInfo.postedAt).toLocaleString("pt-BR")
-                          : "Ainda não postado"}
-                      </b>
-                    </div>
-                    <div>
-                      <span>Entregue em</span>
-                      <b>
-                        {trackingInfo.deliveredAt
-                          ? new Date(trackingInfo.deliveredAt).toLocaleString("pt-BR")
-                          : "Ainda não entregue"}
-                      </b>
-                    </div>
-                  </div>
-                  <p className="trackingCacheNote">
-                    O status é consultado diretamente no Melhor Envio. A API de
-                    rastreio pode manter cache temporário das informações.
-                  </p>
-                </>
-              ) : null}
-            </div>
-
-            <footer className="trackingStatusFooter">
-              <button
-                type="button"
-                disabled={trackingBusy}
-                onClick={() => openTrackingStatus(trackingSale)}
-              >
-                {trackingBusy ? "Atualizando..." : "Atualizar status"}
-              </button>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => {
-                  setTrackingSale(null);
-                  setTrackingInfo(null);
-                  setTrackingError("");
-                }}
-              >
-                Fechar
-              </button>
-            </footer>
-          </div>
-        </div>
-      ) : null}
-
-      {quickQuoteOpen ? (
-        <div className="overlay">
-          <div className="systemDialog quickQuoteDialog">
-            <header>
-              <div>
-                <small>MELHOR ENVIO</small>
-                <h2>Cotar frete</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setQuickQuoteOpen(false)}
-                aria-label="Fechar cotação"
-              >
-                <X />
-              </button>
-            </header>
-
-            <div className="quickQuoteScroll">
-              {!meStatus.configured ? (
-                <div className="meError">
-                  Configure as chaves do Melhor Envio antes de realizar cotações.
-                </div>
-              ) : !meStatus.connected ? (
-                <div className="quickQuoteConnect">
-                  <p>Conecte sua conta do Melhor Envio para realizar a cotação.</p>
-                  <button
-                    type="button"
-                    className="meConnectButton"
-                    onClick={connectMelhorEnvio}
-                  >
-                    Conectar Melhor Envio
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {quickQuoteError ? (
-                    <div className="meError">{quickQuoteError}</div>
-                  ) : null}
-                  <section className="quickQuoteCard">
-                    <div>
-                      <b>Rota</b>
-                      <small>Informe o CEP de origem e o CEP de destino.</small>
-                    </div>
-                    <div className="meFormGrid two">
-                      <label>
-                        <span>CEP de origem</span>
-                        <input
-                          value={sender.postal_code}
-                          onChange={(e) =>
-                            updateSender("postal_code", e.target.value)
-                          }
-                          placeholder="00000-000"
-                        />
-                      </label>
-                      <label>
-                        <span>CEP de destino</span>
-                        <input
-                          value={quickQuoteToPostalCode}
-                          onChange={(e) =>
-                            setQuickQuoteToPostalCode(e.target.value)
-                          }
-                          placeholder="00000-000"
-                        />
-                      </label>
-                    </div>
-                  </section>
-
-                  <section className="quickQuoteCard">
-                    <div>
-                      <b>Pacote</b>
-                      <small>Dimensões em cm e peso em kg.</small>
-                    </div>
-                    <div className="mePackageGrid">
-                      {(["width", "height", "length", "weight"] as const).map(
-                        (field) => (
-                          <label key={field}>
-                            <span>
-                              {field === "width"
-                                ? "Largura"
-                                : field === "height"
-                                  ? "Altura"
-                                  : field === "length"
-                                    ? "Comprimento"
-                                    : "Peso"}
-                            </span>
-                            <input
-                              inputMode="decimal"
-                              value={packageData[field]}
-                              onChange={(e) =>
-                                setPackageData((current) => ({
-                                  ...current,
-                                  [field]: e.target.value,
-                                }))
-                              }
-                            />
-                          </label>
-                        ),
-                      )}
-                    </div>
-                    <label className="quickQuoteInsurance">
-                      <span>Valor declarado</span>
-                      <input
-                        inputMode="decimal"
-                        value={quickQuoteInsuranceValue}
-                        onChange={(e) =>
-                          setQuickQuoteInsuranceValue(e.target.value)
-                        }
-                        placeholder="0,00"
-                      />
-                    </label>
-                  </section>
-
-                  <button
-                    type="button"
-                    className="quickQuoteSubmit"
-                    disabled={quickQuoteBusy}
-                    onClick={quoteQuickFreight}
-                  >
-                    {quickQuoteBusy ? "Cotando..." : "Consultar valores"}
-                  </button>
-
-                  {quickQuotes.length ? (
-                    <div className="meQuotes quickQuoteResults">
-                      {quickQuotes.map((quote) => (
-                        <div key={quote.id} className="quickQuoteResult">
-                          <span>
-                            <b>{quote.company}</b>
-                            <small>{quote.name}</small>
-                          </span>
-                          <span>
-                            <b>{brl(quote.price)}</b>
-                            <small>
-                              {quote.deliveryTime
-                                ? `${quote.deliveryTime} dia(s)`
-                                : "Prazo não informado"}
-                            </small>
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {labelSale ? (
-        <div className="overlay">
-          <div className="systemDialog melhorEnvioLabelDialog">
-            <header>
-              <div>
-                <small>MELHOR ENVIO</small>
-                <h2>
-                  Gerar etiqueta do pedido #{orderNo(labelSale.id)}
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={closeLabelDialog}
-                aria-label="Fechar geração de etiqueta"
-              >
-                <X />
-              </button>
-            </header>
-
-            <div className="meLabelScroll">
-            {meStatus.environment === "sandbox" ? (
-              <div className="meSandboxNotice">
-                Ambiente Sandbox: nenhuma cobrança ou postagem real será
-                realizada.
-              </div>
-            ) : (
-              <div className="meProductionNotice">
-                Ambiente de produção. A compra da etiqueta utilizará o saldo da
-                sua carteira Melhor Envio.
-              </div>
-            )}
-
-            {meError ? <div className="meError">{meError}</div> : null}
-
-            <section className="meSection">
-              <div className="meSectionHead">
-                <div>
-                  <b>Remetente</b>
-                  <small>
-                    Estes dados ficam salvos apenas neste navegador para os
-                    próximos envios.
-                  </small>
-                </div>
-              </div>
-              <div className="meFormGrid">
-                <label>
-                  <span>Nome</span>
-                  <input
-                    value={sender.name}
-                    onChange={(e) => updateSender("name", e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>E-mail</span>
-                  <input
-                    type="email"
-                    value={sender.email}
-                    onChange={(e) => updateSender("email", e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Telefone</span>
-                  <input
-                    value={sender.phone}
-                    onChange={(e) => updateSender("phone", e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>CPF</span>
-                  <input
-                    value={sender.document}
-                    onChange={(e) => updateSender("document", e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>CEP</span>
-                  <input
-                    value={sender.postal_code}
-                    onChange={(e) =>
-                      updateSender("postal_code", e.target.value)
-                    }
-                  />
-                </label>
-                <label>
-                  <span>Endereço</span>
-                  <input
-                    value={sender.address}
-                    onChange={(e) => updateSender("address", e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Número</span>
-                  <input
-                    value={sender.number}
-                    onChange={(e) => updateSender("number", e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Complemento</span>
-                  <input
-                    value={sender.complement}
-                    onChange={(e) =>
-                      updateSender("complement", e.target.value)
-                    }
-                  />
-                </label>
-                <label>
-                  <span>Bairro</span>
-                  <input
-                    value={sender.district}
-                    onChange={(e) => updateSender("district", e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Cidade</span>
-                  <input
-                    value={sender.city}
-                    onChange={(e) => updateSender("city", e.target.value)}
-                  />
-                </label>
-                <label>
-                  <span>Estado</span>
-                  <input
-                    maxLength={2}
-                    value={sender.state_abbr}
-                    onChange={(e) =>
-                      updateSender(
-                        "state_abbr",
-                        e.target.value.toUpperCase(),
-                      )
-                    }
-                  />
-                </label>
-              </div>
-            </section>
-
-            <section className="meSection">
-              <div className="meSectionHead">
-                <div>
-                  <b>Destinatário</b>
-                  <small>
-                    {saleCustomer(labelSale, d)} ·{" "}
-                    {labelAddress?.value || "Endereço não informado"}
-                  </small>
-                </div>
-              </div>
-              <div className="meFormGrid two">
-                <label>
-                  <span>E-mail do destinatário</span>
-                  <input
-                    type="email"
-                    value={recipientEmail}
-                    onChange={(e) => setRecipientEmail(e.target.value)}
-                    placeholder="Obrigatório para a etiqueta"
-                  />
-                </label>
-                <label>
-                  <span>CPF</span>
-                  <input readOnly value={labelClient?.cpf || ""} />
-                </label>
-              </div>
-            </section>
-
-            <section className="meSection">
-              <div className="meSectionHead">
-                <div>
-                  <b>Pacote</b>
-                  <small>Dimensões em cm e peso em kg.</small>
-                </div>
-              </div>
-              <div className="mePackageGrid">
-                {(["width", "height", "length", "weight"] as const).map(
-                  (field) => (
-                    <label key={field}>
-                      <span>
-                        {field === "width"
-                          ? "Largura"
-                          : field === "height"
-                            ? "Altura"
-                            : field === "length"
-                              ? "Comprimento"
-                              : "Peso"}
-                      </span>
-                      <input
-                        inputMode="decimal"
-                        value={packageData[field]}
-                        onChange={(e) =>
-                          setPackageData((current) => ({
-                            ...current,
-                            [field]: e.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                  ),
                 )}
-              </div>
-            </section>
-
-            <section className="meSection">
-              <div className="meSectionHead">
-                <div>
-                  <b>Declaração de conteúdo</b>
-                  <small>
-                    Confira e ajuste os valores individuais antes da compra.
-                  </small>
-                </div>
-              </div>
-              <div className="meContents">
-                {labelSale.items.map((item, index) => {
-                  const product = d.products.find(
-                    (candidate) => candidate.id === item.productId,
-                  );
-                  return (
-                    <div key={index}>
-                      <span>
-                        {product
-                          ? `${product.brand} ${product.name}`
-                          : "Perfume"}{" "}
-                        · {item.ml} ml{item.isApc ? " · APC" : ""}
-                      </span>
-                      <label>
-                        <small>Valor</small>
-                        <input
-                          inputMode="decimal"
-                          value={contentValues[index] ?? ""}
-                          onChange={(e) =>
-                            setContentValues((current) => {
-                              const next = [...current];
-                              next[index] = Number(
-                                e.target.value.replace(",", "."),
-                              );
-                              return next;
-                            })
-                          }
-                        />
-                      </label>
-                    </div>
-                  );
-                })}
-                <div className="meContentTotal">
-                  <span>Total declarado</span>
-                  <b>
-                    {brl(
-                      contentValues.reduce(
-                        (sum, value) =>
-                          sum + Math.max(0, Number(value) || 0),
-                        0,
-                      ),
-                    )}
-                  </b>
-                </div>
-              </div>
-            </section>
-
-            <div className="meQuoteActions">
-              <button
-                type="button"
-                className="secondary"
-                disabled={Boolean(meBusy)}
-                onClick={quoteMelhorEnvio}
-              >
-                {meBusy === "quote" ? "Cotando..." : "Cotar frete"}
-              </button>
+              </details>
             </div>
-
-            {quotes.length ? (
-              <div className="meQuotes">
-                {quotes.map((quote) => (
-                  <button
-                    type="button"
-                    key={quote.id}
-                    className={
-                      selectedService === quote.id ? "selected" : ""
-                    }
-                    onClick={() => setSelectedService(quote.id)}
-                  >
-                    <span>
-                      <b>{quote.company}</b>
-                      <small>{quote.name}</small>
-                    </span>
-                    <span>
-                      <b>{brl(quote.price)}</b>
-                      <small>
-                        {quote.deliveryTime
-                          ? `${quote.deliveryTime} dia(s)`
-                          : "Prazo não informado"}
-                      </small>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-
-            </div>
-            <footer className="meLabelFooter">
-              <button type="button" onClick={closeLabelDialog}>
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="primary"
-                disabled={
-                  !selectedService ||
-                  Boolean(meBusy) ||
-                  !quotes.length
-                }
-                onClick={generateMelhorEnvioLabel}
-              >
-                {meBusy === "label"
-                  ? "Gerando..."
-                  : "Comprar e gerar etiqueta"}
-              </button>
-            </footer>
-          </div>
-        </div>
-      ) : null}
-    </>
+          );
+        })}
+        {!list.length ? <p>Nenhum pedido nesta lista.</p> : null}
+      </div>
+    </div>
   );
 }
+
 function FieldView({ label, value }: { label: string; value?: string }) {
   return (
     <label>
@@ -9970,6 +8947,38 @@ function Form({
           },
         ];
       }
+      const currentCustomerName = (
+        newClient && !isMarketplace ? String(f.newName || "") : typedClientName
+      )
+        .trim()
+        .toLowerCase();
+      const pendingPreparationSale = !existingSale
+        ? x.sales.find((pendingSale) => {
+            if (
+              pendingSale.status === "cancelled" ||
+              pendingSale.prepared ||
+              isHistoricalSale(pendingSale)
+            )
+              return false;
+            if (isMarketplaceSale(pendingSale) !== isMarketplace) return false;
+            if (
+              isMarketplace &&
+              pendingSale.marketplace !== String(f.marketplace)
+            )
+              return false;
+            if (clientId && pendingSale.clientId) {
+              return pendingSale.clientId === clientId;
+            }
+            return (
+              saleCustomer(pendingSale, x).trim().toLowerCase() ===
+              currentCustomerName
+            );
+          })
+        : undefined;
+      const inheritedPreparationStatus = pendingPreparationSale
+        ? getPreparationStatus(pendingPreparationSale)
+        : undefined;
+
       const items = Array.from({ length: lines }, (_, i) => {
         const typed = String(f["productName" + i] || "");
         const product = x.products.find(
@@ -10014,6 +9023,11 @@ function Form({
         installments,
         prepared: existingSale?.prepared || false,
         sent: existingSale?.sent || false,
+        preparationStatus:
+          existingSale?.preparationStatus || inheritedPreparationStatus,
+        accumulatingDecants:
+          existingSale?.accumulatingDecants ||
+          inheritedPreparationStatus === "accumulating",
         status: existingSale?.status || "active",
         expenses: existingSale?.expenses || 0,
         supplyOverrides,
