@@ -166,6 +166,13 @@ type V = {
     | "Shopee";
   accumulatingDecants?: boolean;
   preparationStatus?: "preparing" | "accumulating" | "waiting";
+  mandaBem?: {
+    envioId?: string;
+    service?: string;
+    status?: string;
+    tracking?: string;
+    createdAt?: string;
+  };
   historical?: boolean;
   description?: string;
 };
@@ -1442,7 +1449,7 @@ const action =
           ) : page === "shipping" ? (
             <Shipping d={data} set={setData} notify={notify} />
           ) : page === "shipping-mandabem" ? (
-            <div className="panel mandaBemPlaceholder" aria-label="MandaBem" />
+            <MandaBem d={data} set={setData} notify={notify} />
           ) : page === "receivables" ? (
             <Receivables
               d={data}
@@ -4555,6 +4562,59 @@ function Prepare({
   );
 }
 
+function mandaBemSuggestedWeight(sale: V) {
+  const apcCount = sale.items.filter((item) => item.isApc).length;
+  const decantCount = sale.items.filter((item) => !item.isApc).length;
+  if (apcCount >= 2) return 2;
+  if (apcCount === 1) return 1;
+  return decantCount <= 3 ? 0.3 : 1;
+}
+
+function mandaBemServiceFromSale(sale: V) {
+  const method = String(sale.shippingMethod || "").toLowerCase();
+  if (method.includes("sedex")) return "SEDEX";
+  if (method.includes("mini")) return "PACMINI";
+  if (method.includes("pac")) return "PAC";
+  if (method.includes("loggi")) return "LOGGI";
+  if (method.includes("correios")) return "PAC";
+  return "PAC";
+}
+
+function mandaBemEligibleSale(sale: V) {
+  if (isMarketplaceSale(sale)) return false;
+  const method = String(sale.shippingMethod || "").toLowerCase();
+  return method.includes("correios") || method.includes("loggi");
+}
+
+async function mandaBemRequest(action: string, payload: Record<string, any> = {}) {
+  const response = await fetch(`/api/mandabem?action=${encodeURIComponent(action)}`, {
+    method: action === "status" ? "GET" : "POST",
+    headers:
+      action === "status" ? undefined : { "Content-Type": "application/json" },
+    body: action === "status" ? undefined : JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      data?.error ||
+        data?.details?.resultado?.erro ||
+        "Não foi possível comunicar com a MandaBem.",
+    );
+  }
+  return data?.data ?? data;
+}
+
+function mandaBemResult(data: any) {
+  return data?.resultado || data || {};
+}
+
+function mandaBemShipmentRows(data: any) {
+  const result = mandaBemResult(data);
+  const rows = result?.dados;
+  if (!rows) return [];
+  return Array.isArray(rows) ? rows : [rows];
+}
+
 function Shipping({
   d,
   set,
@@ -4568,6 +4628,28 @@ function Shipping({
   const [addressIndex, setAddressIndex] = useState<Record<number, number>>({});
   const [shippingQuery, setShippingQuery] = useState("");
   const [shippingMonth, setShippingMonth] = useState(today().slice(0, 7));
+  const [labelSale, setLabelSale] = useState<V | null>(null);
+  const [labelBusy, setLabelBusy] = useState(false);
+  const [labelError, setLabelError] = useState("");
+  const [labelDraft, setLabelDraft] = useState({
+    destinatario: "",
+    forma_envio: "PAC",
+    cep: "",
+    logradouro: "",
+    numero: "",
+    complemento: "",
+    bairro: "",
+    cidade: "",
+    estado: "",
+    peso: "0.3",
+    email: "",
+    cpf_destinatario: "",
+    valor_seguro: "",
+    altura: "",
+    comprimento: "",
+    largura: "",
+    observacao: "",
+  });
 
   const shippingMonthLabel = new Intl.DateTimeFormat("pt-BR", {
     month: "long",
@@ -4683,7 +4765,109 @@ function Shipping({
     }));
   }
 
+  function openMandaBemLabel(sale: V) {
+    const client = d.clients.find((item) => item.id === sale.clientId);
+    const selectedIndex = addressIndex[sale.id] || 0;
+    const address = client?.addresses[selectedIndex] || client?.addresses[0];
+    setLabelSale(sale);
+    setLabelError("");
+    setLabelDraft({
+      destinatario: saleCustomer(sale, d).slice(0, 40),
+      forma_envio: mandaBemServiceFromSale(sale),
+      cep: client?.cep || "",
+      logradouro: address?.value || "",
+      numero: client?.number || "",
+      complemento: address?.complement || client?.complement || "",
+      bairro: address?.district || client?.district || "",
+      cidade: address?.city || client?.city || "",
+      estado: address?.state || client?.state || "",
+      peso: String(mandaBemSuggestedWeight(sale)),
+      email: "",
+      cpf_destinatario: client?.cpf || "",
+      valor_seguro: "",
+      altura: "",
+      comprimento: "",
+      largura: "",
+      observacao: `Pedido #${orderNo(sale.id)}`.slice(0, 30),
+    });
+  }
+
+  async function generateMandaBemShipment() {
+    if (!labelSale) return;
+    const required = [
+      labelDraft.destinatario,
+      labelDraft.forma_envio,
+      labelDraft.cep,
+      labelDraft.logradouro,
+      labelDraft.numero,
+      labelDraft.bairro,
+      labelDraft.cidade,
+      labelDraft.estado,
+      labelDraft.peso,
+    ];
+    if (required.some((value) => !String(value || "").trim())) {
+      setLabelError("Preencha os campos obrigatórios antes de gerar o envio.");
+      return;
+    }
+
+    setLabelBusy(true);
+    setLabelError("");
+    try {
+      const averagePrice = Math.max(
+        0.01,
+        Number(labelSale.total || 0) / Math.max(1, labelSale.items.length),
+      );
+      const response = await mandaBemRequest("generate", {
+        ...labelDraft,
+        ref_id: orderNo(labelSale.id),
+        integration: "DAF Splits",
+        produtos: labelSale.items.map((item) => {
+          const product = d.products.find(
+            (candidate) => candidate.id === item.productId,
+          );
+          return {
+            nome: `${product ? product.brand + " " + product.name : "Perfume"} · ${item.ml} ml${item.isApc ? " · APC" : ""}`,
+            quantidade: 1,
+            preco: Number(averagePrice.toFixed(2)),
+          };
+        }),
+      });
+      const result = mandaBemResult(response);
+      if (String(result?.sucesso || "").toLowerCase() === "false") {
+        throw new Error(result?.erro || "A MandaBem recusou a geração do envio.");
+      }
+      const envioId = String(result?.envio_id || result?.id || "");
+      set((state: D) => ({
+        ...state,
+        sales: state.sales.map((sale) =>
+          sale.id === labelSale.id
+            ? {
+                ...sale,
+                mandaBem: {
+                  envioId,
+                  service: labelDraft.forma_envio,
+                  status: result?.mensagem || "Envio gerado",
+                  createdAt: today(),
+                },
+              }
+            : sale,
+        ),
+      }));
+      notify(
+        envioId
+          ? `Envio MandaBem #${envioId} gerado para o pedido #${orderNo(labelSale.id)}.`
+          : `Envio MandaBem gerado para o pedido #${orderNo(labelSale.id)}.`,
+      );
+      setLabelSale(null);
+    } catch (error: any) {
+      setLabelError(error?.message || "Não foi possível gerar o envio.");
+    } finally {
+      setLabelBusy(false);
+    }
+  }
+
   return (
+    <>
     <div className="panel shippingControlPanel">
       <div className="shippingPageHead">
         <div>
@@ -5105,6 +5289,29 @@ function Shipping({
                           ? "Definido automaticamente pela origem da venda."
                           : "Você pode ajustar antes do despacho."}
                       </small>
+                    {mandaBemEligibleSale(sale) ? (
+                      <div className="sentDeliveryCard mandaBemDeliveryCard">
+                        <span>MandaBem</span>
+                        <b>
+                          {sale.mandaBem?.envioId
+                            ? `Envio #${sale.mandaBem.envioId}`
+                            : "Etiqueta de envio"}
+                        </b>
+                        <small>
+                          Os dados do cliente, endereço e peso serão preenchidos
+                          automaticamente.
+                        </small>
+                        <button
+                          type="button"
+                          className="mandaBemGenerateButton"
+                          onClick={() => openMandaBemLabel(sale)}
+                        >
+                          {sale.mandaBem?.envioId
+                            ? "Gerar novo envio"
+                            : "Gerar etiqueta de envio"}
+                        </button>
+                      </div>
+                    ) : null}
                     </div>
                   </div>
                 )}
@@ -5114,6 +5321,765 @@ function Shipping({
         })}
         {!list.length ? <p>Nenhum pedido nesta lista.</p> : null}
       </div>
+    </div>
+
+    {labelSale ? (
+      <div className="overlay">
+        <div className="systemDialog mandaBemLabelDialog">
+          <header>
+            <div>
+              <small>MANDA BEM</small>
+              <h2>Gerar etiqueta de envio</h2>
+            </div>
+            <button
+              type="button"
+              aria-label="Fechar geração de etiqueta"
+              onClick={() => {
+                if (!labelBusy) setLabelSale(null);
+              }}
+            >
+              <X />
+            </button>
+          </header>
+
+          <p>
+            Pedido #{orderNo(labelSale.id)} · {saleCustomer(labelSale, d)}
+          </p>
+
+          {labelError ? (
+            <div className="mandaBemError">{labelError}</div>
+          ) : null}
+
+          <div className="mandaBemLabelScroll">
+            <section className="mandaBemFormSection">
+              <h3>Dados do envio</h3>
+              <div className="mandaBemFormGrid">
+                <label>
+                  <span>Destinatário *</span>
+                  <input
+                    value={labelDraft.destinatario}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        destinatario: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Forma de envio *</span>
+                  <select
+                    value={labelDraft.forma_envio}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        forma_envio: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="PAC">PAC</option>
+                    <option value="SEDEX">SEDEX</option>
+                    <option value="PACMINI">Mini Envios</option>
+                    <option value="LOGGI">Loggi</option>
+                  </select>
+                </label>
+                <label>
+                  <span>CEP *</span>
+                  <input
+                    value={labelDraft.cep}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        cep: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Logradouro *</span>
+                  <input
+                    value={labelDraft.logradouro}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        logradouro: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Número *</span>
+                  <input
+                    value={labelDraft.numero}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        numero: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Complemento</span>
+                  <input
+                    value={labelDraft.complemento}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        complemento: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Bairro *</span>
+                  <input
+                    value={labelDraft.bairro}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        bairro: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Cidade *</span>
+                  <input
+                    value={labelDraft.cidade}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        cidade: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Estado *</span>
+                  <input
+                    maxLength={2}
+                    value={labelDraft.estado}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        estado: e.target.value.toUpperCase(),
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Peso *</span>
+                  <select
+                    value={labelDraft.peso}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        peso: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="0.3">Até 300 g</option>
+                    <option value="1">De 300 g a 1 kg</option>
+                    <option value="2">De 1 a 2 kg</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section className="mandaBemFormSection">
+              <h3>Campos opcionais</h3>
+              <div className="mandaBemFormGrid">
+                <label>
+                  <span>E-mail</span>
+                  <input
+                    type="email"
+                    value={labelDraft.email}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        email: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>CPF destinatário</span>
+                  <input
+                    value={labelDraft.cpf_destinatario}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        cpf_destinatario: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Seguro / valor declarado</span>
+                  <input
+                    inputMode="decimal"
+                    value={labelDraft.valor_seguro}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        valor_seguro: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>Observação</span>
+                  <input
+                    maxLength={30}
+                    value={labelDraft.observacao}
+                    onChange={(e) =>
+                      setLabelDraft((current) => ({
+                        ...current,
+                        observacao: e.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="mandaBemFormSection">
+              <div className="mandaBemSectionTitle">
+                <h3>Medidas da caixa</h3>
+                <small>Opcionais</small>
+              </div>
+              <div className="mandaBemDimensions">
+                {([
+                  ["altura", "Altura"],
+                  ["comprimento", "Comprimento"],
+                  ["largura", "Largura"],
+                ] as const).map(([field, label]) => (
+                  <label key={field}>
+                    <span>{label}</span>
+                    <input
+                      inputMode="decimal"
+                      value={labelDraft[field]}
+                      onChange={(e) =>
+                        setLabelDraft((current) => ({
+                          ...current,
+                          [field]: e.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          <footer className="mandaBemLabelFooter">
+            <button
+              type="button"
+              disabled={labelBusy}
+              onClick={() => setLabelSale(null)}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              className="primary"
+              disabled={labelBusy}
+              onClick={generateMandaBemShipment}
+            >
+              {labelBusy ? "Gerando..." : "Gerar envio no MandaBem"}
+            </button>
+          </footer>
+        </div>
+      </div>
+    ) : null}
+    </>
+  );
+}
+
+function MandaBem({
+  d,
+  set,
+  notify,
+}: {
+  d: D;
+  set: any;
+  notify: (s: string) => void;
+}) {
+  const [section, setSection] = useState<
+    "overview" | "quote" | "labels" | "tracking" | "balance"
+  >("overview");
+  const [status, setStatus] = useState<any>(null);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const [quoteResult, setQuoteResult] = useState<any>(null);
+  const [quote, setQuote] = useState({
+    cep_origem: "",
+    cep_destino: "",
+    servico: "PAC",
+    peso: "0.3",
+    valor_seguro: "",
+    altura: "",
+    largura: "",
+    comprimento: "",
+  });
+  const firstDay = today().slice(0, 8) + "01";
+  const [labelDates, setLabelDates] = useState({
+    start_date: firstDay,
+    end_date: today(),
+  });
+  const [labels, setLabels] = useState<any[]>([]);
+  const [trackingKey, setTrackingKey] = useState("");
+  const [tracking, setTracking] = useState<any>(null);
+
+  useEffect(() => {
+    mandaBemRequest("status")
+      .then((result) => {
+        setStatus(result);
+        if (result?.originCep) {
+          setQuote((current) => ({
+            ...current,
+            cep_origem: current.cep_origem || result.originCep,
+          }));
+        }
+      })
+      .catch((err) => setError(err?.message || "Falha ao consultar MandaBem."));
+  }, []);
+
+  async function runQuote() {
+    setBusy("quote");
+    setError("");
+    setQuoteResult(null);
+    try {
+      const result = await mandaBemRequest("quote", quote);
+      setQuoteResult(mandaBemResult(result));
+    } catch (err: any) {
+      setError(err?.message || "Não foi possível realizar a cotação.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function loadLabels() {
+    setBusy("labels");
+    setError("");
+    try {
+      const result = await mandaBemRequest("shipments", labelDates);
+      setLabels(mandaBemShipmentRows(result));
+    } catch (err: any) {
+      setError(err?.message || "Não foi possível consultar as etiquetas.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function loadTracking() {
+    const key = trackingKey.trim();
+    if (!key) return;
+    setBusy("tracking");
+    setError("");
+    setTracking(null);
+    try {
+      const numeric = /^\d+$/.test(key);
+      const result = await mandaBemRequest("shipment", numeric
+        ? { id: key }
+        : { ref_id: key.replace(/^#/, "") });
+      const data = mandaBemResult(result)?.dados || mandaBemResult(result);
+      setTracking(data);
+      const localSale = d.sales.find(
+        (sale) =>
+          String(sale.mandaBem?.envioId || "") === String(data?.envio_id || "") ||
+          orderNo(sale.id) === String(key).replace(/^#/, ""),
+      );
+      if (localSale && data) {
+        set((state: D) => ({
+          ...state,
+          sales: state.sales.map((sale) =>
+            sale.id === localSale.id
+              ? {
+                  ...sale,
+                  mandaBem: {
+                    ...sale.mandaBem,
+                    envioId: String(data.envio_id || sale.mandaBem?.envioId || ""),
+                    status: data.status || sale.mandaBem?.status,
+                    tracking: data.etiqueta || sale.mandaBem?.tracking,
+                  },
+                }
+              : sale,
+          ),
+        }));
+      }
+    } catch (err: any) {
+      setError(err?.message || "Não foi possível acompanhar o envio.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  const generatedSales = d.sales.filter((sale) => sale.mandaBem?.envioId);
+
+  return (
+    <div className="mandaBemHub">
+      <div className="panel mandaBemHero">
+        <div>
+          <small>INTEGRAÇÃO LOGÍSTICA</small>
+          <h2>MandaBem</h2>
+          <p>
+            Cotações, envios, etiquetas e acompanhamento sem sair do Sistema DAF.
+          </p>
+        </div>
+        <div
+          className={
+            "mandaBemConnection " + (status?.configured ? "connected" : "")
+          }
+        >
+          <span />
+          {status?.configured
+            ? "API configurada"
+            : "API aguardando credenciais"}
+        </div>
+      </div>
+
+      <div className="mandaBemNav">
+        {([
+          ["overview", "Visão geral"],
+          ["quote", "Cotação"],
+          ["labels", "Etiquetas"],
+          ["tracking", "Acompanhamento"],
+          ["balance", "Saldo e recarga"],
+        ] as const).map(([id, label]) => (
+          <button
+            type="button"
+            key={id}
+            className={section === id ? "active" : ""}
+            onClick={() => {
+              setSection(id);
+              setError("");
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {error ? <div className="mandaBemError">{error}</div> : null}
+
+      {section === "overview" ? (
+        <div className="mandaBemOverviewGrid">
+          <div className="panel">
+            <span>Envios vinculados</span>
+            <b>{generatedSales.length}</b>
+            <small>Pedidos do DAF já enviados para a MandaBem.</small>
+          </div>
+          <div className="panel">
+            <span>Aguardando envio</span>
+            <b>
+              {
+                d.sales.filter(
+                  (sale) =>
+                    sale.prepared &&
+                    !sale.sent &&
+                    mandaBemEligibleSale(sale) &&
+                    !sale.mandaBem?.envioId,
+                ).length
+              }
+            </b>
+            <small>Correios ou Loggi ainda sem envio MandaBem.</small>
+          </div>
+          <div className="panel">
+            <span>Integração</span>
+            <b>{status?.configured ? "Ativa" : "Pendente"}</b>
+            <small>
+              {status?.configured
+                ? "Credenciais protegidas no servidor."
+                : "Configure API ID e Token nas variáveis da Vercel."}
+            </small>
+          </div>
+          <div className="panel mandaBemOverviewWide">
+            <b>Fluxo integrado</b>
+            <p>
+              Gere o envio diretamente no Controle de envios. O número gerado
+              fica vinculado ao pedido e pode ser acompanhado nesta área.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {section === "quote" ? (
+        <div className="panel mandaBemWorkspace">
+          <div className="panelHeading">
+            <div>
+              <h2>Cotação de frete</h2>
+              <p>Consulte valores diretamente na API da MandaBem.</p>
+            </div>
+          </div>
+          <div className="mandaBemFormGrid">
+            <label>
+              <span>CEP de origem</span>
+              <input
+                value={quote.cep_origem}
+                onChange={(e) =>
+                  setQuote((current) => ({
+                    ...current,
+                    cep_origem: e.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label>
+              <span>CEP de destino</span>
+              <input
+                value={quote.cep_destino}
+                onChange={(e) =>
+                  setQuote((current) => ({
+                    ...current,
+                    cep_destino: e.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label>
+              <span>Serviço</span>
+              <select
+                value={quote.servico}
+                onChange={(e) =>
+                  setQuote((current) => ({
+                    ...current,
+                    servico: e.target.value,
+                  }))
+                }
+              >
+                <option value="PAC">PAC</option>
+                <option value="SEDEX">SEDEX</option>
+                <option value="PACMINI">Mini Envios</option>
+                <option value="LOGGI">Loggi</option>
+              </select>
+            </label>
+            <label>
+              <span>Peso</span>
+              <select
+                value={quote.peso}
+                onChange={(e) =>
+                  setQuote((current) => ({ ...current, peso: e.target.value }))
+                }
+              >
+                <option value="0.3">Até 300 g</option>
+                <option value="1">Até 1 kg</option>
+                <option value="2">Até 2 kg</option>
+              </select>
+            </label>
+            <label>
+              <span>Seguro</span>
+              <input
+                inputMode="decimal"
+                value={quote.valor_seguro}
+                onChange={(e) =>
+                  setQuote((current) => ({
+                    ...current,
+                    valor_seguro: e.target.value,
+                  }))
+                }
+              />
+            </label>
+          </div>
+          <div className="mandaBemDimensions">
+            {([
+              ["altura", "Altura"],
+              ["largura", "Largura"],
+              ["comprimento", "Comprimento"],
+            ] as const).map(([field, label]) => (
+              <label key={field}>
+                <span>{label} (opcional)</span>
+                <input
+                  value={quote[field]}
+                  onChange={(e) =>
+                    setQuote((current) => ({
+                      ...current,
+                      [field]: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+          <button
+            type="button"
+            className="primary mandaBemActionButton"
+            disabled={busy === "quote"}
+            onClick={runQuote}
+          >
+            {busy === "quote" ? "Cotando..." : "Consultar frete"}
+          </button>
+
+          {quoteResult ? (
+            <div className="mandaBemResult">
+              {["PAC", "SEDEX", "PACMINI", "LOGGI"]
+                .filter((service) => quoteResult?.[service])
+                .map((service) => (
+                  <div key={service}>
+                    <b>{service}</b>
+                    <span>
+                      R$ {String(quoteResult[service]?.valor || "—")} ·{" "}
+                      {quoteResult[service]?.prazo || "—"} dia(s)
+                    </span>
+                  </div>
+                ))}
+              {quoteResult?.erro ? <small>{quoteResult.erro}</small> : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {section === "labels" ? (
+        <div className="panel mandaBemWorkspace">
+          <div className="panelHeading">
+            <div>
+              <h2>Etiquetas e envios criados</h2>
+              <p>Consulte os registros da MandaBem por período.</p>
+            </div>
+          </div>
+          <div className="mandaBemDateFilter">
+            <label>
+              <span>De</span>
+              <input
+                type="date"
+                value={labelDates.start_date}
+                onChange={(e) =>
+                  setLabelDates((current) => ({
+                    ...current,
+                    start_date: e.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label>
+              <span>Até</span>
+              <input
+                type="date"
+                value={labelDates.end_date}
+                onChange={(e) =>
+                  setLabelDates((current) => ({
+                    ...current,
+                    end_date: e.target.value,
+                  }))
+                }
+              />
+            </label>
+            <button
+              type="button"
+              className="primary"
+              disabled={busy === "labels"}
+              onClick={loadLabels}
+            >
+              {busy === "labels" ? "Consultando..." : "Buscar"}
+            </button>
+          </div>
+          <div className="mandaBemTableWrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Envio</th>
+                  <th>Destinatário</th>
+                  <th>Etiqueta / rastreio</th>
+                  <th>Status</th>
+                  <th>Destino</th>
+                </tr>
+              </thead>
+              <tbody>
+                {labels.map((row, index) => (
+                  <tr key={String(row.envio_id || index)}>
+                    <td>#{row.envio_id || "—"}</td>
+                    <td>{row.destinatario || "—"}</td>
+                    <td>{row.etiqueta || "—"}</td>
+                    <td>{row.status || "—"}</td>
+                    <td>
+                      {[row.cidade, row.estado].filter(Boolean).join(" / ") ||
+                        "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!labels.length ? (
+              <p className="empty">Nenhum envio consultado neste período.</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {section === "tracking" ? (
+        <div className="panel mandaBemWorkspace">
+          <div className="panelHeading">
+            <div>
+              <h2>Acompanhamento</h2>
+              <p>Busque pelo ID do envio MandaBem ou referência do pedido.</p>
+            </div>
+          </div>
+          <div className="mandaBemTrackingSearch">
+            <input
+              value={trackingKey}
+              onChange={(e) => setTrackingKey(e.target.value)}
+              placeholder="ID do envio ou número do pedido"
+            />
+            <button
+              type="button"
+              className="primary"
+              disabled={busy === "tracking"}
+              onClick={loadTracking}
+            >
+              {busy === "tracking" ? "Consultando..." : "Consultar"}
+            </button>
+          </div>
+          {tracking ? (
+            <div className="mandaBemTrackingCard">
+              <div>
+                <span>Envio</span>
+                <b>#{tracking.envio_id || "—"}</b>
+              </div>
+              <div>
+                <span>Status</span>
+                <b>{tracking.status || "Não informado"}</b>
+              </div>
+              <div>
+                <span>Etiqueta / rastreio</span>
+                <b>{tracking.etiqueta || "Não disponível"}</b>
+              </div>
+              <div>
+                <span>Destinatário</span>
+                <b>{tracking.destinatario || "—"}</b>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {section === "balance" ? (
+        <div className="panel mandaBemWorkspace mandaBemBalance">
+          <div>
+            <small>SALDO E RECARGA</small>
+            <h2>Pagamentos MandaBem</h2>
+            <p>
+              A documentação pública atual da API não disponibiliza um endpoint
+              de consulta de saldo ou recarga. A estrutura desta área já fica
+              reservada para integrar assim que a MandaBem disponibilizar esse
+              método para sua conta.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="primary"
+            onClick={() =>
+              window.open(
+                "https://mandabem.com.br/login",
+                "_blank",
+                "noopener,noreferrer",
+              )
+            }
+          >
+            Abrir pagamentos no MandaBem
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
