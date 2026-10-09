@@ -10039,3 +10039,31 @@ aside nav {
     padding-right: 4px;
   }
 }
+
+
+/* Envios: pedidos individuais sem contorno externo */
+:root[data-theme="dark"] .shipping .shippingItem,
+:root[data-theme="dark"] .shipping .shippingItem > details,
+.shipping .shippingItem,
+.shipping .shippingItem > details {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.shipping .shippingItem {
+  background: var(--panel-2);
+}
+
+.prepareGroupedOrders {
+  margin: 3px 0 5px;
+  color: var(--accent) !important;
+  font-weight: 800;
+}
+
+.mandaBemPlaceholder {
+  min-height: 220px;
+}
+
+.shippingNavGroup .stockSubnav button {
+  justify-content: space-between;
+}
