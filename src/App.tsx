@@ -1450,6 +1450,20 @@ const action =
             ) : null}
             {page === "catalog" ? (
               <button
+                className="secondary"
+                disabled={!ready || sync !== "saved"}
+                onClick={async () => {
+                  if (writer.current && !writer.current.pending && !blocked.current) {
+                    const publication = await writer.current.publish();
+                    if (mounted.current) recordPublication(publication);
+                  }
+                }}
+              >
+                <Cloud /> Publicar revisão salva
+              </button>
+            ) : null}
+            {page === "catalog" ? (
+              <button
                 className="secondary catalogPublicButton"
                 onClick={() =>
                   window.open("/catalogo", "_blank", "noopener,noreferrer")
