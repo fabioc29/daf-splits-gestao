@@ -1456,6 +1456,7 @@ const action =
             {page === "sales" ? (
               <button
                 className="secondary marketplaceButton"
+                disabled={editingBlocked}
                 onClick={() => setModal({ type: "marketplace" })}
               >
                 <ShoppingBag /> Marketplace
@@ -1508,7 +1509,7 @@ const action =
         <section className="content">
           {saveNotice && <div className="card" role="alert"><p>{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button></div>}
           {catalogNotice && <div className="card" role="status"><p>{catalogNotice}</p><button disabled={sync !== "saved" || !ready} onClick={async () => { if (writer.current && !writer.current.pending && !blocked.current) recordPublication(await writer.current.publish()); }}>Publicar catálogo da revisão salva</button></div>}
-          <fieldset disabled={editingBlocked} style={{border:0,margin:0,padding:0,minWidth:0}}>
+          <div inert={editingBlocked} style={{display:"contents"}}>
           {page === "crm" ? (
             <CRMFeedPanel userId={session.user.id} synced={ready && sync === "saved" && !blocked.current} />
           ) : page === "dashboard" ? (
@@ -1590,10 +1591,10 @@ const action =
           ) : (
             <Finance d={data} totals={totals} set={setData} notify={notify} />
           )}
-          </fieldset>
+          </div>
         </section>
       </main>
-      <fieldset disabled={editingBlocked} style={{border:0,margin:0,padding:0,minWidth:0}}>
+      <div inert={editingBlocked} style={{display:"contents"}}>
       {modal?.type === "supplyEdit" || modal?.type === "purchaseEdit" ? (
         <InventoryEdit
           modal={modal}
@@ -1621,7 +1622,7 @@ const action =
           close={() => setModal(null)}
         />
       ) : null}
-      </fieldset>
+      </div>
       {history ? (
         <History id={history} d={data} close={() => setHistory(0)} />
       ) : null}
