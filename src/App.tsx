@@ -1041,7 +1041,7 @@ function System({ session }: { session: Session }) {
           : blocked.current ? "A adoção de UUIDs precisa ser concluída antes de salvar." : "");
         setReady(true); setSync(blocked.current ? "error" : "saved");
       } catch {
-        if (active) { blockEditing("Não foi possível confirmar o estado salvo ou acessar a recuperação local. Exporte o rascunho e tente carregar o estado salvo; a edição está bloqueada."); setSync("error"); }
+        if (active) { blockEditing(writer.current ? "Estado confirmado no banco. A recuperação local está indisponível; a edição está bloqueada. Exporte os rascunhos e tente carregar o estado salvo." : "Não foi possível confirmar o estado salvo. A edição está bloqueada; tente carregar o estado salvo antes de continuar."); setSync("error"); }
       }
     })();
     const timer = window.setInterval(async () => {
