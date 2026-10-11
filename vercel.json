@@ -8,5 +8,10 @@
       "source": "/catalogo/:path*",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "homologacao/fabio-dashboard-crm-20261011": false
+    }
+  }
 }
