@@ -93,28 +93,29 @@ export default async function handler(req, res) {
 
   if (action === "status") {
     res.status(200).json({
-      configured: configured(),
-      originCep: String(process.env.MANDA_BEM_CEP_ORIGEM || "").replace(/\D/g, ""),
+      configured: false,
+      commercialEnabled: false,
+      originCep: "",
       capabilities: {
-        quote: true,
-        generate: true,
-        shipment: true,
-        shipments: true,
-        cep: true,
-        reverse: true,
+        quote: false,
+        generate: false,
+        shipment: false,
+        shipments: false,
+        cep: false,
+        reverse: false,
         balanceRecharge: false,
       },
     });
     return;
   }
 
-  if (!configured()) {
-    res.status(503).json({
-      error: "Integração MandaBem ainda não configurada.",
-      code: "MANDA_BEM_NOT_CONFIGURED",
-    });
-    return;
-  }
+  // Commercial execution remains closed even when credentials/environment flags exist.
+  // Reopening requires separately reviewed authentication, confirmed CAS and uncertain-result handling.
+  res.status(503).json({
+    error: "Execução comercial MandaBem desativada no servidor.",
+    code: "MANDA_BEM_COMMERCIAL_DISABLED",
+  });
+  return;
 
   try {
     const body = req.body || {};

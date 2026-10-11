@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { readState, newIdentities, StateConflict } from "./crm/state-persistence";
 import { FabioStateWriter, committedCatalogCache, PUBLISHED_CATALOG_KEY } from "./crm/fabio-persistence";
+import { LocalRecovery, optionalLocalGet, optionalLocalSet, optionalLocalRemove } from "./crm/local-recovery";
 import { CRMFeedPanel } from "./crm/CRMFeedPanel";
 import {
   LayoutDashboard,
@@ -859,7 +860,7 @@ export default function App() {
 }
 
 function System({ session }: { session: Session }) {
-  const [data, setDataState] = useState<D>(() => readLocal()),
+  const [data, setDataState] = useState<D>(() => normalizeData(blank)),
     [ready, setReady] = useState(false),
     [sync, setSync] = useState<"loading" | "saved" | "error">("loading");
   const writer = useRef<FabioStateWriter | null>(null);
@@ -871,24 +872,37 @@ function System({ session }: { session: Session }) {
   const mounted = useRef(true);
   const [saveNotice, setSaveNotice] = useState("");
   const [catalogNotice, setCatalogNotice] = useState("");
-  const pendingKey = "daf-v4-pending:" + session.user.id;
+  const recovery = useRef<LocalRecovery | null>(null);
+  const recoveredDrafts = useRef<unknown[]>([]);
+  const [editingBlocked, setEditingBlocked] = useState(true);
+  function blockEditing(message: string) {
+    blocked.current = true; setEditingBlocked(true); setSaveNotice(message);
+  }
   function setData(update: D | ((current: D) => D)) {
+    if (blocked.current || !ready || !recovery.current || !writer.current) return;
+    const next = newIdentities(typeof update === "function" ? update(dataRef.current) : update, dataRef.current);
+    dataRef.current = next;
     saveVersion.current++;
-    setDataState(current => newIdentities(typeof update === "function" ? update(current) : update, current));
+    try { recovery.current.preserve(next, writer.current.snapshot.revision); }
+    catch { blockEditing("O rascunho está apenas na memória: o armazenamento local falhou. Exporte-o antes de fechar e carregue o estado salvo para continuar."); setDataState(next); return; }
+    setDataState(next);
   }
   function recordPublication(publication: Awaited<ReturnType<FabioStateWriter["publish"]>>) {
     const cache = committedCatalogCache(publication);
-    if (cache) localStorage.setItem(PUBLISHED_CATALOG_KEY, cache);
+    if (cache && !optionalLocalSet(PUBLISHED_CATALOG_KEY, cache)) {
+      setCatalogNotice("Dados e catálogo confirmados no servidor; o cache local do catálogo está indisponível."); return;
+    }
     setCatalogNotice(publication.status === "published" ? "" : publication.status === "stale"
       ? "O catálogo aguarda a revisão atual. Outra sessão salvou durante a publicação."
       : "Dados salvos; o catálogo ainda não foi publicado. Tente publicar novamente após conferir a revisão.");
   }
-  async function buildCatalog(persisted: D) {
-    const items = await enrichCatalogItemsWithImages(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages));
+  function fallbackCatalog(persisted: D) { return catalogSnapshotPayload(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), persisted.catalogSettings); }
+  async function buildCatalog(persisted: D, signal?: AbortSignal) {
+    const items = await enrichCatalogItemsWithImages(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), signal);
     return catalogSnapshotPayload(items, persisted.catalogSettings);
   }
   function exportDraft() {
-    const url = URL.createObjectURL(new Blob([JSON.stringify(dataRef.current, null, 2)], {type:"application/json"}));
+    const url = URL.createObjectURL(new Blob([JSON.stringify({format:"daf-recovery-export-v1",userId:session.user.id,currentDraft:dataRef.current,pendingDrafts:recoveredDrafts.current}, null, 2)], {type:"application/json"}));
     const link = document.createElement("a"); link.href = url; link.download = "DAF-rascunho-nao-salvo.json"; link.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
@@ -897,21 +911,24 @@ function System({ session }: { session: Session }) {
     const version = saveVersion.current;
     try {
       if (writer.current?.pending) throw Error("Aguarde a gravação em andamento.");
-      const current = await FabioStateWriter.open(supabase, buildCatalog);
+      const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
       if (!mounted.current || version !== saveVersion.current) { current.dispose(); return; }
       writer.current?.dispose(); writer.current = current;
       const normalized = normalizeData(current.snapshot.data);
       lastSynced.current = JSON.stringify(normalized);
-      localStorage.removeItem(pendingKey);
+      // Clear only this tab's record. Other tabs' drafts are retained for recovery.
+      recovery.current ||= new LocalRecovery(session.user.id);
+      recovery.current.clear();
       blocked.current = !current.snapshot.identitiesReady;
+      setEditingBlocked(blocked.current);
       setSaveNotice(blocked.current ? "A adoção de UUIDs precisa ser concluída antes de salvar." : "");
       setDataState(normalized); setReady(true); setSync(blocked.current ? "error" : "saved");
-    } catch(error) { setSaveNotice(error instanceof Error ? error.message : "Não foi possível carregar o estado salvo."); setSync("error"); }
+    } catch(error) { blockEditing(error instanceof Error ? error.message : "Não foi possível carregar o estado salvo."); setSync("error"); }
   }
   const [page, setPage] = useState("dashboard"),
     [theme, setTheme] = useState<"dark" | "light">(() => {
       if (typeof window === "undefined") return "dark";
-      const stored = window.localStorage.getItem("daf-theme");
+      const stored = optionalLocalGet("daf-theme");
       if (stored === "light" || stored === "dark") return stored;
       return window.matchMedia?.("(prefers-color-scheme: light)").matches
         ? "light"
@@ -921,6 +938,7 @@ function System({ session }: { session: Session }) {
     [history, setHistory] = useState(0),
     [supplierHistory, setSupplierHistory] = useState(""),
     [toast, setToast] = useState("");
+  const modalRef = useRef(modal); modalRef.current = modal;
   const [stockMenuOpen, setStockMenuOpen] = useState(false);
   const [financeMenuOpen, setFinanceMenuOpen] = useState(false);
   const [shippingMenuOpen, setShippingMenuOpen] = useState(false);
@@ -930,7 +948,7 @@ function System({ session }: { session: Session }) {
   );
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem("daf-theme", theme);
+    optionalLocalSet("daf-theme", theme);
   }, [theme]);
   useEffect(() => {
     const palette =
@@ -978,7 +996,7 @@ function System({ session }: { session: Session }) {
     Object.entries(variables).forEach(([key, value]) =>
       root.style.setProperty(key, value),
     );
-    window.localStorage.setItem("daf-ui-settings", JSON.stringify(localUi));
+    optionalLocalSet("daf-ui-settings", JSON.stringify(localUi));
     document.title = "Gestão | DAF Splits";
   }, [localUi, theme]);
   useEffect(() => {
@@ -1007,35 +1025,38 @@ function System({ session }: { session: Session }) {
     mounted.current = true;
     (async () => {
       try {
-        const current = await FabioStateWriter.open(supabase, buildCatalog);
+        const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
         if (!active) { current.dispose(); return; }
         writer.current = current;
         const normalized = normalizeData(current.snapshot.data);
         lastSynced.current = JSON.stringify(normalized);
-        const pending = localStorage.getItem(pendingKey);
-        blocked.current = Boolean(pending) || !current.snapshot.identitiesReady;
-        // Recovery drafts are retained, never automatically replayed over another revision.
-        setDataState(pending ? normalizeData(JSON.parse(pending)) : normalized);
-        setSaveNotice(pending ? "Há um rascunho local pendente. Exporte-o e carregue o estado salvo antes de continuar."
+        recovery.current = new LocalRecovery(session.user.id);
+        const pending = recovery.current.list();
+        recoveredDrafts.current = pending;
+        blocked.current = pending.length > 0 || !current.snapshot.identitiesReady;
+        setEditingBlocked(blocked.current);
+        // Never replay a recovered draft or silently rebase it over a different revision.
+        setDataState(pending.length ? normalizeData(pending[0].draft) : normalized);
+        setSaveNotice(pending.length ? "Há rascunhos locais pendentes deste usuário. Exporte-os e carregue o estado salvo antes de continuar."
           : blocked.current ? "A adoção de UUIDs precisa ser concluída antes de salvar." : "");
         setReady(true); setSync(blocked.current ? "error" : "saved");
       } catch {
-        if (active) { blocked.current = true; setSaveNotice("Não foi possível confirmar o estado salvo. As alterações locais não serão enviadas."); setSync("error"); }
+        if (active) { blockEditing("Não foi possível confirmar o estado salvo ou acessar a recuperação local. Exporte o rascunho e tente carregar o estado salvo; a edição está bloqueada."); setSync("error"); }
       }
     })();
     const timer = window.setInterval(async () => {
       const current = writer.current, version = saveVersion.current;
-      if (!current || current.pending || blocked.current || JSON.stringify(dataRef.current) !== lastSynced.current) return;
+      if (!current || current.pending || modalRef.current || blocked.current || JSON.stringify(dataRef.current) !== lastSynced.current) return;
       try {
         const remote = await readState(supabase);
-        if (!active || current !== writer.current || current.pending || version !== saveVersion.current || remote.data === null) return;
+        if (!active || modalRef.current || blocked.current || current !== writer.current || current.pending || version !== saveVersion.current || remote.data === null) return;
         if (remote.revision === current.snapshot.revision) return;
         current.snapshot = remote;
         const normalized = normalizeData(remote.data);
         lastSynced.current = JSON.stringify(normalized);
         setDataState(normalized);
         blocked.current = !remote.identitiesReady;
-        if (blocked.current) { setSaveNotice("A adoção de UUIDs precisa ser concluída antes de salvar."); setSync("error"); }
+        if (blocked.current) { setEditingBlocked(true); setSaveNotice("A adoção de UUIDs precisa ser concluída antes de salvar."); setSync("error"); }
       } catch { /* An idle read never acknowledges or retries a write. */ }
     }, 5000);
     return () => { active = false; mounted.current = false; window.clearInterval(timer); writer.current?.dispose(); writer.current = null; };
@@ -1043,27 +1064,26 @@ function System({ session }: { session: Session }) {
   useEffect(() => {
     if (!ready) return;
     const serialized = JSON.stringify(data);
-    localStorage.setItem("daf-v4", serialized);
-    if (serialized === lastSynced.current) return;
-    localStorage.setItem(pendingKey, serialized);
-    if (blocked.current || !writer.current) return;
+    if (serialized === lastSynced.current || blocked.current || !writer.current) return;
     const version = saveVersion.current;
     setSync("loading");
     writer.current.save(data).then(({saved, publication}) => {
       if (!mounted.current) return;
       const normalized = normalizeData(saved.data);
       lastSynced.current = JSON.stringify(normalized);
-      recordPublication(publication);
       if (version === saveVersion.current) {
-        localStorage.removeItem(pendingKey);
+        // A browser cache failure cannot invalidate an acknowledged database commit.
         setDataState(normalized); setSync("saved"); setSaveNotice("");
+        try { recovery.current?.clear(); }
+        catch { blockEditing("Gravação confirmada no banco. A recuperação local falhou; novas edições estão bloqueadas. Exporte e carregue o estado salvo."); }
       }
+      void publication.then(result => { if (mounted.current) recordPublication(result); });
     }).catch(error => {
       if (!mounted.current) return;
-      blocked.current = true; setSync("error");
-      setSaveNotice(error instanceof StateConflict
+      blockEditing(error instanceof StateConflict
         ? "Outra sessão alterou os dados. Este rascunho não foi salvo. Exporte-o e carregue a revisão atual."
-        : "Não foi possível confirmar esta gravação. O rascunho foi preservado; confira o estado salvo antes de continuar.");
+        : "Não foi possível confirmar esta gravação. Não haverá repetição automática. Exporte o rascunho e confira o estado salvo antes de continuar.");
+      setSync("error");
     });
   }, [data, ready, session.user.id]);
   const totals = useMemo(
@@ -1182,12 +1202,13 @@ const action =
             : page === "shipping-mandabem"
               ? "MandaBem"
               : nav.find((item) => item[0] === page)?.[1] || "Painel";
-  if (!ready && sync !== "error")
+  if (!ready)
     return (
       <div className="authPage">
         <div className="authCard">
           <Cloud />
-          <h1>Carregando seus dados...</h1>
+          <h1>{sync === "error" ? "Edição bloqueada" : "Carregando seus dados..."}</h1>
+          {sync === "error" && <><p role="alert">{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button><button onClick={() => supabase.auth.signOut()}>Sair</button></>}
         </div>
       </div>
     );
@@ -1475,6 +1496,7 @@ const action =
             {action ? (
               <button
                 className="primary"
+                disabled={editingBlocked}
                 onClick={() => setModal({ type: action[1] })}
               >
                 <Plus />
@@ -1486,6 +1508,7 @@ const action =
         <section className="content">
           {saveNotice && <div className="card" role="alert"><p>{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button></div>}
           {catalogNotice && <div className="card" role="status"><p>{catalogNotice}</p><button disabled={sync !== "saved" || !ready} onClick={async () => { if (writer.current && !writer.current.pending && !blocked.current) recordPublication(await writer.current.publish()); }}>Publicar catálogo da revisão salva</button></div>}
+          <fieldset disabled={editingBlocked} style={{border:0,margin:0,padding:0,minWidth:0}}>
           {page === "crm" ? (
             <CRMFeedPanel userId={session.user.id} synced={ready && sync === "saved" && !blocked.current} />
           ) : page === "dashboard" ? (
@@ -1567,8 +1590,10 @@ const action =
           ) : (
             <Finance d={data} totals={totals} set={setData} notify={notify} />
           )}
+          </fieldset>
         </section>
       </main>
+      <fieldset disabled={editingBlocked} style={{border:0,margin:0,padding:0,minWidth:0}}>
       {modal?.type === "supplyEdit" || modal?.type === "purchaseEdit" ? (
         <InventoryEdit
           modal={modal}
@@ -1596,6 +1621,7 @@ const action =
           close={() => setModal(null)}
         />
       ) : null}
+      </fieldset>
       {history ? (
         <History id={history} d={data} close={() => setHistory(0)} />
       ) : null}
@@ -2247,8 +2273,8 @@ function SettingsPage({
   }
 
   function resetLocalSettings() {
-    window.localStorage.removeItem("daf-ui-settings");
-    window.localStorage.removeItem("daf-theme");
+    optionalLocalRemove("daf-ui-settings");
+    optionalLocalRemove("daf-theme");
     setSettings({
       ...DEFAULT_LOCAL_UI_SETTINGS,
       menuOrder: [...DEFAULT_MENU_ORDER],
@@ -4641,6 +4667,7 @@ function mandaBemEligibleSale(sale: V) {
 }
 
 async function mandaBemRequest(action: string, payload: Record<string, any> = {}) {
+  if (action !== "status") throw new Error("Execução comercial MandaBem desativada. Nenhuma operação externa foi enviada.");
   const response = await fetch(`/api/mandabem?action=${encodeURIComponent(action)}`, {
     method: action === "status" ? "GET" : "POST",
     headers:

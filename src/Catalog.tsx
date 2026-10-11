@@ -368,6 +368,7 @@ function validFragranticaImageUrl(value: unknown): value is string {
 
 export async function enrichCatalogItemsWithImages(
   items: CatalogItem[],
+  signal?: AbortSignal,
 ): Promise<CatalogItem[]> {
   const known = items.map((item) => applyKnownFragranticaImage(item));
 
@@ -401,7 +402,10 @@ export async function enrichCatalogItemsWithImages(
           brand: item.brand,
           name: item.name,
         });
-        const response = await fetch("/api/fragrantica-image?" + params.toString());
+        const deadline = AbortSignal.timeout(4000);
+        const response = await fetch("/api/fragrantica-image?" + params.toString(), {
+          signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+        });
         if (!response.ok) return item;
         const data = await response.json();
         if (!validFragranticaImageUrl(data?.imageUrl)) return item;
