@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { readState, newIdentities, StateConflict } from "./crm/state-persistence";
+import { FabioStateWriter, committedCatalogCache, PUBLISHED_CATALOG_KEY } from "./crm/fabio-persistence";
+import { CRMFeedPanel } from "./crm/CRMFeedPanel";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -66,7 +69,9 @@ type BottleHistoryEntry = {
   assumedSold?: boolean;
 };
 
-type P = {
+type SourceIdentity = { externalId?: string; legacyIds?: number[] };
+
+type P = SourceIdentity & {
   id: number;
   brand: string;
   name: string;
@@ -100,7 +105,7 @@ type LeadSource = "Grupo 1" | "Grupo 2" | "Grupo 3" | "TikTok" | "Shopee";
 const LEAD_SOURCES: LeadSource[] = ["Grupo 1", "Grupo 2", "Grupo 3", "TikTok", "Shopee"];
 const MANUAL_LEAD_SOURCES: LeadSource[] = ["Grupo 1", "Grupo 2", "Grupo 3"];
 
-type C = {
+type C = SourceIdentity & {
   id: number;
   name: string;
   phone: string;
@@ -130,7 +135,7 @@ type L = {
   bottleNumber?: number;
 };
 type Installment = { date: string; amount: number; paid?: boolean };
-type V = {
+type V = SourceIdentity & {
   id: number;
   date: string;
   clientId: number;
@@ -807,6 +812,7 @@ const nav = [
   ["suppliers", "Fornecedores", Building2],
   ["finance", "Financeiro", Wallet],
   ["settings", "Configurações", Settings],
+  ["crm", "Integração CRM", Cloud],
 ] as const;
 
 function isPublicCatalogRoute() {
@@ -849,15 +855,59 @@ export default function App() {
       </div>
     );
   if (!session) return <Auth />;
-  return <System session={session} />;
+  return <System key={session.user.id} session={session} />;
 }
 
 function System({ session }: { session: Session }) {
-  const [data, setData] = useState<D>(() => readLocal()),
+  const [data, setDataState] = useState<D>(() => readLocal()),
     [ready, setReady] = useState(false),
     [sync, setSync] = useState<"loading" | "saved" | "error">("loading");
-  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const writer = useRef<FabioStateWriter | null>(null);
   const saveVersion = useRef(0);
+  const lastSynced = useRef("");
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const blocked = useRef(false);
+  const mounted = useRef(true);
+  const [saveNotice, setSaveNotice] = useState("");
+  const [catalogNotice, setCatalogNotice] = useState("");
+  const pendingKey = "daf-v4-pending:" + session.user.id;
+  function setData(update: D | ((current: D) => D)) {
+    saveVersion.current++;
+    setDataState(current => newIdentities(typeof update === "function" ? update(current) : update, current));
+  }
+  function recordPublication(publication: Awaited<ReturnType<FabioStateWriter["publish"]>>) {
+    const cache = committedCatalogCache(publication);
+    if (cache) localStorage.setItem(PUBLISHED_CATALOG_KEY, cache);
+    setCatalogNotice(publication.status === "published" ? "" : publication.status === "stale"
+      ? "O catálogo aguarda a revisão atual. Outra sessão salvou durante a publicação."
+      : "Dados salvos; o catálogo ainda não foi publicado. Tente publicar novamente após conferir a revisão.");
+  }
+  async function buildCatalog(persisted: D) {
+    const items = await enrichCatalogItemsWithImages(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages));
+    return catalogSnapshotPayload(items, persisted.catalogSettings);
+  }
+  function exportDraft() {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(dataRef.current, null, 2)], {type:"application/json"}));
+    const link = document.createElement("a"); link.href = url; link.download = "DAF-rascunho-nao-salvo.json"; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function loadCurrent() {
+    if (!window.confirm("Carregar o estado salvo descarta este rascunho local. Exporte-o antes se precisar preservá-lo. Continuar?")) return;
+    const version = saveVersion.current;
+    try {
+      if (writer.current?.pending) throw Error("Aguarde a gravação em andamento.");
+      const current = await FabioStateWriter.open(supabase, buildCatalog);
+      if (!mounted.current || version !== saveVersion.current) { current.dispose(); return; }
+      writer.current?.dispose(); writer.current = current;
+      const normalized = normalizeData(current.snapshot.data);
+      lastSynced.current = JSON.stringify(normalized);
+      localStorage.removeItem(pendingKey);
+      blocked.current = !current.snapshot.identitiesReady;
+      setSaveNotice(blocked.current ? "A adoção de UUIDs precisa ser concluída antes de salvar." : "");
+      setDataState(normalized); setReady(true); setSync(blocked.current ? "error" : "saved");
+    } catch(error) { setSaveNotice(error instanceof Error ? error.message : "Não foi possível carregar o estado salvo."); setSync("error"); }
+  }
   const [page, setPage] = useState("dashboard"),
     [theme, setTheme] = useState<"dark" | "light">(() => {
       if (typeof window === "undefined") return "dark";
@@ -954,82 +1004,67 @@ function System({ session }: { session: Session }) {
   }
   useEffect(() => {
     let active = true;
+    mounted.current = true;
     (async () => {
-      const { data: remote, error } = await supabase
-        .from("app_state")
-        .select("data")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      if (!active) return;
-      if (error) {
-        setSync("error");
-        return;
+      try {
+        const current = await FabioStateWriter.open(supabase, buildCatalog);
+        if (!active) { current.dispose(); return; }
+        writer.current = current;
+        const normalized = normalizeData(current.snapshot.data);
+        lastSynced.current = JSON.stringify(normalized);
+        const pending = localStorage.getItem(pendingKey);
+        blocked.current = Boolean(pending) || !current.snapshot.identitiesReady;
+        // Recovery drafts are retained, never automatically replayed over another revision.
+        setDataState(pending ? normalizeData(JSON.parse(pending)) : normalized);
+        setSaveNotice(pending ? "Há um rascunho local pendente. Exporte-o e carregue o estado salvo antes de continuar."
+          : blocked.current ? "A adoção de UUIDs precisa ser concluída antes de salvar." : "");
+        setReady(true); setSync(blocked.current ? "error" : "saved");
+      } catch {
+        if (active) { blocked.current = true; setSaveNotice("Não foi possível confirmar o estado salvo. As alterações locais não serão enviadas."); setSync("error"); }
       }
-      if (remote?.data && Object.keys(remote.data).length) {
-        setData(normalizeData(remote.data));
-      } else {
-        const local = readLocal();
-        const { error: saveError } = await supabase
-          .from("app_state")
-          .upsert({ user_id: session.user.id, data: local });
-        if (saveError) {
-          setSync("error");
-          return;
-        }
-      }
-      setReady(true);
-      setSync("saved");
     })();
-    return () => {
-      active = false;
-    };
+    const timer = window.setInterval(async () => {
+      const current = writer.current, version = saveVersion.current;
+      if (!current || current.pending || blocked.current || JSON.stringify(dataRef.current) !== lastSynced.current) return;
+      try {
+        const remote = await readState(supabase);
+        if (!active || current !== writer.current || current.pending || version !== saveVersion.current || remote.data === null) return;
+        if (remote.revision === current.snapshot.revision) return;
+        current.snapshot = remote;
+        const normalized = normalizeData(remote.data);
+        lastSynced.current = JSON.stringify(normalized);
+        setDataState(normalized);
+        blocked.current = !remote.identitiesReady;
+        if (blocked.current) { setSaveNotice("A adoção de UUIDs precisa ser concluída antes de salvar."); setSync("error"); }
+      } catch { /* An idle read never acknowledges or retries a write. */ }
+    }, 5000);
+    return () => { active = false; mounted.current = false; window.clearInterval(timer); writer.current?.dispose(); writer.current = null; };
   }, [session.user.id]);
   useEffect(() => {
-    localStorage.setItem("daf-v4", JSON.stringify(data));
     if (!ready) return;
-    const version = ++saveVersion.current;
+    const serialized = JSON.stringify(data);
+    localStorage.setItem("daf-v4", serialized);
+    if (serialized === lastSynced.current) return;
+    localStorage.setItem(pendingKey, serialized);
+    if (blocked.current || !writer.current) return;
+    const version = saveVersion.current;
     setSync("loading");
-    saveQueue.current = saveQueue.current
-      .catch(() => undefined)
-      .then(async () => {
-        try {
-          const { error } = await supabase
-            .from("app_state")
-            .upsert({ user_id: session.user.id, data });
-
-          if (!error) {
-            // Snapshot público: somente dados seguros do estoque.
-            // Falhas aqui não interrompem o salvamento administrativo.
-            const catalogItems = await enrichCatalogItemsWithImages(
-              catalogItemsFromProducts(
-                data.products,
-                data.catalogSettings.manualImages,
-              ),
-            );
-            await supabase
-              .from("public_catalogs")
-              .upsert(
-                {
-                  user_id: session.user.id,
-                  slug: "daf-splits",
-                  name: "DAF Splits",
-                  published: true,
-                  items: catalogSnapshotPayload(
-                    catalogItems,
-                    data.catalogSettings,
-                  ),
-                },
-                { onConflict: "user_id" },
-              );
-          }
-
-          if (version === saveVersion.current) {
-            setSync(error ? "error" : "saved");
-          }
-        } catch {
-          if (version === saveVersion.current) setSync("error");
-        }
-      });
+    writer.current.save(data).then(({saved, publication}) => {
+      if (!mounted.current) return;
+      const normalized = normalizeData(saved.data);
+      lastSynced.current = JSON.stringify(normalized);
+      recordPublication(publication);
+      if (version === saveVersion.current) {
+        localStorage.removeItem(pendingKey);
+        setDataState(normalized); setSync("saved"); setSaveNotice("");
+      }
+    }).catch(error => {
+      if (!mounted.current) return;
+      blocked.current = true; setSync("error");
+      setSaveNotice(error instanceof StateConflict
+        ? "Outra sessão alterou os dados. Este rascunho não foi salvo. Exporte-o e carregue a revisão atual."
+        : "Não foi possível confirmar esta gravação. O rascunho foi preservado; confira o estado salvo antes de continuar.");
+    });
   }, [data, ready, session.user.id]);
   const totals = useMemo(
     () =>
@@ -1435,7 +1470,11 @@ const action =
           </div>
         </header>
         <section className="content">
-          {page === "dashboard" ? (
+          {saveNotice && <div className="card" role="alert"><p>{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button></div>}
+          {catalogNotice && <div className="card" role="status"><p>{catalogNotice}</p><button disabled={sync !== "saved" || !ready} onClick={async () => { if (writer.current && !writer.current.pending && !blocked.current) recordPublication(await writer.current.publish()); }}>Publicar catálogo da revisão salva</button></div>}
+          {page === "crm" ? (
+            <CRMFeedPanel userId={session.user.id} synced={ready && sync === "saved" && !blocked.current} />
+          ) : page === "dashboard" ? (
             <Dash d={data} set={setData} />
           ) : page === "sales" ? (
             <Sales
@@ -1631,7 +1670,8 @@ function normalizeData(stored: any): D {
   const productAliases = new Map<number, ProductAlias>();
   const productGroups = new Map<string, P[]>();
   normalizedProducts.forEach((product: P) => {
-    const key = perfumeIdentity(product.brand, product.name);
+    // Adopted UUIDs are separate entities even when their display names match.
+    const key = product.externalId ? "uuid:" + product.externalId : perfumeIdentity(product.brand, product.name);
     const current = productGroups.get(key) || [];
     current.push(product);
     productGroups.set(key, current);
@@ -9557,6 +9597,11 @@ function Form({
   function submit(e: any) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
+    // UUID adoption must not merge products to repair an ambiguous name selector.
+    const ambiguous = isSale && !isOldSale
+      ? Array.from({length: lines}, (_, i) => String(f["productName" + i] || "")).some(name => d.products.filter(p => `${p.brand} ${p.name}` === name).length > 1)
+      : type === "purchase" && kind === "Perfume" && d.products.filter(p => perfumeIdentity(p.brand, p.name) === perfumeIdentity(String(f.brand || ""), parseBottleMarker(f.productName).name)).length > 1;
+    if (ambiguous) { window.alert("Há mais de um produto com esta marca e nome. Confira as identidades antes de lançar esta operação."); return; }
     if (isSale && !isOldSale) {
       const invalid = Array.from({ length: lines }, (_, i) =>
         String(f["productName" + i] || ""),
@@ -10148,6 +10193,7 @@ function Form({
             })).filter((p) => p.date || p.amount)
           : [];
       const sale: V = {
+        ...existingSale,
         id:
           existingSale?.id ||
           x.sales.reduce((max, current) => Math.max(max, current.id), 0) + 1,

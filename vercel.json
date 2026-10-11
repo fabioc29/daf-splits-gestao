@@ -1,4 +1,5 @@
 {
+  "git": {"deploymentEnabled": {"homologacao/fabio-dashboard-crm-20261011": false}},
   "rewrites": [
     {
       "source": "/catalogo",
@@ -8,10 +9,5 @@
       "source": "/catalogo/:path*",
       "destination": "/index.html"
     }
-  ],
-  "git": {
-    "deploymentEnabled": {
-      "homologacao/fabio-dashboard-crm-20261011": false
-    }
-  }
+  ]
 }

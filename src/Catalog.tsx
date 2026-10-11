@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "./supabase";
+import { PUBLISHED_CATALOG_KEY, readCommittedCatalogCache } from "./crm/fabio-persistence";
 import "./catalog.css";
 
 export type CatalogItem = {
@@ -1163,21 +1164,14 @@ export function PublicCatalog() {
 
     async function localCatalogFallback() {
       try {
-        const stored = JSON.parse(window.localStorage.getItem("daf-v4") || "null");
-        const fallbackSettings = normalizeCatalogSettings(
-          stored?.catalogSettings,
-        );
-        const fallbackItems = catalogItemsFromProducts(
-          Array.isArray(stored?.products) ? stored.products : [],
-          fallbackSettings.manualImages,
-        );
-        if (fallbackItems.length) {
-          const resolved = await enrichCatalogItemsWithImages(fallbackItems);
+        const stored = readCommittedCatalogCache(window.localStorage.getItem(PUBLISHED_CATALOG_KEY));
+        if (stored) {
+          const snapshot = readCatalogSnapshot(stored.items);
           if (!active) return true;
-          setItems(resolved);
-          setSettings(fallbackSettings);
-          setUpdatedAt(new Date().toISOString());
-          setState("ready");
+          setItems(snapshot.items);
+          setSettings(snapshot.settings);
+          setUpdatedAt(stored.updatedAt);
+          setState(snapshot.items.length ? "ready" : "empty");
           return true;
         }
       } catch {
@@ -1214,7 +1208,8 @@ export function PublicCatalog() {
           return;
         }
 
-        if (await localCatalogFallback()) return;
+        if (error && await localCatalogFallback()) return;
+        setItems([]); setSettings(snapshot.settings); setUpdatedAt(String(data?.updated_at || ""));
         setState(error ? "error" : "empty");
       } catch {
         if (!active) return;
