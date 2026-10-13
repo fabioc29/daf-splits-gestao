@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { supabase } from "./supabase";
+import { PUBLISHED_CATALOG_KEY, readCommittedCatalogCache } from "./crm/fabio-persistence";
 import "./catalog.css";
 
 export type CatalogItem = {
@@ -367,6 +368,7 @@ function validFragranticaImageUrl(value: unknown): value is string {
 
 export async function enrichCatalogItemsWithImages(
   items: CatalogItem[],
+  signal?: AbortSignal,
 ): Promise<CatalogItem[]> {
   const known = items.map((item) => applyKnownFragranticaImage(item));
 
@@ -400,7 +402,10 @@ export async function enrichCatalogItemsWithImages(
           brand: item.brand,
           name: item.name,
         });
-        const response = await fetch("/api/fragrantica-image?" + params.toString());
+        const deadline = AbortSignal.timeout(4000);
+        const response = await fetch("/api/fragrantica-image?" + params.toString(), {
+          signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
+        });
         if (!response.ok) return item;
         const data = await response.json();
         if (!validFragranticaImageUrl(data?.imageUrl)) return item;
@@ -1163,21 +1168,14 @@ export function PublicCatalog() {
 
     async function localCatalogFallback() {
       try {
-        const stored = JSON.parse(window.localStorage.getItem("daf-v4") || "null");
-        const fallbackSettings = normalizeCatalogSettings(
-          stored?.catalogSettings,
-        );
-        const fallbackItems = catalogItemsFromProducts(
-          Array.isArray(stored?.products) ? stored.products : [],
-          fallbackSettings.manualImages,
-        );
-        if (fallbackItems.length) {
-          const resolved = await enrichCatalogItemsWithImages(fallbackItems);
+        const stored = readCommittedCatalogCache(window.localStorage.getItem(PUBLISHED_CATALOG_KEY));
+        if (stored) {
+          const snapshot = readCatalogSnapshot(stored.items);
           if (!active) return true;
-          setItems(resolved);
-          setSettings(fallbackSettings);
-          setUpdatedAt(new Date().toISOString());
-          setState("ready");
+          setItems(snapshot.items);
+          setSettings(snapshot.settings);
+          setUpdatedAt(stored.updatedAt);
+          setState(snapshot.items.length ? "ready" : "empty");
           return true;
         }
       } catch {
@@ -1214,7 +1212,8 @@ export function PublicCatalog() {
           return;
         }
 
-        if (await localCatalogFallback()) return;
+        if (error && await localCatalogFallback()) return;
+        setItems([]); setSettings(snapshot.settings); setUpdatedAt(String(data?.updated_at || ""));
         setState(error ? "error" : "empty");
       } catch {
         if (!active) return;

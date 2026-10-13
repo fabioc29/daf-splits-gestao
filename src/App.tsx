@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { readState, newIdentities, StateConflict } from "./crm/state-persistence";
+import { FabioStateWriter, committedCatalogCache, PUBLISHED_CATALOG_KEY } from "./crm/fabio-persistence";
+import { LocalRecovery, optionalLocalGet, optionalLocalSet, optionalLocalRemove } from "./crm/local-recovery";
+import { CRMFeedPanel } from "./crm/CRMFeedPanel";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -66,7 +70,9 @@ type BottleHistoryEntry = {
   assumedSold?: boolean;
 };
 
-type P = {
+type SourceIdentity = { externalId?: string; legacyIds?: number[] };
+
+type P = SourceIdentity & {
   id: number;
   brand: string;
   name: string;
@@ -100,7 +106,7 @@ type LeadSource = "Grupo 1" | "Grupo 2" | "Grupo 3" | "TikTok" | "Shopee";
 const LEAD_SOURCES: LeadSource[] = ["Grupo 1", "Grupo 2", "Grupo 3", "TikTok", "Shopee"];
 const MANUAL_LEAD_SOURCES: LeadSource[] = ["Grupo 1", "Grupo 2", "Grupo 3"];
 
-type C = {
+type C = SourceIdentity & {
   id: number;
   name: string;
   phone: string;
@@ -130,7 +136,7 @@ type L = {
   bottleNumber?: number;
 };
 type Installment = { date: string; amount: number; paid?: boolean };
-type V = {
+type V = SourceIdentity & {
   id: number;
   date: string;
   clientId: number;
@@ -807,6 +813,7 @@ const nav = [
   ["suppliers", "Fornecedores", Building2],
   ["finance", "Financeiro", Wallet],
   ["settings", "Configurações", Settings],
+  ["crm", "Integração CRM", Cloud],
 ] as const;
 
 function isPublicCatalogRoute() {
@@ -849,19 +856,79 @@ export default function App() {
       </div>
     );
   if (!session) return <Auth />;
-  return <System session={session} />;
+  return <System key={session.user.id} session={session} />;
 }
 
 function System({ session }: { session: Session }) {
-  const [data, setData] = useState<D>(() => readLocal()),
+  const [data, setDataState] = useState<D>(() => normalizeData(blank)),
     [ready, setReady] = useState(false),
     [sync, setSync] = useState<"loading" | "saved" | "error">("loading");
-  const saveQueue = useRef<Promise<void>>(Promise.resolve());
+  const writer = useRef<FabioStateWriter | null>(null);
   const saveVersion = useRef(0);
+  const lastSynced = useRef("");
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const blocked = useRef(false);
+  const mounted = useRef(true);
+  const [saveNotice, setSaveNotice] = useState("");
+  const [catalogNotice, setCatalogNotice] = useState("");
+  const recovery = useRef<LocalRecovery | null>(null);
+  const recoveredDrafts = useRef<unknown[]>([]);
+  const [editingBlocked, setEditingBlocked] = useState(true);
+  function blockEditing(message: string) {
+    blocked.current = true; setEditingBlocked(true); setSaveNotice(message);
+  }
+  function setData(update: D | ((current: D) => D)) {
+    if (blocked.current || !ready || !recovery.current || !writer.current) return;
+    const next = newIdentities(typeof update === "function" ? update(dataRef.current) : update, dataRef.current);
+    dataRef.current = next;
+    saveVersion.current++;
+    try { recovery.current.preserve(next, writer.current.snapshot.revision); }
+    catch { blockEditing("O rascunho está apenas na memória: o armazenamento local falhou. Exporte-o antes de fechar e carregue o estado salvo para continuar."); setDataState(next); return; }
+    setDataState(next);
+  }
+  function recordPublication(publication: Awaited<ReturnType<FabioStateWriter["publish"]>>) {
+    const cache = committedCatalogCache(publication);
+    if (cache && !optionalLocalSet(PUBLISHED_CATALOG_KEY, cache)) {
+      setCatalogNotice("Dados e catálogo confirmados no servidor; o cache local do catálogo está indisponível."); return;
+    }
+    setCatalogNotice(publication.status === "published" ? "" : publication.status === "stale"
+      ? "O catálogo aguarda a revisão atual. Outra sessão salvou durante a publicação."
+      : "Dados salvos; o catálogo ainda não foi publicado. Tente publicar novamente após conferir a revisão.");
+  }
+  function fallbackCatalog(persisted: D) { return catalogSnapshotPayload(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), persisted.catalogSettings); }
+  async function buildCatalog(persisted: D, signal?: AbortSignal) {
+    const items = await enrichCatalogItemsWithImages(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), signal);
+    return catalogSnapshotPayload(items, persisted.catalogSettings);
+  }
+  function exportDraft() {
+    const url = URL.createObjectURL(new Blob([JSON.stringify({format:"daf-recovery-export-v1",userId:session.user.id,currentDraft:dataRef.current,pendingDrafts:recoveredDrafts.current}, null, 2)], {type:"application/json"}));
+    const link = document.createElement("a"); link.href = url; link.download = "DAF-rascunho-nao-salvo.json"; link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function loadCurrent() {
+    if (!window.confirm("Carregar o estado salvo descarta este rascunho local. Exporte-o antes se precisar preservá-lo. Continuar?")) return;
+    const version = saveVersion.current;
+    try {
+      if (writer.current?.pending) throw Error("Aguarde a gravação em andamento.");
+      const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
+      if (!mounted.current || version !== saveVersion.current) { current.dispose(); return; }
+      writer.current?.dispose(); writer.current = current;
+      const normalized = normalizeData(current.snapshot.data);
+      lastSynced.current = JSON.stringify(normalized);
+      // Clear only this tab's record. Other tabs' drafts are retained for recovery.
+      recovery.current ||= new LocalRecovery(session.user.id);
+      recovery.current.clear();
+      blocked.current = !current.snapshot.identitiesReady;
+      setEditingBlocked(blocked.current);
+      setSaveNotice(blocked.current ? "A adoção de UUIDs precisa ser concluída antes de salvar." : "");
+      setDataState(normalized); setReady(true); setSync(blocked.current ? "error" : "saved");
+    } catch(error) { blockEditing(error instanceof Error ? error.message : "Não foi possível carregar o estado salvo."); setSync("error"); }
+  }
   const [page, setPage] = useState("dashboard"),
     [theme, setTheme] = useState<"dark" | "light">(() => {
       if (typeof window === "undefined") return "dark";
-      const stored = window.localStorage.getItem("daf-theme");
+      const stored = optionalLocalGet("daf-theme");
       if (stored === "light" || stored === "dark") return stored;
       return window.matchMedia?.("(prefers-color-scheme: light)").matches
         ? "light"
@@ -871,6 +938,7 @@ function System({ session }: { session: Session }) {
     [history, setHistory] = useState(0),
     [supplierHistory, setSupplierHistory] = useState(""),
     [toast, setToast] = useState("");
+  const modalRef = useRef(modal); modalRef.current = modal;
   const [stockMenuOpen, setStockMenuOpen] = useState(false);
   const [financeMenuOpen, setFinanceMenuOpen] = useState(false);
   const [shippingMenuOpen, setShippingMenuOpen] = useState(false);
@@ -880,7 +948,7 @@ function System({ session }: { session: Session }) {
   );
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem("daf-theme", theme);
+    optionalLocalSet("daf-theme", theme);
   }, [theme]);
   useEffect(() => {
     const palette =
@@ -928,7 +996,7 @@ function System({ session }: { session: Session }) {
     Object.entries(variables).forEach(([key, value]) =>
       root.style.setProperty(key, value),
     );
-    window.localStorage.setItem("daf-ui-settings", JSON.stringify(localUi));
+    optionalLocalSet("daf-ui-settings", JSON.stringify(localUi));
     document.title = "Gestão | DAF Splits";
   }, [localUi, theme]);
   useEffect(() => {
@@ -954,82 +1022,69 @@ function System({ session }: { session: Session }) {
   }
   useEffect(() => {
     let active = true;
+    mounted.current = true;
     (async () => {
-      const { data: remote, error } = await supabase
-        .from("app_state")
-        .select("data")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      if (!active) return;
-      if (error) {
-        setSync("error");
-        return;
+      try {
+        const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
+        if (!active) { current.dispose(); return; }
+        writer.current = current;
+        const normalized = normalizeData(current.snapshot.data);
+        lastSynced.current = JSON.stringify(normalized);
+        recovery.current = new LocalRecovery(session.user.id);
+        const pending = recovery.current.list();
+        recoveredDrafts.current = pending;
+        blocked.current = pending.length > 0 || !current.snapshot.identitiesReady;
+        setEditingBlocked(blocked.current);
+        // Never replay a recovered draft or silently rebase it over a different revision.
+        setDataState(pending.length ? normalizeData(pending[0].draft) : normalized);
+        setSaveNotice(pending.length ? "Há rascunhos locais pendentes deste usuário. Exporte-os e carregue o estado salvo antes de continuar."
+          : blocked.current ? "A adoção de UUIDs precisa ser concluída antes de salvar." : "");
+        setReady(true); setSync(blocked.current ? "error" : "saved");
+      } catch {
+        if (active) { blockEditing(writer.current ? "Estado confirmado no banco. A recuperação local está indisponível; a edição está bloqueada. Exporte os rascunhos e tente carregar o estado salvo." : "Não foi possível confirmar o estado salvo. A edição está bloqueada; tente carregar o estado salvo antes de continuar."); setSync("error"); }
       }
-      if (remote?.data && Object.keys(remote.data).length) {
-        setData(normalizeData(remote.data));
-      } else {
-        const local = readLocal();
-        const { error: saveError } = await supabase
-          .from("app_state")
-          .upsert({ user_id: session.user.id, data: local });
-        if (saveError) {
-          setSync("error");
-          return;
-        }
-      }
-      setReady(true);
-      setSync("saved");
     })();
-    return () => {
-      active = false;
-    };
+    const timer = window.setInterval(async () => {
+      const current = writer.current, version = saveVersion.current;
+      if (!current || current.pending || modalRef.current || blocked.current || JSON.stringify(dataRef.current) !== lastSynced.current) return;
+      try {
+        const remote = await readState(supabase);
+        if (!active || modalRef.current || blocked.current || current !== writer.current || current.pending || version !== saveVersion.current || remote.data === null) return;
+        if (remote.revision === current.snapshot.revision) return;
+        current.snapshot = remote;
+        const normalized = normalizeData(remote.data);
+        lastSynced.current = JSON.stringify(normalized);
+        setDataState(normalized);
+        blocked.current = !remote.identitiesReady;
+        if (blocked.current) { setEditingBlocked(true); setSaveNotice("A adoção de UUIDs precisa ser concluída antes de salvar."); setSync("error"); }
+      } catch { /* An idle read never acknowledges or retries a write. */ }
+    }, 5000);
+    return () => { active = false; mounted.current = false; window.clearInterval(timer); writer.current?.dispose(); writer.current = null; };
   }, [session.user.id]);
   useEffect(() => {
-    localStorage.setItem("daf-v4", JSON.stringify(data));
     if (!ready) return;
-    const version = ++saveVersion.current;
+    const serialized = JSON.stringify(data);
+    if (serialized === lastSynced.current || blocked.current || !writer.current) return;
+    const version = saveVersion.current;
     setSync("loading");
-    saveQueue.current = saveQueue.current
-      .catch(() => undefined)
-      .then(async () => {
-        try {
-          const { error } = await supabase
-            .from("app_state")
-            .upsert({ user_id: session.user.id, data });
-
-          if (!error) {
-            // Snapshot público: somente dados seguros do estoque.
-            // Falhas aqui não interrompem o salvamento administrativo.
-            const catalogItems = await enrichCatalogItemsWithImages(
-              catalogItemsFromProducts(
-                data.products,
-                data.catalogSettings.manualImages,
-              ),
-            );
-            await supabase
-              .from("public_catalogs")
-              .upsert(
-                {
-                  user_id: session.user.id,
-                  slug: "daf-splits",
-                  name: "DAF Splits",
-                  published: true,
-                  items: catalogSnapshotPayload(
-                    catalogItems,
-                    data.catalogSettings,
-                  ),
-                },
-                { onConflict: "user_id" },
-              );
-          }
-
-          if (version === saveVersion.current) {
-            setSync(error ? "error" : "saved");
-          }
-        } catch {
-          if (version === saveVersion.current) setSync("error");
-        }
-      });
+    writer.current.save(data).then(({saved, publication}) => {
+      if (!mounted.current) return;
+      const normalized = normalizeData(saved.data);
+      lastSynced.current = JSON.stringify(normalized);
+      if (version === saveVersion.current) {
+        // A browser cache failure cannot invalidate an acknowledged database commit.
+        setDataState(normalized); setSync("saved"); setSaveNotice("");
+        try { recovery.current?.clear(); }
+        catch { blockEditing("Gravação confirmada no banco. A recuperação local falhou; novas edições estão bloqueadas. Exporte e carregue o estado salvo."); }
+      }
+      void publication.then(result => { if (mounted.current) recordPublication(result); });
+    }).catch(error => {
+      if (!mounted.current) return;
+      blockEditing(error instanceof StateConflict
+        ? "Outra sessão alterou os dados. Este rascunho não foi salvo. Exporte-o e carregue a revisão atual."
+        : "Não foi possível confirmar esta gravação. Não haverá repetição automática. Exporte o rascunho e confira o estado salvo antes de continuar.");
+      setSync("error");
+    });
   }, [data, ready, session.user.id]);
   const totals = useMemo(
     () =>
@@ -1147,12 +1202,13 @@ const action =
             : page === "shipping-mandabem"
               ? "MandaBem"
               : nav.find((item) => item[0] === page)?.[1] || "Painel";
-  if (!ready && sync !== "error")
+  if (!ready)
     return (
       <div className="authPage">
         <div className="authCard">
           <Cloud />
-          <h1>Carregando seus dados...</h1>
+          <h1>{sync === "error" ? "Edição bloqueada" : "Carregando seus dados..."}</h1>
+          {sync === "error" && <><p role="alert">{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button><button onClick={() => supabase.auth.signOut()}>Sair</button></>}
         </div>
       </div>
     );
@@ -1400,6 +1456,7 @@ const action =
             {page === "sales" ? (
               <button
                 className="secondary marketplaceButton"
+                disabled={editingBlocked}
                 onClick={() => setModal({ type: "marketplace" })}
               >
                 <ShoppingBag /> Marketplace
@@ -1415,6 +1472,20 @@ const action =
             ) : null}
             {page === "catalog" ? (
               <button
+                className="secondary"
+                disabled={!ready || sync !== "saved"}
+                onClick={async () => {
+                  if (writer.current && !writer.current.pending && !blocked.current) {
+                    const publication = await writer.current.publish();
+                    if (mounted.current) recordPublication(publication);
+                  }
+                }}
+              >
+                <Cloud /> Publicar revisão salva
+              </button>
+            ) : null}
+            {page === "catalog" ? (
+              <button
                 className="secondary catalogPublicButton"
                 onClick={() =>
                   window.open("/catalogo", "_blank", "noopener,noreferrer")
@@ -1426,6 +1497,7 @@ const action =
             {action ? (
               <button
                 className="primary"
+                disabled={editingBlocked}
                 onClick={() => setModal({ type: action[1] })}
               >
                 <Plus />
@@ -1435,7 +1507,12 @@ const action =
           </div>
         </header>
         <section className="content">
-          {page === "dashboard" ? (
+          {saveNotice && <div className="card" role="alert"><p>{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button></div>}
+          {catalogNotice && <div className="card" role="status"><p>{catalogNotice}</p><button disabled={sync !== "saved" || !ready} onClick={async () => { if (writer.current && !writer.current.pending && !blocked.current) recordPublication(await writer.current.publish()); }}>Publicar catálogo da revisão salva</button></div>}
+          <div inert={editingBlocked} style={{display:"contents"}}>
+          {page === "crm" ? (
+            <CRMFeedPanel userId={session.user.id} synced={ready && sync === "saved" && !blocked.current} />
+          ) : page === "dashboard" ? (
             <Dash d={data} set={setData} />
           ) : page === "sales" ? (
             <Sales
@@ -1514,8 +1591,10 @@ const action =
           ) : (
             <Finance d={data} totals={totals} set={setData} notify={notify} />
           )}
+          </div>
         </section>
       </main>
+      <div inert={editingBlocked} style={{display:"contents"}}>
       {modal?.type === "supplyEdit" || modal?.type === "purchaseEdit" ? (
         <InventoryEdit
           modal={modal}
@@ -1543,6 +1622,7 @@ const action =
           close={() => setModal(null)}
         />
       ) : null}
+      </div>
       {history ? (
         <History id={history} d={data} close={() => setHistory(0)} />
       ) : null}
@@ -1631,7 +1711,8 @@ function normalizeData(stored: any): D {
   const productAliases = new Map<number, ProductAlias>();
   const productGroups = new Map<string, P[]>();
   normalizedProducts.forEach((product: P) => {
-    const key = perfumeIdentity(product.brand, product.name);
+    // Adopted UUIDs are separate entities even when their display names match.
+    const key = product.externalId ? "uuid:" + product.externalId : perfumeIdentity(product.brand, product.name);
     const current = productGroups.get(key) || [];
     current.push(product);
     productGroups.set(key, current);
@@ -2193,8 +2274,8 @@ function SettingsPage({
   }
 
   function resetLocalSettings() {
-    window.localStorage.removeItem("daf-ui-settings");
-    window.localStorage.removeItem("daf-theme");
+    optionalLocalRemove("daf-ui-settings");
+    optionalLocalRemove("daf-theme");
     setSettings({
       ...DEFAULT_LOCAL_UI_SETTINGS,
       menuOrder: [...DEFAULT_MENU_ORDER],
@@ -4587,6 +4668,7 @@ function mandaBemEligibleSale(sale: V) {
 }
 
 async function mandaBemRequest(action: string, payload: Record<string, any> = {}) {
+  if (action !== "status") throw new Error("Execução comercial MandaBem desativada. Nenhuma operação externa foi enviada.");
   const response = await fetch(`/api/mandabem?action=${encodeURIComponent(action)}`, {
     method: action === "status" ? "GET" : "POST",
     headers:
@@ -9557,6 +9639,11 @@ function Form({
   function submit(e: any) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
+    // UUID adoption must not merge products to repair an ambiguous name selector.
+    const ambiguous = isSale && !isOldSale
+      ? Array.from({length: lines}, (_, i) => String(f["productName" + i] || "")).some(name => d.products.filter(p => `${p.brand} ${p.name}` === name).length > 1)
+      : type === "purchase" && kind === "Perfume" && d.products.filter(p => perfumeIdentity(p.brand, p.name) === perfumeIdentity(String(f.brand || ""), parseBottleMarker(f.productName).name)).length > 1;
+    if (ambiguous) { window.alert("Há mais de um produto com esta marca e nome. Confira as identidades antes de lançar esta operação."); return; }
     if (isSale && !isOldSale) {
       const invalid = Array.from({ length: lines }, (_, i) =>
         String(f["productName" + i] || ""),
@@ -10148,6 +10235,7 @@ function Form({
             })).filter((p) => p.date || p.amount)
           : [];
       const sale: V = {
+        ...existingSale,
         id:
           existingSale?.id ||
           x.sales.reduce((max, current) => Math.max(max, current.id), 0) + 1,
