@@ -13,6 +13,8 @@ export const PACKAGING_RULES = [
   "Saco organza",
   "Carta de agradecimento",
   "Cartão de visita",
+  "Envelope APC",
+  "Sacolas DAF",
 ] as const;
 
 type SaleForPackaging = {
@@ -21,7 +23,11 @@ type SaleForPackaging = {
   supplyOverrides?: Record<string, number>;
 };
 
-type SupplyForPackaging = { name: string; cost?: number };
+type SupplyForPackaging = {
+  name: string;
+  cost?: number;
+  attachCost?: boolean;
+};
 
 export function automaticPackaging(sale: SaleForPackaging) {
   const bottles = sale.items.reduce(
@@ -41,7 +47,36 @@ export function automaticPackaging(sale: SaleForPackaging) {
     "Saco organza": Math.ceil(bottles / 3),
     "Carta de agradecimento": 1,
     "Cartão de visita": 1,
+    "Envelope APC": sale.items.filter((item) => item.isApc).length,
+    "Sacolas DAF": 0,
   } satisfies Record<(typeof PACKAGING_RULES)[number], number>;
+}
+
+export function packagingOptions(
+  sale: SaleForPackaging,
+  supplies: SupplyForPackaging[],
+) {
+  const automatic = automaticPackaging(sale);
+  const names = [
+    ...PACKAGING_RULES,
+    ...supplies.filter((supply) => supply.attachCost).map((supply) => supply.name),
+    ...Object.keys(sale.supplyOverrides || {}),
+  ];
+  const unique = new Map<string, string>();
+  names.forEach((name) => {
+    const normalized = key(name);
+    if (!unique.has(normalized)) unique.set(normalized, name);
+  });
+  return [...unique.values()].map((name) => {
+    const fixedName = PACKAGING_RULES.find((rule) => key(rule) === key(name));
+    const attached = supplies.some(
+      (supply) => supply.attachCost && key(supply.name) === key(name),
+    );
+    return {
+      name,
+      automaticQty: fixedName ? automatic[fixedName] : attached ? 1 : 0,
+    };
+  });
 }
 
 export function packaging(
@@ -50,22 +85,24 @@ export function packaging(
 ) {
   if (sale.status === "cancelled") return { total: 0, lines: [], missing: [] };
 
-  const automatic = automaticPackaging(sale);
-  const lines = PACKAGING_RULES.map((name) => {
-    const qty = Math.max(
-      0,
-      Number(sale.supplyOverrides?.[name] ?? automatic[name]),
-    );
-    const supply = supplies.find((item) => key(item.name) === key(name));
-    return {
-      name,
-      qty,
-      automaticQty: automatic[name],
-      unitCost: supply?.cost || 0,
-      missing: !supply || supply.cost == null,
-      total: qty * (supply?.cost || 0),
-    };
-  }).filter((line) => line.qty > 0);
+  const options = packagingOptions(sale, supplies);
+  const lines = options
+    .map(({ name, automaticQty }) => {
+      const qty = Math.max(
+        0,
+        Number(sale.supplyOverrides?.[name] ?? automaticQty),
+      );
+      const supply = supplies.find((item) => key(item.name) === key(name));
+      return {
+        name,
+        qty,
+        automaticQty,
+        unitCost: supply?.cost || 0,
+        missing: !supply || supply.cost == null,
+        total: qty * (supply?.cost || 0),
+      };
+    })
+    .filter((line) => line.qty > 0);
 
   return {
     lines,
