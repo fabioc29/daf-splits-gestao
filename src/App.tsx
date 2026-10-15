@@ -478,6 +478,53 @@ function perfumeIdentity(brand: unknown, name: unknown) {
     .replace(/\s+/g, " ");
 }
 
+function productDisplayName(product: P) {
+  return `${product.brand} ${product.name}`.trim();
+}
+
+function resolveSaleProduct(
+  products: P[],
+  typedName: unknown,
+  options?: { preferredId?: number; preferApc?: boolean },
+) {
+  const typed = String(typedName || "").trim();
+  if (!typed) return undefined;
+
+  const matches = products.filter(
+    (product) => productDisplayName(product) === typed,
+  );
+  if (!matches.length) return undefined;
+
+  const preferred = options?.preferredId
+    ? matches.find((product) => product.id === options.preferredId)
+    : undefined;
+  if (preferred) return preferred;
+
+  return [...matches].sort((a, b) => {
+    if (options?.preferApc) {
+      const apcDelta = Number(b.apc > 0) - Number(a.apc > 0);
+      if (apcDelta) return apcDelta;
+    }
+
+    const stockDelta = Number(b.stock > 0) - Number(a.stock > 0);
+    if (stockDelta) return stockDelta;
+
+    // If old and new bottle records have the same display name, use remaining
+    // stock from the oldest bottle first. This covers returned/cancelled ml.
+    const bottleDelta =
+      Math.max(1, Number(a.bottleNumber) || 1) -
+      Math.max(1, Number(b.bottleNumber) || 1);
+    if (bottleDelta) return bottleDelta;
+
+    const volumeDelta =
+      Math.max(0, Number(b.stock) || 0) -
+      Math.max(0, Number(a.stock) || 0);
+    if (volumeDelta) return volumeDelta;
+
+    return a.id - b.id;
+  })[0];
+}
+
 function normalizeBottleHistory(
   product: Partial<P>,
   inferredNumber: number,
@@ -9562,10 +9609,10 @@ function Form({
           ) as HTMLInputElement | null
         )?.value || "",
       );
-      const product = d.products.find(
-        (candidate) =>
-          `${candidate.brand} ${candidate.name}` === typedProduct,
-      );
+      const product = resolveSaleProduct(d.products, typedProduct, {
+        preferredId: existingSale?.items[lineIndex]?.productId,
+        preferApc: Boolean(apcLines[lineIndex]),
+      });
       if (!product) continue;
 
       const value =
@@ -9639,16 +9686,34 @@ function Form({
   function submit(e: any) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
-    // UUID adoption must not merge products to repair an ambiguous name selector.
-    const ambiguous = isSale && !isOldSale
-      ? Array.from({length: lines}, (_, i) => String(f["productName" + i] || "")).some(name => d.products.filter(p => `${p.brand} ${p.name}` === name).length > 1)
-      : type === "purchase" && kind === "Perfume" && d.products.filter(p => perfumeIdentity(p.brand, p.name) === perfumeIdentity(String(f.brand || ""), parseBottleMarker(f.productName).name)).length > 1;
-    if (ambiguous) { window.alert("Há mais de um produto com esta marca e nome. Confira as identidades antes de lançar esta operação."); return; }
+    // UUID-backed products remain separate entities. In sales, identical visible
+    // names are resolved to the concrete sellable record; purchases still require
+    // an unambiguous identity to avoid joining inventory incorrectly.
+    const ambiguous =
+      type === "purchase" &&
+      kind === "Perfume" &&
+      d.products.filter(
+        (p) =>
+          perfumeIdentity(p.brand, p.name) ===
+          perfumeIdentity(
+            String(f.brand || ""),
+            parseBottleMarker(f.productName).name,
+          ),
+      ).length > 1;
+    if (ambiguous) {
+      window.alert(
+        "Há mais de um produto com esta marca e nome. Confira as identidades antes de lançar esta operação.",
+      );
+      return;
+    }
     if (isSale && !isOldSale) {
       const invalid = Array.from({ length: lines }, (_, i) =>
         String(f["productName" + i] || ""),
-      ).find(
-        (typed) => !d.products.some((p) => `${p.brand} ${p.name}` === typed),
+      ).find((typed, index) =>
+        !resolveSaleProduct(d.products, typed, {
+          preferredId: existingSale?.items[index]?.productId,
+          preferApc: Boolean(apcLines[index]),
+        }),
       );
       if (invalid) {
         window.alert(
@@ -9676,7 +9741,10 @@ function Form({
       const apcProducts = Array.from({ length: lines }, (_, i) => {
         if (!apcLines[i]) return null;
         const typed = String(f["productName" + i] || "");
-        return d.products.find((p) => `${p.brand} ${p.name}` === typed);
+        return resolveSaleProduct(d.products, typed, {
+          preferredId: existingSale?.items[i]?.productId,
+          preferApc: true,
+        });
       }).filter(Boolean) as P[];
       if (new Set(apcProducts.map((p) => p.id)).size !== apcProducts.length) {
         window.alert("Só é possível vender um APC de cada perfume por pedido.");
@@ -10213,9 +10281,10 @@ function Form({
 
       const items = Array.from({ length: lines }, (_, i) => {
         const typed = String(f["productName" + i] || "");
-        const product = x.products.find(
-          (p) => `${p.brand} ${p.name}` === typed,
-        );
+        const product = resolveSaleProduct(x.products, typed, {
+          preferredId: existingSale?.items[i]?.productId,
+          preferApc: Boolean(apcLines[i]),
+        });
         return {
           productId: product?.id || Number(f["product" + i]),
           ml: parseDecimal(f["ml" + i]),
@@ -11392,21 +11461,35 @@ function ProductSearch({
   onChange?: (event: any) => void;
 }) {
   const selected = products.find((p) => p.id === value);
+  const displayNames = Array.from(
+    new Set(products.map((product) => productDisplayName(product))),
+  );
+  const selectableProducts = displayNames
+    .map((displayName) =>
+      resolveSaleProduct(products, displayName, {
+        preferredId:
+          selected && productDisplayName(selected) === displayName
+            ? selected.id
+            : undefined,
+      }),
+    )
+    .filter(Boolean) as P[];
+
   return (
     <label>
       <span>Perfume {index + 1}</span>
       <input
         name={"productName" + index}
         list={"products" + index}
-        defaultValue={selected ? `${selected.brand} ${selected.name}` : ""}
+        defaultValue={selected ? productDisplayName(selected) : ""}
         placeholder="Digite para buscar..."
         required
         onChange={onChange}
       />
       <datalist id={"products" + index}>
-        {products.map((p) => (
-          <option key={p.id} value={`${p.brand} ${p.name}`}>
-            {p.stock} ml disponíveis · APC{" "}
+        {selectableProducts.map((p) => (
+          <option key={p.id} value={productDisplayName(p)}>
+            {p.stock} ml disponíveis · Frasco nº {p.bottleNumber || 1} · APC{" "}
             {p.apc ? "disponível" : "indisponível"}
           </option>
         ))}
