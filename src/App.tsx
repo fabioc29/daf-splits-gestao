@@ -4156,6 +4156,11 @@ function Sales({
               <td>
                 {brl(s.total)}
                 <small>Insumos: {brl(packaging(s, d.supplies).total)}</small>
+                {saleExpenseBreakdown(s, d).freight > 0 ? (
+                  <small className="saleFreightCost">
+                    Frete DAF: {brl(saleExpenseBreakdown(s, d).freight)}
+                  </small>
+                ) : null}
               </td>
               <td>{saleBadge(s)}</td>
               {edit ? (
@@ -8760,24 +8765,10 @@ function InventoryProjection({ d }: { d: D }) {
       !isHistoricalSale(sale),
   );
   const revenue = sales.reduce((sum, sale) => sum + sale.total, 0);
-  const costs = sales.reduce(
-    (sum, sale) =>
-      sum +
-      sale.items.reduce(
-        (itemSum, item) =>
-          itemSum +
-          item.ml *
-            (item.unitCost ??
-              d.products.find((product) => product.id === item.productId)?.cost ??
-              0),
-        0,
-      ) +
-      Number(sale.expenses || 0) +
-      Number(sale.marketplaceFee || 0) +
-      Number(sale.shippingCost || 0) +
-      packaging(sale, d.supplies).total,
-    0,
-  );
+  const costs = sales.reduce((sum, sale) => {
+    const breakdown = saleCostBreakdown(sale, d);
+    return sum + breakdown.perfumeCost + breakdown.operatingExpenses;
+  }, 0);
   const margin = revenue ? Math.max(0, Math.min(0.9, (revenue - costs) / revenue)) : 0;
   const projectedRevenue = margin ? inventoryCost / (1 - margin) : inventoryCost;
   return (
@@ -9109,23 +9100,25 @@ function PackagingSummary({ d }: { d: D }) {
     ...new Set(active.flatMap((s) => packaging(s, d.supplies).missing)),
   ];
   const revenue = active.reduce((n, s) => n + (isNoCost(s) ? 0 : s.total), 0);
-  const otherCosts = active.reduce(
-    (n, s) =>
+  const otherCosts = active.reduce((n, s) => {
+    const expenseBreakdown = saleExpenseBreakdown(s, d);
+    const perfumeCost = s.items.reduce(
+      (sum, i) =>
+        sum +
+        i.ml *
+          (i.unitCost ??
+            d.products.find((p) => p.id === i.productId)?.cost ??
+            0),
+      0,
+    );
+    return (
       n +
-      (s.expenses || 0) +
-      (s.marketplaceFee || 0) +
-      (s.shippingCost || 0) +
-      s.items.reduce(
-        (sum, i) =>
-          sum +
-          i.ml *
-            (i.unitCost ??
-              d.products.find((p) => p.id === i.productId)?.cost ??
-              0),
-        0,
-      ),
-    0,
-  );
+      expenseBreakdown.freight +
+      expenseBreakdown.marketplace +
+      expenseBreakdown.extra +
+      perfumeCost
+    );
+  }, 0);
   return (
     <div className="panel">
       <h2>Custos e resultado</h2>
