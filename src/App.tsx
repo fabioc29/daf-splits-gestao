@@ -2729,7 +2729,7 @@ function periodMonthLabel(monthKey: string) {
 function periodCutoffDay(monthKey: string) {
   const currentMonth = today().slice(0, 7);
   return monthKey === currentMonth
-    ? Math.min(Math.max(1, new Date().getDate() - 1), monthDays(monthKey))
+    ? Math.min(new Date().getDate(), monthDays(monthKey))
     : monthDays(monthKey);
 }
 function saleExpenseBreakdown(sale: V, d: D) {
