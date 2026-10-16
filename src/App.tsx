@@ -2073,7 +2073,7 @@ function normalizeData(stored: any): D {
       marketplacePayoutReceived: Boolean(s.marketplacePayoutReceived),
       shippingCost: Number(s.shippingCost || 0),
       shippingPaidBy:
-        s.shippingPaidBy || (Number(s.shippingCost || 0) > 0 ? "daf" : "client"),
+        Number(s.shippingCost || 0) > 0 ? "daf" : s.shippingPaidBy || "client",
       accumulatingDecants: Boolean(s.accumulatingDecants),
       historical:
         Boolean(s.historical) ||
@@ -2729,9 +2729,21 @@ function periodMonthLabel(monthKey: string) {
 function periodCutoffDay(monthKey: string) {
   const currentMonth = today().slice(0, 7);
   return monthKey === currentMonth
-    ? Math.min(new Date().getDate(), monthDays(monthKey))
+    ? Math.min(Math.max(1, new Date().getDate() - 1), monthDays(monthKey))
     : monthDays(monthKey);
 }
+function saleExpenseBreakdown(sale: V, d: D) {
+  const supplies = packaging(sale, d.supplies).total;
+  const freight =
+    sale.shippingPaidBy === "daf" || Number(sale.shippingCost || 0) > 0
+      ? Math.max(0, Number(sale.shippingCost || 0))
+      : 0;
+  const marketplace = Math.max(0, Number(sale.marketplaceFee || 0));
+  const extra = Math.max(0, Number(sale.expenses || 0));
+  const total = supplies + freight + marketplace + extra;
+  return { supplies, freight, marketplace, extra, total };
+}
+
 function saleCostBreakdown(sale: V, d: D) {
   const perfumeCost = sale.items.reduce(
     (sum, item) =>
@@ -2742,12 +2754,8 @@ function saleCostBreakdown(sale: V, d: D) {
           0),
     0,
   );
-  const operatingExpenses =
-    Number(sale.expenses || 0) +
-    Number(sale.marketplaceFee || 0) +
-    Number(sale.shippingCost || 0) +
-    packaging(sale, d.supplies).total;
-  return { perfumeCost, operatingExpenses };
+  const expenses = saleExpenseBreakdown(sale, d);
+  return { perfumeCost, operatingExpenses: expenses.total };
 }
 function dateInRange(value: string, start: string, end: string) {
   return Boolean(value) && value >= start && value <= end;
@@ -3634,6 +3642,12 @@ function Dash({ d, set }: { d: D; set: any }) {
           <span>Frascos vendidos</span>
           <b>{metrics.bottles}</b>
           <small>{metrics.apcs} APC(s) vendidos à parte</small>
+          <ComparisonBadge
+            value={metricDelta(metrics.bottles, previousMetrics.bottles)}
+            label={comparisonLabel}
+            previousValue={String(previousMetrics.bottles)}
+            previousPeriod={previousPeriodLabel}
+          />
         </div>
         <div className="metricCard metricPink">
           <span>Volume vendido</span>
@@ -4142,6 +4156,11 @@ function Sales({
               <td>
                 {brl(s.total)}
                 <small>Insumos: {brl(packaging(s, d.supplies).total)}</small>
+                {saleExpenseBreakdown(s, d).freight > 0 ? (
+                  <small className="saleFreightCost">
+                    Frete DAF: {brl(saleExpenseBreakdown(s, d).freight)}
+                  </small>
+                ) : null}
               </td>
               <td>{saleBadge(s)}</td>
               {edit ? (
@@ -4238,9 +4257,7 @@ function Prepare({
   };
 
   const [tab, setTab] = useState("pending");
-  const [shippingGroup, setShippingGroup] = useState<V[]>([]);
   const [simplifiedOpen, setSimplifiedOpen] = useState(false);
-  const [correiosModeOpen, setCorreiosModeOpen] = useState(false);
 
   const operationalSales = d.sales.filter(
     (sale) => sale.status !== "cancelled" && !isHistoricalSale(sale),
@@ -4323,50 +4340,25 @@ function Prepare({
   }
 
   function prepareGroup(group: PreparationGroup) {
-    const marketplaceSales = group.sales.filter(isMarketplaceSale);
-    if (
-      marketplaceSales.length === group.sales.length &&
-      marketplaceSales.length > 0
-    ) {
-      const saleIds = new Set(group.sales.map((sale) => sale.id));
-      set((state: D) => ({
-        ...state,
-        sales: state.sales.map((sale) =>
-          saleIds.has(sale.id)
-            ? {
-                ...sale,
-                prepared: true,
-                sent: false,
-                shippingMethod: sale.marketplace || "TikTok Shop",
-              }
-            : sale,
-        ),
-      }));
-      notify(
-        `Pedidos de ${group.customer} finalizados para envio pelo marketplace.`,
-      );
-      return;
-    }
-    setShippingGroup(group.sales);
-  }
-
-  function finishWithShipping(method: V["shippingMethod"]) {
-    if (!shippingGroup.length || !method) return;
-    const saleIds = new Set(shippingGroup.map((sale) => sale.id));
-    const customer = saleCustomer(shippingGroup[0], d);
+    const saleIds = new Set(group.sales.map((sale) => sale.id));
     set((state: D) => ({
       ...state,
       sales: state.sales.map((sale) =>
         saleIds.has(sale.id)
-          ? { ...sale, prepared: true, sent: false, shippingMethod: method }
+          ? {
+              ...sale,
+              prepared: true,
+              sent: false,
+              shippingMethod: isMarketplaceSale(sale)
+                ? sale.marketplace || "TikTok Shop"
+                : sale.shippingMethod,
+            }
           : sale,
       ),
     }));
     notify(
-      `${shippingGroup.length > 1 ? "Pedidos" : "Pedido"} de ${customer} finalizado(s) para envio por ${method}.`,
+      `${group.sales.length > 1 ? "Pedidos" : "Pedido"} de ${group.customer} finalizado(s). A forma de entrega definida na venda foi mantida.`,
     );
-    setCorreiosModeOpen(false);
-    setShippingGroup([]);
   }
 
   function setPreparationStatus(
@@ -4600,88 +4592,6 @@ function Prepare({
             {!simplifiedDecants.length ? (
               <p className="empty">Nenhum decante marcado como A preparar.</p>
             ) : null}
-          </div>
-        </div>
-      </div>
-    ) : null}
-    {shippingGroup.length ? (
-      <div className="overlay">
-        <div className="systemDialog">
-          <header>
-            <div><small>FORMA DE ENVIO</small><h2>Como o pedido será enviado?</h2></div>
-            <button
-              type="button"
-              onClick={() => {
-                setCorreiosModeOpen(false);
-                setShippingGroup([]);
-              }}
-            >
-              <X />
-            </button>
-          </header>
-          <p>
-            {shippingGroup.length > 1
-              ? `${shippingGroup.length} pedidos reunidos`
-              : `Pedido #${orderNo(shippingGroup[0].id)}`}{" "}
-            · {saleCustomer(shippingGroup[0], d)}
-          </p>
-          <div className="shippingChoices">
-            <button
-              type="button"
-              onClick={() => setCorreiosModeOpen(true)}
-            >
-              Correios
-            </button>
-            {(["Loggi", "Jadlog", "Uber/Pessoalmente"] as const).map((method) => (
-              <button type="button" key={method} onClick={() => finishWithShipping(method)}>
-                {method}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-    ) : null}
-    {shippingGroup.length && correiosModeOpen ? (
-      <div className="overlay nestedOverlay">
-        <div className="systemDialog correiosModeDialog">
-          <header>
-            <div>
-              <small>CORREIOS</small>
-              <h2>Selecione a modalidade</h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => setCorreiosModeOpen(false)}
-              aria-label="Voltar para formas de envio"
-            >
-              <X />
-            </button>
-          </header>
-          <p>
-            {shippingGroup.length > 1
-              ? `${shippingGroup.length} pedidos reunidos`
-              : `Pedido #${orderNo(shippingGroup[0].id)}`}{" "}
-            · {saleCustomer(shippingGroup[0], d)}
-          </p>
-          <div className="shippingChoices correiosChoices">
-            <button
-              type="button"
-              onClick={() => finishWithShipping("Correios Sedex")}
-            >
-              Sedex
-            </button>
-            <button
-              type="button"
-              onClick={() => finishWithShipping("Correios PAC")}
-            >
-              PAC
-            </button>
-            <button
-              type="button"
-              onClick={() => finishWithShipping("Correios Mini")}
-            >
-              Mini Envios
-            </button>
           </div>
         </div>
       </div>
@@ -8855,24 +8765,10 @@ function InventoryProjection({ d }: { d: D }) {
       !isHistoricalSale(sale),
   );
   const revenue = sales.reduce((sum, sale) => sum + sale.total, 0);
-  const costs = sales.reduce(
-    (sum, sale) =>
-      sum +
-      sale.items.reduce(
-        (itemSum, item) =>
-          itemSum +
-          item.ml *
-            (item.unitCost ??
-              d.products.find((product) => product.id === item.productId)?.cost ??
-              0),
-        0,
-      ) +
-      Number(sale.expenses || 0) +
-      Number(sale.marketplaceFee || 0) +
-      Number(sale.shippingCost || 0) +
-      packaging(sale, d.supplies).total,
-    0,
-  );
+  const costs = sales.reduce((sum, sale) => {
+    const breakdown = saleCostBreakdown(sale, d);
+    return sum + breakdown.perfumeCost + breakdown.operatingExpenses;
+  }, 0);
   const margin = revenue ? Math.max(0, Math.min(0.9, (revenue - costs) / revenue)) : 0;
   const projectedRevenue = margin ? inventoryCost / (1 - margin) : inventoryCost;
   return (
@@ -9006,13 +8902,10 @@ function ProfitControl({
             0),
       0,
     );
-    const expenses =
-      Number(sale.expenses || 0) +
-      Number(sale.marketplaceFee || 0) +
-      Number(sale.shippingCost || 0) +
-      packaging(sale, d.supplies).total;
+    const expenseBreakdown = saleExpenseBreakdown(sale, d);
+    const expenses = expenseBreakdown.total;
     const profit = (isNoCost(sale) ? 0 : sale.total) - perfumeCost - expenses;
-    return { sale, perfumeCost, expenses, profit };
+    return { sale, perfumeCost, expenses, expenseBreakdown, profit };
   });
   const revenue = rows.reduce(
     (sum, row) => sum + (isNoCost(row.sale) ? 0 : row.sale.total),
@@ -9070,6 +8963,7 @@ function ProfitControl({
                 sale,
                 perfumeCost: cost,
                 expenses: expense,
+                expenseBreakdown,
                 profit: rowProfit,
               }) => (
                 <tr key={sale.id}>
@@ -9077,17 +8971,45 @@ function ProfitControl({
                   <td>{brl(sale.total)}</td>
                   <td>{brl(cost)}</td>
                   <td>
-                    {brl(expense)}
-                    <details>
-                      <summary>Ver insumos</summary>
-                      {packaging(sale, d.supplies).lines.map((line) => (
-                        <small key={line.name}>
-                          {line.qty} × {line.name}:{" "}
-                          {line.missing
-                            ? "Custo não cadastrado"
-                            : brl(line.total)}
+                    <b>{brl(expense)}</b>
+                    <details className="expenseBreakdownDetails">
+                      <summary>Ver despesas</summary>
+                      <small className="expenseBreakdownLine">
+                        <span>Insumos</span>
+                        <b>{brl(expenseBreakdown.supplies)}</b>
+                      </small>
+                      {expenseBreakdown.freight > 0 ? (
+                        <small className="expenseBreakdownLine expenseFreight">
+                          <span>Frete pago pela DAF</span>
+                          <b>{brl(expenseBreakdown.freight)}</b>
                         </small>
-                      ))}
+                      ) : null}
+                      {expenseBreakdown.marketplace > 0 ? (
+                        <small className="expenseBreakdownLine">
+                          <span>Taxa marketplace</span>
+                          <b>{brl(expenseBreakdown.marketplace)}</b>
+                        </small>
+                      ) : null}
+                      {expenseBreakdown.extra > 0 ? (
+                        <small className="expenseBreakdownLine">
+                          <span>Despesas extras</span>
+                          <b>{brl(expenseBreakdown.extra)}</b>
+                        </small>
+                      ) : null}
+                      <span className="expenseBreakdownSupplies">
+                        {packaging(sale, d.supplies).lines.map((line) => (
+                          <small key={line.name}>
+                            {line.qty} × {line.name}:{" "}
+                            {line.missing
+                              ? "Custo não cadastrado"
+                              : brl(line.total)}
+                          </small>
+                        ))}
+                      </span>
+                      <small className="expenseBreakdownTotal">
+                        <span>Total das despesas</span>
+                        <b>{brl(expenseBreakdown.total)}</b>
+                      </small>
                     </details>
                   </td>
                   <td>{brl(rowProfit)}</td>
@@ -9178,23 +9100,25 @@ function PackagingSummary({ d }: { d: D }) {
     ...new Set(active.flatMap((s) => packaging(s, d.supplies).missing)),
   ];
   const revenue = active.reduce((n, s) => n + (isNoCost(s) ? 0 : s.total), 0);
-  const otherCosts = active.reduce(
-    (n, s) =>
+  const otherCosts = active.reduce((n, s) => {
+    const expenseBreakdown = saleExpenseBreakdown(s, d);
+    const perfumeCost = s.items.reduce(
+      (sum, i) =>
+        sum +
+        i.ml *
+          (i.unitCost ??
+            d.products.find((p) => p.id === i.productId)?.cost ??
+            0),
+      0,
+    );
+    return (
       n +
-      (s.expenses || 0) +
-      (s.marketplaceFee || 0) +
-      (s.shippingCost || 0) +
-      s.items.reduce(
-        (sum, i) =>
-          sum +
-          i.ml *
-            (i.unitCost ??
-              d.products.find((p) => p.id === i.productId)?.cost ??
-              0),
-        0,
-      ),
-    0,
-  );
+      expenseBreakdown.freight +
+      expenseBreakdown.marketplace +
+      expenseBreakdown.extra +
+      perfumeCost
+    );
+  }, 0);
   return (
     <div className="panel">
       <h2>Custos e resultado</h2>
@@ -9544,6 +9468,21 @@ function Form({
     existingSale?.shippingPaidBy === "daf" || Number(existingSale?.shippingCost || 0) > 0
       ? "DAF"
       : "Cliente",
+  );
+  const existingShippingMethod = existingSale?.shippingMethod || "";
+  const [deliveryMethod, setDeliveryMethod] = useState(
+    existingShippingMethod.startsWith("Correios")
+      ? "Correios"
+      : existingShippingMethod,
+  );
+  const [correiosDeliveryMethod, setCorreiosDeliveryMethod] = useState(
+    existingShippingMethod === "Correios Sedex"
+      ? "Correios Sedex"
+      : existingShippingMethod === "Correios Mini"
+        ? "Correios Mini"
+        : existingShippingMethod === "Correios PAC"
+          ? "Correios PAC"
+          : "",
   );
   function findClientByCpf(value: string) {
     const cpf = value.replace(/\D/g, "");
@@ -10341,6 +10280,11 @@ function Form({
         shippingCost:
           shippingPaidBy === "DAF" ? parseDecimal(f.shippingCost) : 0,
         shippingPaidBy: shippingPaidBy === "DAF" ? "daf" : "client",
+        shippingMethod: isMarketplace
+          ? ((String(f.marketplace) || existingSale?.marketplace || "TikTok Shop") as V["shippingMethod"])
+          : deliveryMethod === "Correios"
+            ? ((correiosDeliveryMethod || "Correios") as V["shippingMethod"])
+            : ((deliveryMethod || existingSale?.shippingMethod) as V["shippingMethod"]),
       };
       const products = x.products.map((p) => {
         const restored =
@@ -10657,17 +10601,6 @@ function Form({
               overrides={supplyOverrides}
               setOverrides={setSupplyOverrides}
             />
-            <div className="shippingCostBox">
-              <Choices
-                label="Frete pago pelo"
-                a={["Cliente", "DAF"]}
-                v={shippingPaidBy}
-                set={(value) => setShippingPaidBy(value as "Cliente" | "DAF")}
-              />
-              {shippingPaidBy === "DAF" ? (
-                <Field n="shippingCost" l="Valor do frete (R$)" t="number" v={existingSale?.shippingCost || 0} />
-              ) : null}
-            </div>
             <div className="row">
               <Field
                 n="date"
@@ -10773,6 +10706,71 @@ function Form({
                     : "")
                 }
               />
+            ) : null}
+            {!isMarketplace ? (
+              <div className="saleDeliveryQuestionnaire">
+                <div className="saleDeliveryQuestionnaireHead">
+                  <span>Informações de entrega</span>
+                  <small>
+                    Defina agora como este pedido será entregue. Essa informação
+                    seguirá com o pedido até o Controle de envios.
+                  </small>
+                </div>
+                <label>
+                  <span>Forma de entrega</span>
+                  <select
+                    name="shippingMethod"
+                    value={deliveryMethod}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setDeliveryMethod(value);
+                      if (value !== "Correios") setCorreiosDeliveryMethod("");
+                    }}
+                    required
+                  >
+                    <option value="">Selecione...</option>
+                    <option value="Correios">Correios</option>
+                    <option value="Loggi">Loggi</option>
+                    <option value="Jadlog">Jadlog</option>
+                    <option value="Uber/Pessoalmente">Uber/Pessoalmente</option>
+                  </select>
+                </label>
+                {deliveryMethod === "Correios" ? (
+                  <label>
+                    <span>Modalidade dos Correios</span>
+                    <select
+                      value={correiosDeliveryMethod}
+                      onChange={(event) =>
+                        setCorreiosDeliveryMethod(event.target.value)
+                      }
+                      required
+                    >
+                      <option value="">Selecione...</option>
+                      <option value="Correios Sedex">Sedex</option>
+                      <option value="Correios PAC">PAC</option>
+                      <option value="Correios Mini">Mini Envios</option>
+                    </select>
+                  </label>
+                ) : null}
+                <div className="shippingCostBox saleDeliveryFreight">
+                  <Choices
+                    label="Frete pago pelo"
+                    a={["Cliente", "DAF"]}
+                    v={shippingPaidBy}
+                    set={(value) =>
+                      setShippingPaidBy(value as "Cliente" | "DAF")
+                    }
+                  />
+                  {shippingPaidBy === "DAF" ? (
+                    <Field
+                      n="shippingCost"
+                      l="Valor do frete (R$)"
+                      t="number"
+                      v={existingSale?.shippingCost || 0}
+                    />
+                  ) : null}
+                </div>
+              </div>
             ) : null}
           </>
         ) : null}

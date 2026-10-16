@@ -10571,3 +10571,167 @@ aside nav {
     width: calc(100vw - 20px) !important;
   }
 }
+
+
+/* =========================================================
+   DAF — despesas, entrega no lançamento e scrollbar do menu
+   ========================================================= */
+
+/* Menu lateral com rolagem própria e identidade DAF */
+aside {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+aside nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) color-mix(in srgb, var(--sidebar) 88%, #fff 12%);
+}
+
+aside nav::-webkit-scrollbar {
+  width: 8px;
+}
+
+aside nav::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--sidebar) 88%, #fff 12%);
+  border-radius: 999px;
+}
+
+aside nav::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 82%, #fff 18%),
+    var(--accent)
+  );
+  border: 2px solid color-mix(in srgb, var(--sidebar) 88%, #fff 12%);
+  border-radius: 999px;
+}
+
+aside nav::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 84%, #fff 16%);
+}
+
+/* Detalhamento real das despesas por pedido */
+.expenseBreakdownDetails {
+  margin-top: 5px;
+  min-width: 210px;
+}
+
+.expenseBreakdownDetails summary {
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.expenseBreakdownLine,
+.expenseBreakdownTotal {
+  margin-top: 5px;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  color: var(--muted);
+}
+
+.expenseBreakdownLine b,
+.expenseBreakdownTotal b {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.expenseBreakdownLine.expenseFreight {
+  color: var(--accent);
+}
+
+.expenseBreakdownLine.expenseFreight b {
+  color: var(--accent);
+}
+
+.expenseBreakdownSupplies {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 7px 0 7px 9px;
+  border-left: 2px solid var(--line-strong);
+}
+
+.expenseBreakdownSupplies > small {
+  display: block;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.expenseBreakdownTotal {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 800;
+}
+
+/* Informações de entrega ficam no final do lançamento da venda */
+.saleDeliveryQuestionnaire {
+  margin-top: 8px;
+  padding: 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: 13px;
+  background: var(--panel-2);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+:root[data-theme="dark"] .saleDeliveryQuestionnaire {
+  border-color: rgb(255 255 255 / 42%);
+}
+
+.saleDeliveryQuestionnaireHead {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 3px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.saleDeliveryQuestionnaireHead > span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.saleDeliveryQuestionnaireHead > small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.saleDeliveryQuestionnaire > label {
+  min-width: 0;
+}
+
+.saleDeliveryQuestionnaire > label > select {
+  width: 100%;
+  min-width: 0;
+}
+
+.saleDeliveryFreight {
+  grid-column: 1 / -1;
+  margin: 0 !important;
+}
+
+@media (max-width: 760px) {
+  .saleDeliveryQuestionnaire {
+    grid-template-columns: 1fr;
+  }
+
+  .saleDeliveryQuestionnaireHead,
+  .saleDeliveryFreight {
+    grid-column: 1;
+  }
+}
