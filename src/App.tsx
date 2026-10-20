@@ -8706,6 +8706,8 @@ function PricingCalculator({
   const [paidEditing, setPaidEditing] = useState(false);
   const initialApcMl = pricingApcVolume(100);
   const [apcChoice, setApcChoice] = useState(pricingApcChoice(initialApcMl));
+  const [apcMenuOpen, setApcMenuOpen] = useState(false);
+  const apcSelectRef = useRef<HTMLDivElement | null>(null);
   const [customApcMl, setCustomApcMl] = useState(
     pricingApcChoice(initialApcMl) === "Outro valor" ? initialApcMl : 0,
   );
@@ -8721,6 +8723,20 @@ function PricingCalculator({
   const [supplyOverrides, setSupplyOverrides] =
     useState<PricingSupplyOverrides>({});
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!apcMenuOpen) return;
+    function closeApcMenu(event: MouseEvent) {
+      if (
+        apcSelectRef.current &&
+        !apcSelectRef.current.contains(event.target as Node)
+      ) {
+        setApcMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", closeApcMenu);
+    return () => document.removeEventListener("mousedown", closeApcMenu);
+  }, [apcMenuOpen]);
 
   const isArabic = perfumeIdentity("", category).includes("arabe");
   const volumes = isArabic ? [2, 3, 5, 7, 10, 15] : [2, 3, 5, 7, 10];
@@ -9074,33 +9090,69 @@ function PricingCalculator({
             </label>
 
             <div className="pricingApcField">
-              <Choices
-                label="APC"
-                a={["20 ml", "30 ml", "40 ml", "50 ml", "60 ml", "Outro valor"]}
-                v={
-                  apcChoice === "Outro valor"
-                    ? "Outro valor"
-                    : apcChoice + " ml"
-                }
-                set={(value) => {
-                  const nextChoice =
-                    value === "Outro valor" ? "Outro valor" : value.replace(" ml", "");
-                  if (nextChoice === "Outro valor" && !customApcMl) {
-                    setCustomApcMl(apcMl || pricingApcVolume(bottleMl));
-                  }
-                  setApcChoice(nextChoice);
-                  setRowMarginOffsets((current) => {
-                    const next = { ...current };
-                    delete next.apc;
-                    return next;
-                  });
-                  setSupplyOverrides((current) => {
-                    const next = { ...current };
-                    delete next.apc;
-                    return next;
-                  });
-                }}
-              />
+              <span className="pricingApcLabel">APC</span>
+              <div className="pricingApcSelect" ref={apcSelectRef}>
+                <button
+                  type="button"
+                  className="pricingApcSelectTrigger"
+                  aria-haspopup="listbox"
+                  aria-expanded={apcMenuOpen}
+                  onClick={() => setApcMenuOpen((open) => !open)}
+                >
+                  <span>
+                    {apcChoice === "Outro valor"
+                      ? "Outro valor"
+                      : apcChoice + " ml"}
+                  </span>
+                  <ChevronDown className={apcMenuOpen ? "open" : ""} />
+                </button>
+
+                {apcMenuOpen ? (
+                  <div className="pricingApcSelectMenu" role="listbox">
+                    {["20", "30", "40", "50", "60", "Outro valor"].map(
+                      (option) => {
+                        const selected = apcChoice === option;
+                        return (
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={selected}
+                            className={selected ? "selected" : ""}
+                            key={option}
+                            onClick={() => {
+                              if (option === "Outro valor" && !customApcMl) {
+                                setCustomApcMl(
+                                  apcMl || pricingApcVolume(bottleMl),
+                                );
+                              }
+                              setApcChoice(option);
+                              setApcMenuOpen(false);
+                              setRowMarginOffsets((current) => {
+                                const next = { ...current };
+                                delete next.apc;
+                                return next;
+                              });
+                              setSupplyOverrides((current) => {
+                                const next = { ...current };
+                                delete next.apc;
+                                return next;
+                              });
+                            }}
+                          >
+                            <span>
+                              {option === "Outro valor"
+                                ? "Outro valor"
+                                : option + " ml"}
+                            </span>
+                            {selected ? <Check /> : null}
+                          </button>
+                        );
+                      },
+                    )}
+                  </div>
+                ) : null}
+              </div>
+
               {apcChoice === "Outro valor" ? (
                 <label className="pricingCustomApc">
                   <span>Outro valor do APC (ml)</span>
@@ -9242,7 +9294,7 @@ function PricingCalculator({
                 <th>Insumos</th>
                 <th>Custo total</th>
                 <th>Lucro</th>
-                <th>Margem</th>
+                <th className="pricingMarginHeader">Margem</th>
               </tr>
             </thead>
             <tbody>
@@ -9262,9 +9314,8 @@ function PricingCalculator({
                   <td className="pricingProfit">
                     {row.price ? brl(row.profit) : "—"}
                   </td>
-                  <td>
+                  <td className="pricingMarginColumn">
                     <div className="pricingMarginCell">
-                      <span className="pricingMarginSpacer" aria-hidden="true" />
                       <b className="pricingMarginValue">
                         {row.price
                           ? row.margin.toFixed(1).replace(".", ",") + "%"
