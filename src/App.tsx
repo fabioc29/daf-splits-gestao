@@ -8670,12 +8670,13 @@ function pricingClamp(value: number, min: number, max: number) {
 }
 
 function pricingParseCurrency(value: string) {
-  const normalized = String(value || "")
+  const raw = String(value || "")
     .replace(/R\$/gi, "")
     .replace(/\s/g, "")
-    .replace(/\./g, "")
-    .replace(",", ".")
-    .replace(/[^0-9.-]/g, "");
+    .replace(/[^0-9,.-]/g, "");
+  const normalized = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : raw;
   return Math.max(0, Number(normalized) || 0);
 }
 
