@@ -53,7 +53,6 @@ import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import {
   CatalogAdminPreview,
-  PublicCatalog,
   catalogItemsFromProducts,
   enrichCatalogItemsWithImages,
   catalogSnapshotPayload,
@@ -863,22 +862,7 @@ const nav = [
   ["crm", "Integração CRM", Cloud],
 ] as const;
 
-function isPublicCatalogRoute() {
-  if (typeof window === "undefined") return false;
-  const path = window.location.pathname.replace(/\/+$/, "") || "/";
-  const catalogHost = String(import.meta.env.VITE_CATALOG_HOST || "")
-    .trim()
-    .toLowerCase();
-  const currentHost = window.location.hostname.toLowerCase();
-  return (
-    path === "/catalogo" ||
-    path.startsWith("/catalogo/") ||
-    Boolean(catalogHost && currentHost === catalogHost)
-  );
-}
-
 export default function App() {
-  const publicCatalogRoute = isPublicCatalogRoute();
   const [session, setSession] = useState<Session | null>(null),
     [authLoading, setAuthLoading] = useState(true);
   useEffect(() => {
@@ -891,7 +875,6 @@ export default function App() {
     } = supabase.auth.onAuthStateChange((_event, next) => setSession(next));
     return () => subscription.unsubscribe();
   }, []);
-  if (publicCatalogRoute) return <PublicCatalog />;
   if (!isSupabaseConfigured) return <SetupRequired />;
   if (authLoading)
     return (
@@ -934,52 +917,14 @@ function System({ session }: { session: Session }) {
     catch { blockEditing("O rascunho está apenas na memória: o armazenamento local falhou. Exporte-o antes de fechar e carregue o estado salvo para continuar."); setDataState(next); return; }
     setDataState(next);
   }
-  async function mirrorPublishedCatalog(
-    publication: Awaited<ReturnType<FabioStateWriter["publish"]>>,
-  ) {
-    if (publication.status !== "published") return;
-    const payload = publication.data;
-    if (!Array.isArray(payload?.items) || typeof payload?.revision !== "string")
-      return;
-
-    try {
-      const response = await fetch("/api/catalog-mirror", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          revision: payload.revision,
-          items: payload.items,
-          updatedAt: payload.updatedAt,
-        }),
-      });
-
-      if (!response.ok) {
-        const result = await response.json().catch(() => ({}));
-        throw new Error(result?.error || "Falha ao atualizar o catálogo externo.");
-      }
-    } catch {
-      if (mounted.current) {
-        setCatalogNotice(
-          "Catálogo salvo no sistema principal, mas o catálogo externo não foi atualizado. Tente publicar novamente.",
-        );
-      }
-    }
-  }
-
   function recordPublication(publication: Awaited<ReturnType<FabioStateWriter["publish"]>>) {
     const cache = committedCatalogCache(publication);
     if (cache && !optionalLocalSet(PUBLISHED_CATALOG_KEY, cache)) {
-      setCatalogNotice("Dados e catálogo confirmados no servidor; o cache local do catálogo está indisponível.");
-      void mirrorPublishedCatalog(publication);
-      return;
+      setCatalogNotice("Dados e catálogo confirmados no servidor; o cache local do catálogo está indisponível."); return;
     }
     setCatalogNotice(publication.status === "published" ? "" : publication.status === "stale"
       ? "O catálogo aguarda a revisão atual. Outra sessão salvou durante a publicação."
       : "Dados salvos; o catálogo ainda não foi publicado. Tente publicar novamente após conferir a revisão.");
-    void mirrorPublishedCatalog(publication);
   }
   function fallbackCatalog(persisted: D) { return catalogSnapshotPayload(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), persisted.catalogSettings); }
   async function buildCatalog(persisted: D, signal?: AbortSignal) {
