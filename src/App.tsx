@@ -8595,6 +8595,649 @@ function PaymentBreakdown({
     </div>
   );
 }
+
+type PricingSupplyOverrides = Record<string, Record<string, number>>;
+
+type PricingSimulation = {
+  key: string;
+  label: string;
+  ml: number;
+  isApc: boolean;
+};
+
+const PRICING_APC_VOLUMES: Record<number, number> = {
+  50: 20,
+  75: 30,
+  100: 40,
+  125: 40,
+  150: 50,
+  175: 60,
+  200: 60,
+};
+
+const PRICING_BASE_MARGINS: Record<number, number> = {
+  2: 41,
+  3: 39,
+  5: 39.5,
+  7: 39,
+  10: 38.5,
+  15: 38,
+};
+
+function pricingSupplyIdentity(value: unknown) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function pricingApcVolume(bottleMl: number) {
+  const normalized = Math.max(0, Math.round(Number(bottleMl) || 0));
+  if (PRICING_APC_VOLUMES[normalized]) return PRICING_APC_VOLUMES[normalized];
+  if (!normalized) return 0;
+  return Math.max(5, Math.round((normalized * 0.4) / 5) * 5);
+}
+
+function pricingCommercialNearest(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.max(0.9, Math.round(value - 0.9) + 0.9);
+}
+
+function pricingCommercialCeil(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.max(0.9, Math.ceil(value - 0.9) + 0.9);
+}
+
+function pricingProductDefaults(product: P | undefined, d: D) {
+  if (!product) return { bottleMl: 100, paid: 0 };
+
+  const history = [...(product.bottleHistory || [])]
+    .filter((entry) => Number(entry.ml) > 0)
+    .sort((a, b) => Number(b.number || 0) - Number(a.number || 0));
+  const latestBottle = history[0];
+  const purchase = latestBottle?.purchaseId
+    ? d.purchases.find((item) => item.id === latestBottle.purchaseId)
+    : undefined;
+  const bottleMl = Math.max(
+    1,
+    Number(latestBottle?.ml || purchase?.mlPerBottle || 100),
+  );
+  const paid =
+    purchase && Number(purchase.qty) > 0
+      ? Number(purchase.total || 0) / Number(purchase.qty)
+      : Math.max(0, Number(product.cost || 0)) * bottleMl;
+
+  return { bottleMl, paid };
+}
+
+function PricingCalculator({ d }: { d: D }) {
+  const orderedProducts = useMemo(
+    () =>
+      [...d.products].sort((a, b) =>
+        productDisplayName(a).localeCompare(productDisplayName(b), "pt-BR"),
+      ),
+    [d.products],
+  );
+  const initialProduct = orderedProducts[0];
+  const initialDefaults = pricingProductDefaults(initialProduct, d);
+  const [mode, setMode] = useState<"existing" | "free">(
+    initialProduct ? "existing" : "free",
+  );
+  const [productId, setProductId] = useState(initialProduct?.id || 0);
+  const [category, setCategory] = useState(initialProduct?.category || "Designer");
+  const [bottleMl, setBottleMl] = useState(initialDefaults.bottleMl);
+  const [paid, setPaid] = useState(initialDefaults.paid);
+  const [marginStep, setMarginStep] = useState(0);
+  const [suppliesOpen, setSuppliesOpen] = useState(false);
+  const [supplyOverrides, setSupplyOverrides] =
+    useState<PricingSupplyOverrides>({});
+
+  const selectedProduct = d.products.find((product) => product.id === productId);
+  const isArabic =
+    perfumeIdentity("", category || selectedProduct?.category || "").includes(
+      "arabe",
+    );
+  const volumes = isArabic ? [2, 3, 5, 7, 10, 15] : [2, 3, 5, 7, 10];
+  const apcMl = pricingApcVolume(bottleMl);
+  const simulations: PricingSimulation[] = [
+    ...volumes.map((ml) => ({
+      key: String(ml),
+      label: ml + " ml",
+      ml,
+      isApc: false,
+    })),
+    ...(apcMl
+      ? [{ key: "apc", label: "APC " + apcMl + " ml", ml: apcMl, isApc: true }]
+      : []),
+  ];
+
+  function applyProduct(nextId: number) {
+    const product = d.products.find((item) => item.id === nextId);
+    setProductId(nextId);
+    if (!product) return;
+    const defaults = pricingProductDefaults(product, d);
+    setCategory(product.category || "Designer");
+    setBottleMl(defaults.bottleMl);
+    setPaid(defaults.paid);
+    setMarginStep(0);
+    setSupplyOverrides({});
+  }
+
+  function simulationSale(simulation: PricingSimulation) {
+    return {
+      items: [{ ml: simulation.ml, isApc: simulation.isApc }],
+      supplyOverrides: supplyOverrides[simulation.key] || {},
+    };
+  }
+
+  function automaticQty(simulation: PricingSimulation, supplyName: string) {
+    return (
+      packagingOptions(
+        { items: [{ ml: simulation.ml, isApc: simulation.isApc }] },
+        d.supplies,
+      ).find(
+        (option) =>
+          pricingSupplyIdentity(option.name) ===
+          pricingSupplyIdentity(supplyName),
+      )?.automaticQty || 0
+    );
+  }
+
+  function effectiveQty(simulation: PricingSimulation, supplyName: string) {
+    return (
+      supplyOverrides[simulation.key]?.[supplyName] ??
+      automaticQty(simulation, supplyName)
+    );
+  }
+
+  function updateSupplyQty(
+    simulation: PricingSimulation,
+    supplyName: string,
+    quantity: number,
+  ) {
+    const automatic = automaticQty(simulation, supplyName);
+    const nextQuantity = Math.max(0, Number(quantity) || 0);
+    setSupplyOverrides((current) => {
+      const next = { ...current };
+      const volumeOverrides = { ...(next[simulation.key] || {}) };
+      if (nextQuantity === automatic) delete volumeOverrides[supplyName];
+      else volumeOverrides[supplyName] = nextQuantity;
+      if (Object.keys(volumeOverrides).length) {
+        next[simulation.key] = volumeOverrides;
+      } else {
+        delete next[simulation.key];
+      }
+      return next;
+    });
+  }
+
+  const supplyNames = Array.from(
+    new Map(
+      simulations
+        .flatMap((simulation) =>
+          packagingOptions(
+            { items: [{ ml: simulation.ml, isApc: simulation.isApc }] },
+            d.supplies,
+          ).map((option) => [
+            pricingSupplyIdentity(option.name),
+            option.name,
+          ] as const),
+        )
+        .filter(([identity]) => Boolean(identity)),
+    ).values(),
+  );
+
+  const perfumeUnitCost = bottleMl > 0 ? paid / bottleMl : 0;
+  const adjustment = marginStep;
+  const decantRows = simulations
+    .filter((simulation) => !simulation.isApc)
+    .map((simulation) => {
+      const supply = packaging(simulationSale(simulation), d.supplies);
+      const perfumeCost = perfumeUnitCost * simulation.ml;
+      const totalCost = perfumeCost + supply.total;
+      const targetMargin = Math.max(
+        20,
+        Math.min(
+          55,
+          (PRICING_BASE_MARGINS[simulation.ml] || 38) + adjustment,
+        ),
+      );
+      const rawPrice =
+        totalCost > 0 ? totalCost / Math.max(0.01, 1 - targetMargin / 100) : 0;
+      return {
+        ...simulation,
+        perfumeCost,
+        supplyCost: supply.total,
+        totalCost,
+        missing: supply.missing,
+        targetMargin,
+        price: pricingCommercialNearest(rawPrice),
+      };
+    });
+
+  for (let index = decantRows.length - 2; index >= 0; index -= 1) {
+    const current = decantRows[index];
+    const next = decantRows[index + 1];
+    if (!current.price || !next.price) continue;
+    const minimumUnitPrice = (next.price / next.ml) * 1.025;
+    const minimumPrice = minimumUnitPrice * current.ml;
+    if (current.price < minimumPrice) {
+      current.price = pricingCommercialCeil(minimumPrice);
+    }
+  }
+
+  const row2 = decantRows.find((row) => row.ml === 2);
+  const row3 = decantRows.find((row) => row.ml === 3);
+  if (row2 && row3 && row3.price > 0) {
+    const upgradeFloor = row3.price * 0.82;
+    if (row2.price < upgradeFloor) {
+      row2.price = pricingCommercialCeil(upgradeFloor);
+    }
+    if (row2.price >= row3.price) {
+      row3.price = pricingCommercialCeil(row2.price / 0.9);
+    }
+  }
+
+  const apcSimulation = simulations.find((simulation) => simulation.isApc);
+  const apcRow = apcSimulation
+    ? (() => {
+        const supply = packaging(simulationSale(apcSimulation), d.supplies);
+        const perfumeCost = perfumeUnitCost * apcSimulation.ml;
+        const totalCost = perfumeCost + supply.total;
+        const targetMargin = Math.max(
+          22,
+          Math.min(33, 27.5 + adjustment),
+        );
+        const rawPrice =
+          totalCost > 0
+            ? totalCost / Math.max(0.01, 1 - targetMargin / 100)
+            : 0;
+        return {
+          ...apcSimulation,
+          perfumeCost,
+          supplyCost: supply.total,
+          totalCost,
+          missing: supply.missing,
+          targetMargin,
+          price: pricingCommercialNearest(rawPrice),
+        };
+      })()
+    : null;
+
+  const rows = [...decantRows, ...(apcRow ? [apcRow] : [])].map((row) => ({
+    ...row,
+    unitPrice: row.price > 0 ? row.price / row.ml : 0,
+    margin:
+      row.price > 0 ? ((row.price - row.totalCost) / row.price) * 100 : 0,
+  }));
+
+  const missingSupplies = Array.from(
+    new Set(rows.flatMap((row) => row.missing || [])),
+  );
+  const tenMlSupplyCost =
+    rows.find((row) => row.ml === 10 && !row.isApc)?.supplyCost || 0;
+  const productLabel =
+    mode === "existing" && selectedProduct
+      ? productDisplayName(selectedProduct)
+      : "Cotação livre";
+
+  return (
+    <div className="pricingWorkspace">
+      <div className="pricingHero panel">
+        <div>
+          <span className="eyebrow">Financeiro · Precificação</span>
+          <h2>Calculadora de decants</h2>
+          <p>
+            Sugestões calculadas pelo custo real do perfume, insumos cadastrados
+            no sistema e margem comercial da DAF Splits.
+          </p>
+        </div>
+        <div className="pricingModeSwitch" aria-label="Tipo de precificação">
+          <button
+            type="button"
+            className={mode === "existing" ? "on" : ""}
+            onClick={() => {
+              setMode("existing");
+              if (!productId && orderedProducts[0]) applyProduct(orderedProducts[0].id);
+            }}
+          >
+            Perfume cadastrado
+          </button>
+          <button
+            type="button"
+            className={mode === "free" ? "on" : ""}
+            onClick={() => {
+              setMode("free");
+              setMarginStep(0);
+              setSupplyOverrides({});
+            }}
+          >
+            Cotação por preço
+          </button>
+        </div>
+      </div>
+
+      <div className="pricingSetupGrid">
+        <div className="panel pricingInputsPanel">
+          <div className="panelHeading">
+            <div>
+              <span className="eyebrow">Base da cotação</span>
+              <h2>{productLabel}</h2>
+              <p>
+                Os campos de volume e valor são editáveis mesmo ao selecionar
+                um perfume já cadastrado.
+              </p>
+            </div>
+            <Calculator />
+          </div>
+
+          {mode === "existing" ? (
+            <label>
+              <span>Perfume</span>
+              <select
+                value={productId}
+                onChange={(event) => applyProduct(Number(event.target.value))}
+              >
+                {orderedProducts.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {productDisplayName(product)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label>
+              <span>Categoria da cotação</span>
+              <select
+                value={category}
+                onChange={(event) => {
+                  setCategory(event.target.value);
+                  setSupplyOverrides({});
+                }}
+              >
+                <option value="Designer">Designer</option>
+                <option value="Nicho">Nicho</option>
+                <option value="Árabe">Árabe</option>
+              </select>
+            </label>
+          )}
+
+          <div className="pricingInputRow">
+            <label>
+              <span>ML total do frasco</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={bottleMl || ""}
+                onChange={(event) => {
+                  setBottleMl(Math.max(0, Number(event.target.value) || 0));
+                  setSupplyOverrides({});
+                }}
+              />
+            </label>
+            <label>
+              <span>Valor pago no perfume</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={paid || ""}
+                onChange={(event) =>
+                  setPaid(Math.max(0, Number(event.target.value) || 0))
+                }
+              />
+            </label>
+          </div>
+
+          {mode === "existing" && selectedProduct ? (
+            <div className="pricingSourceNote">
+              <b>{selectedProduct.category}</b>
+              <span>
+                Custo médio atual: {brl(selectedProduct.cost)}/ml · Estoque{" "}
+                {selectedProduct.stock.toLocaleString("pt-BR")} ml
+              </span>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="panel pricingControlPanel">
+          <div className="panelHeading">
+            <div>
+              <span className="eyebrow">Ajuste comercial</span>
+              <h2>Margem sugerida</h2>
+              <p>
+                Use − ou + para reduzir ou elevar suavemente todos os preços.
+              </p>
+            </div>
+            <TrendingUp />
+          </div>
+
+          <div className="pricingMarginControl">
+            <button
+              type="button"
+              aria-label="Reduzir margem"
+              disabled={marginStep <= -4}
+              onClick={() => setMarginStep((value) => Math.max(-4, value - 1))}
+            >
+              <Minus />
+            </button>
+            <div>
+              <b>
+                {marginStep > 0 ? "+" : ""}
+                {marginStep} p.p.
+              </b>
+              <small>Ajuste aplicado às margens-base</small>
+            </div>
+            <button
+              type="button"
+              aria-label="Aumentar margem"
+              disabled={marginStep >= 4}
+              onClick={() => setMarginStep((value) => Math.min(4, value + 1))}
+            >
+              <Plus />
+            </button>
+          </div>
+
+          <div className="pricingQuickMetrics">
+            <div>
+              <span>Custo do perfume</span>
+              <b>{brl(perfumeUnitCost)}/ml</b>
+            </div>
+            <div>
+              <span>Insumos · 10 ml</span>
+              <b>{brl(tenMlSupplyCost)}</b>
+            </div>
+            <div>
+              <span>APC calculado</span>
+              <b>{apcMl ? apcMl + " ml" : "—"}</b>
+            </div>
+            <div>
+              <span>Margem-base APC</span>
+              <b>{(27.5 + adjustment).toFixed(1).replace(".", ",")}%</b>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="secondary pricingSuppliesButton"
+            onClick={() => setSuppliesOpen((open) => !open)}
+          >
+            <SlidersHorizontal />
+            {suppliesOpen ? "Fechar editor de insumos" : "Editar insumos da margem"}
+          </button>
+        </div>
+      </div>
+
+      {suppliesOpen ? (
+        <div className="panel pricingSupplyEditor">
+          <div className="panelHeading">
+            <div>
+              <span className="eyebrow">Custos operacionais</span>
+              <h2>Insumos considerados por volume</h2>
+              <p>
+                As quantidades começam com a mesma regra usada nas vendas. Assim,
+                15 ml usa automaticamente 2 frascos de 10 ml.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="secondary"
+              disabled={!Object.keys(supplyOverrides).length}
+              onClick={() => setSupplyOverrides({})}
+            >
+              <RotateCcw />
+              Restaurar automático
+            </button>
+          </div>
+
+          <div className="pricingSupplyTableWrap">
+            <table className="pricingSupplyTable">
+              <thead>
+                <tr>
+                  <th>Insumo</th>
+                  <th>Custo unit.</th>
+                  {simulations.map((simulation) => (
+                    <th key={simulation.key}>{simulation.label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {supplyNames.map((name) => {
+                  const supply = d.supplies.find(
+                    (item) =>
+                      pricingSupplyIdentity(item.name) ===
+                      pricingSupplyIdentity(name),
+                  );
+                  return (
+                    <tr key={name}>
+                      <td>
+                        <b>{name}</b>
+                        {!supply || supply.cost == null ? (
+                          <small className="pricingMissingCost">
+                            Custo não cadastrado
+                          </small>
+                        ) : null}
+                      </td>
+                      <td>{supply?.cost != null ? brl(supply.cost) : "—"}</td>
+                      {simulations.map((simulation) => {
+                        const auto = automaticQty(simulation, name);
+                        const value = effectiveQty(simulation, name);
+                        const overridden =
+                          supplyOverrides[simulation.key]?.[name] != null;
+                        return (
+                          <td key={simulation.key}>
+                            <input
+                              className={overridden ? "overridden" : ""}
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={value}
+                              title={"Automático: " + auto}
+                              onChange={(event) =>
+                                updateSupplyQty(
+                                  simulation,
+                                  name,
+                                  Number(event.target.value),
+                                )
+                              }
+                            />
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <small className="pricingSupplyHint">
+            Campos dourados foram alterados manualmente. Para ignorar um insumo
+            em determinado volume, informe 0.
+          </small>
+        </div>
+      ) : null}
+
+      {missingSupplies.length ? (
+        <div className="pricingWarning" role="alert">
+          <b>Há insumos sem custo cadastrado.</b>
+          <span>
+            A margem ficará mais otimista até cadastrar o custo de:{" "}
+            {missingSupplies.join(", ")}.
+          </span>
+        </div>
+      ) : null}
+
+      <div className="panel pricingTablePanel">
+        <div className="panelHeading">
+          <div>
+            <span className="eyebrow">Tabela sugerida</span>
+            <h2>Preços de venda</h2>
+            <p>
+              O preço por ml cai conforme o volume aumenta. O 2 ml permanece
+              propositalmente próximo do 3 ml para estimular o upgrade.
+            </p>
+          </div>
+          <Sparkles />
+        </div>
+
+        <div className="pricingTableWrap">
+          <table className="pricingTable">
+            <thead>
+              <tr>
+                <th>Volume</th>
+                <th>Preço sugerido</th>
+                <th>Preço/ml</th>
+                <th>Custo perfume</th>
+                <th>Insumos</th>
+                <th>Custo total</th>
+                <th>Margem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.key} className={row.isApc ? "pricingApcRow" : ""}>
+                  <td>
+                    <b>{row.label}</b>
+                    {row.isApc ? <small>Frasco + caixa originais</small> : null}
+                  </td>
+                  <td className="pricingSuggestedPrice">
+                    {row.price ? brl(row.price) : "—"}
+                  </td>
+                  <td>{row.unitPrice ? brl(row.unitPrice) : "—"}</td>
+                  <td>{brl(row.perfumeCost)}</td>
+                  <td>{brl(row.supplyCost)}</td>
+                  <td>{brl(row.totalCost)}</td>
+                  <td>
+                    <b>
+                      {row.price
+                        ? row.margin.toFixed(1).replace(".", ",") + "%"
+                        : "—"}
+                    </b>
+                    <small>
+                      Alvo {row.targetMargin.toFixed(1).replace(".", ",")}%
+                    </small>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="pricingMethodNote">
+          <b>Como o cálculo funciona</b>
+          <span>
+            Margem = (preço de venda − custo do perfume − insumos) ÷ preço de
+            venda. O APC parte de 27,5% e usa {apcMl || "o volume"} ml conforme
+            o tamanho do frasco.
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Finance({
   d,
   totals: _totals,
