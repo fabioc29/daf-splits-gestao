@@ -10735,3 +10735,968 @@ aside nav::-webkit-scrollbar-thumb:hover {
     grid-column: 1;
   }
 }
+
+
+/* =========================================================
+   DAF — Financeiro / Precificação
+   ========================================================= */
+
+.pricingWorkspace {
+  display: grid;
+  gap: 16px;
+}
+
+.pricingHero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px;
+}
+
+.pricingHero h2,
+.pricingInputsPanel h2,
+.pricingControlPanel h2,
+.pricingSupplyEditor h2,
+.pricingTablePanel h2 {
+  margin: 3px 0 4px;
+}
+
+.pricingHero p,
+.pricingInputsPanel p,
+.pricingControlPanel p,
+.pricingSupplyEditor p,
+.pricingTablePanel p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.pricingModeSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+}
+
+.pricingModeSwitch button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.pricingModeSwitch button.on {
+  color: #0b0803;
+  background: var(--accent);
+}
+
+.pricingSetupGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 16px;
+}
+
+.pricingInputsPanel,
+.pricingControlPanel,
+.pricingSupplyEditor,
+.pricingTablePanel {
+  padding: 18px;
+}
+
+.pricingInputsPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.pricingInputRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.pricingInputsPanel label,
+.pricingSupplyEditor label {
+  min-width: 0;
+}
+
+.pricingInputsPanel label > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pricingInputsPanel input,
+.pricingInputsPanel select {
+  width: 100%;
+}
+
+.pricingSourceNote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.pricingSourceNote b {
+  color: var(--accent);
+}
+
+.pricingSourceNote span {
+  color: var(--muted);
+  text-align: right;
+  font-size: 10px;
+}
+
+.pricingControlPanel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.pricingMarginControl {
+  display: grid;
+  grid-template-columns: 54px 1fr 54px;
+  align-items: center;
+  gap: 10px;
+  padding: 13px;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-2);
+}
+
+.pricingMarginControl > button {
+  width: 54px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  cursor: pointer;
+}
+
+.pricingMarginControl > button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+}
+
+.pricingMarginControl > button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.pricingMarginControl > button svg {
+  width: 19px;
+  height: 19px;
+}
+
+.pricingMarginControl > div {
+  text-align: center;
+}
+
+.pricingMarginControl > div b {
+  display: block;
+  font-size: 22px;
+  color: var(--text);
+}
+
+.pricingMarginControl > div small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.pricingQuickMetrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pricingQuickMetrics > div {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.pricingQuickMetrics span,
+.pricingQuickMetrics b {
+  display: block;
+}
+
+.pricingQuickMetrics span {
+  color: var(--muted);
+  font-size: 9px;
+  margin-bottom: 3px;
+}
+
+.pricingQuickMetrics b {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.pricingSuppliesButton {
+  width: 100%;
+  justify-content: center;
+}
+
+.pricingSupplyEditor {
+  display: grid;
+  gap: 14px;
+}
+
+.pricingSupplyEditor .panelHeading {
+  align-items: flex-start;
+}
+
+.pricingSupplyEditor .panelHeading > button {
+  flex: 0 0 auto;
+}
+
+.pricingSupplyTableWrap,
+.pricingTableWrap {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) var(--panel-2);
+}
+
+.pricingSupplyTableWrap::-webkit-scrollbar,
+.pricingTableWrap::-webkit-scrollbar {
+  height: 8px;
+}
+
+.pricingSupplyTableWrap::-webkit-scrollbar-track,
+.pricingTableWrap::-webkit-scrollbar-track {
+  background: var(--panel-2);
+  border-radius: 999px;
+}
+
+.pricingSupplyTableWrap::-webkit-scrollbar-thumb,
+.pricingTableWrap::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.pricingSupplyTable,
+.pricingTable {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.pricingSupplyTable th,
+.pricingSupplyTable td,
+.pricingTable th,
+.pricingTable td {
+  padding: 10px 9px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.pricingSupplyTable th,
+.pricingTable th {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.pricingSupplyTable td {
+  font-size: 10px;
+}
+
+.pricingSupplyTable td:first-child {
+  min-width: 180px;
+}
+
+.pricingSupplyTable td:first-child b,
+.pricingSupplyTable td:first-child small {
+  display: block;
+}
+
+.pricingSupplyTable input {
+  width: 62px;
+  min-width: 62px;
+  padding: 7px;
+  text-align: center;
+}
+
+.pricingSupplyTable input.overridden {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
+  font-weight: 850;
+}
+
+.pricingMissingCost {
+  margin-top: 2px;
+  color: #f59e0b;
+  font-size: 8px;
+}
+
+.pricingSupplyHint {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.pricingWarning {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid #f59e0b;
+  border-radius: 12px;
+  background: color-mix(in srgb, #f59e0b 8%, var(--panel));
+}
+
+.pricingWarning b {
+  color: #f59e0b;
+}
+
+.pricingWarning span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.pricingTablePanel {
+  display: grid;
+  gap: 14px;
+}
+
+.pricingTable td {
+  font-size: 11px;
+}
+
+.pricingTable td:first-child b,
+.pricingTable td:first-child small,
+.pricingTable td:last-child b,
+.pricingTable td:last-child small {
+  display: block;
+}
+
+.pricingTable td:first-child small,
+.pricingTable td:last-child small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.pricingSuggestedPrice {
+  color: var(--accent);
+  font-size: 13px !important;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.pricingApcRow {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.pricingApcRow td {
+  border-top: 1px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+  border-bottom-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.pricingApcRow td:first-child b {
+  color: var(--accent);
+}
+
+.pricingMethodNote {
+  display: grid;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+}
+
+.pricingMethodNote b {
+  color: var(--text);
+}
+
+.pricingMethodNote span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+:root[data-theme="dark"] .pricingHero,
+:root[data-theme="dark"] .pricingInputsPanel,
+:root[data-theme="dark"] .pricingControlPanel,
+:root[data-theme="dark"] .pricingSupplyEditor,
+:root[data-theme="dark"] .pricingTablePanel {
+  border-color: rgb(255 255 255 / 38%);
+}
+
+@media (max-width: 980px) {
+  .pricingSetupGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .pricingHero {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pricingModeSwitch {
+    width: 100%;
+  }
+
+  .pricingModeSwitch button {
+    flex: 1;
+  }
+
+  .pricingInputRow,
+  .pricingQuickMetrics {
+    grid-template-columns: 1fr;
+  }
+
+  .pricingSourceNote {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pricingSourceNote span {
+    text-align: left;
+  }
+
+  .pricingMarginControl {
+    grid-template-columns: 46px 1fr 46px;
+  }
+
+  .pricingMarginControl > button {
+    width: 46px;
+  }
+}
+
+
+/* Ajustes finos da calculadora de precificação */
+.pricingHero {
+  justify-content: flex-start;
+}
+
+.pricingStackFields {
+  display: grid;
+  gap: 14px;
+}
+
+.pricingInputsPanel input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: var(--input);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.pricingInputsPanel input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.pricingCategoryField fieldset {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pricingCategoryField fieldset legend {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pricingCategoryField fieldset label {
+  min-width: 0;
+}
+
+.pricingCategoryField fieldset label span {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  color: var(--muted);
+  text-align: center;
+  font-weight: 800;
+}
+
+.pricingCategoryField fieldset input:checked + span {
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pricingFieldHint {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.pricingPanelActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.pricingCopyButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.pricingCopyButton svg,
+.pricingPanelIcon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pricingPanelIcon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: var(--accent);
+}
+
+.pricingTable {
+  min-width: 980px;
+}
+
+.pricingProfit {
+  color: #35c77a;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.pricingMarginCell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+  min-width: 150px;
+}
+
+.pricingMarginCell > div:first-child {
+  min-width: 0;
+}
+
+.pricingRowMarginButtons {
+  display: grid;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.pricingRowMarginButtons button {
+  width: 27px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.pricingRowMarginButtons button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+}
+
+.pricingRowMarginButtons button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.pricingRowMarginButtons svg {
+  width: 13px;
+  height: 13px;
+}
+
+.pricingSuppliesOverlay {
+  z-index: 1200;
+  padding: 22px;
+}
+
+.pricingSupplyModal {
+  width: min(1180px, calc(100vw - 44px));
+  max-height: min(86vh, 900px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.pricingSupplyModal > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pricingSupplyModal > header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  max-width: 760px;
+}
+
+.pricingSupplyModal > header > button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.pricingSupplyModalBody {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px;
+}
+
+.pricingSupplyActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.pricingSupplyActions small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.pricingSupplyModalFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
+}
+
+.pricingSupplyModalFooter .primary {
+  min-width: 120px;
+}
+
+.pricingSupplyTable input {
+  background: var(--input);
+  color: var(--text);
+  border-color: var(--line);
+}
+
+@media (max-width: 720px) {
+  .pricingCategoryField fieldset {
+    grid-template-columns: 1fr;
+  }
+
+  .pricingPanelActions {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .pricingCopyButton {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .pricingSupplyActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .pricingSuppliesOverlay {
+    padding: 10px;
+  }
+
+  .pricingSupplyModal {
+    width: calc(100vw - 20px);
+    max-height: 92vh;
+  }
+}
+
+
+/* Refinos finais — precificação */
+.pricingCurrencyInput {
+  font-variant-numeric: tabular-nums;
+}
+
+.pricingApcField {
+  display: grid;
+  gap: 10px;
+}
+
+.pricingApcField fieldset {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pricingApcField fieldset legend {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pricingApcField fieldset label {
+  min-width: 0;
+}
+
+.pricingApcField fieldset label span {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  color: var(--muted);
+  text-align: center;
+  font-weight: 800;
+}
+
+.pricingApcField fieldset input:checked + span {
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pricingCustomApc {
+  display: grid;
+  gap: 6px;
+}
+
+.pricingCustomApc > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pricingMarginCell {
+  display: grid;
+  grid-template-columns: 27px minmax(76px, 1fr) 27px;
+  align-items: center;
+  gap: 9px;
+  min-width: 154px;
+}
+
+.pricingMarginSpacer {
+  width: 27px;
+  height: 1px;
+}
+
+.pricingMarginValue {
+  justify-self: center;
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.pricingRowMarginButtons {
+  justify-self: end;
+}
+
+@media (max-width: 720px) {
+  .pricingApcField fieldset {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* Seletor próprio de APC */
+.pricingApcField {
+  display: grid;
+  gap: 7px;
+  position: relative;
+}
+
+.pricingApcLabel {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pricingApcSelect {
+  position: relative;
+  z-index: 25;
+}
+
+.pricingApcSelectTrigger {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  color: var(--text);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.pricingApcSelectTrigger:hover,
+.pricingApcSelectTrigger[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.pricingApcSelectTrigger svg {
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+
+.pricingApcSelectTrigger svg.open {
+  transform: rotate(180deg);
+}
+
+.pricingApcSelectMenu {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 30%);
+  z-index: 60;
+}
+
+.pricingApcSelectMenu button {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pricingApcSelectMenu button:hover {
+  background: var(--panel-2);
+  border-color: var(--line);
+}
+
+.pricingApcSelectMenu button.selected {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  color: var(--accent);
+}
+
+.pricingApcSelectMenu button svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Centralização real da coluna de margem */
+.pricingMarginHeader {
+  text-align: center !important;
+  padding-right: 45px !important;
+}
+
+.pricingMarginColumn {
+  position: relative;
+}
+
+.pricingMarginCell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
+  min-height: 58px;
+  padding-right: 45px;
+}
+
+.pricingMarginValue {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.pricingRowMarginButtons {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  gap: 4px;
+}
+
+@media (max-width: 720px) {
+  .pricingApcSelectMenu {
+    position: static;
+    margin-top: 7px;
+  }
+}
