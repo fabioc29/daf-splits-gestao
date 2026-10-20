@@ -11550,3 +11550,153 @@ aside nav::-webkit-scrollbar-thumb:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+
+/* Seletor próprio de APC */
+.pricingApcField {
+  display: grid;
+  gap: 7px;
+  position: relative;
+}
+
+.pricingApcLabel {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pricingApcSelect {
+  position: relative;
+  z-index: 25;
+}
+
+.pricingApcSelectTrigger {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  color: var(--text);
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.pricingApcSelectTrigger:hover,
+.pricingApcSelectTrigger[aria-expanded="true"] {
+  border-color: var(--accent);
+}
+
+.pricingApcSelectTrigger svg {
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+  transition: transform 160ms ease;
+}
+
+.pricingApcSelectTrigger svg.open {
+  transform: rotate(180deg);
+}
+
+.pricingApcSelectMenu {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 30%);
+  z-index: 60;
+}
+
+.pricingApcSelectMenu button {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pricingApcSelectMenu button:hover {
+  background: var(--panel-2);
+  border-color: var(--line);
+}
+
+.pricingApcSelectMenu button.selected {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  color: var(--accent);
+}
+
+.pricingApcSelectMenu button svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Centralização real da coluna de margem */
+.pricingMarginHeader {
+  text-align: center !important;
+  padding-right: 45px !important;
+}
+
+.pricingMarginColumn {
+  position: relative;
+}
+
+.pricingMarginCell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
+  min-height: 58px;
+  padding-right: 45px;
+}
+
+.pricingMarginValue {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.pricingRowMarginButtons {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  gap: 4px;
+}
+
+@media (max-width: 720px) {
+  .pricingApcSelectMenu {
+    position: static;
+    margin-top: 7px;
+  }
+}
