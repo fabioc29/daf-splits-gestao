@@ -11456,3 +11456,97 @@ aside nav::-webkit-scrollbar-thumb:hover {
     max-height: 92vh;
   }
 }
+
+
+/* Refinos finais — precificação */
+.pricingCurrencyInput {
+  font-variant-numeric: tabular-nums;
+}
+
+.pricingApcField {
+  display: grid;
+  gap: 10px;
+}
+
+.pricingApcField fieldset {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.pricingApcField fieldset legend {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pricingApcField fieldset label {
+  min-width: 0;
+}
+
+.pricingApcField fieldset label span {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  color: var(--muted);
+  text-align: center;
+  font-weight: 800;
+}
+
+.pricingApcField fieldset input:checked + span {
+  background: color-mix(in srgb, var(--accent) 16%, var(--panel));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pricingCustomApc {
+  display: grid;
+  gap: 6px;
+}
+
+.pricingCustomApc > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pricingMarginCell {
+  display: grid;
+  grid-template-columns: 27px minmax(76px, 1fr) 27px;
+  align-items: center;
+  gap: 9px;
+  min-width: 154px;
+}
+
+.pricingMarginSpacer {
+  width: 27px;
+  height: 1px;
+}
+
+.pricingMarginValue {
+  justify-self: center;
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.pricingRowMarginButtons {
+  justify-self: end;
+}
+
+@media (max-width: 720px) {
+  .pricingApcField fieldset {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
