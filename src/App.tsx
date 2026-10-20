@@ -39,6 +39,7 @@ import {
   TrendingUp,
   TrendingDown,
   Sparkles,
+  DollarSign,
   PackageOpen,
   BarChart3,
   CalendarDays,
@@ -8668,6 +8669,29 @@ function pricingClamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
 
+function pricingParseCurrency(value: string) {
+  const normalized = String(value || "")
+    .replace(/R\$/gi, "")
+    .replace(/\s/g, "")
+    .replace(/\./g, "")
+    .replace(",", ".")
+    .replace(/[^0-9.-]/g, "");
+  return Math.max(0, Number(normalized) || 0);
+}
+
+function pricingFormatCurrency(value: number) {
+  return value.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function pricingApcChoice(value: number) {
+  return [20, 30, 40, 50, 60].includes(value) ? String(value) : "Outro valor";
+}
+
 function PricingCalculator({
   d,
   notify,
@@ -8677,8 +8701,18 @@ function PricingCalculator({
 }) {
   const [category, setCategory] = useState("Designer");
   const [bottleMl, setBottleMl] = useState(100);
-  const [paid, setPaid] = useState(0);
-  const [apcMl, setApcMl] = useState(pricingApcVolume(100));
+  const [paidInput, setPaidInput] = useState("");
+  const [paidEditing, setPaidEditing] = useState(false);
+  const initialApcMl = pricingApcVolume(100);
+  const [apcChoice, setApcChoice] = useState(pricingApcChoice(initialApcMl));
+  const [customApcMl, setCustomApcMl] = useState(
+    pricingApcChoice(initialApcMl) === "Outro valor" ? initialApcMl : 0,
+  );
+  const paid = pricingParseCurrency(paidInput);
+  const apcMl =
+    apcChoice === "Outro valor"
+      ? Math.max(0, Number(customApcMl) || 0)
+      : Math.max(0, Number(apcChoice) || 0);
   const [marginStep, setMarginStep] = useState(0);
   const [rowMarginOffsets, setRowMarginOffsets] =
     useState<PricingMarginOffsets>({});
@@ -8945,7 +8979,7 @@ function PricingCalculator({
       <div className="pricingHero panel">
         <div>
           <span className="eyebrow">Financeiro · Precificação</span>
-          <h2>Calculadora de decants</h2>
+          <h2>Calculadora de preços</h2>
           <p>
             Sugestões calculadas pelo custo do perfume, insumos cadastrados no
             sistema e faixa de margem comercial da DAF Splits.
@@ -8988,7 +9022,17 @@ function PricingCalculator({
                 onChange={(event) => {
                   const value = Math.max(0, Number(event.target.value) || 0);
                   setBottleMl(value);
-                  setApcMl(pricingApcVolume(value));
+                  const suggestedApc = pricingApcVolume(value);
+                  const suggestedChoice = pricingApcChoice(suggestedApc);
+                  setApcChoice(suggestedChoice);
+                  setCustomApcMl(
+                    suggestedChoice === "Outro valor" ? suggestedApc : 0,
+                  );
+                  setRowMarginOffsets((current) => {
+                    const next = { ...current };
+                    delete next.apc;
+                    return next;
+                  });
                   setSupplyOverrides({});
                 }}
               />
@@ -8997,25 +9041,53 @@ function PricingCalculator({
             <label>
               <span>Valor total pago</span>
               <input
-                type="number"
-                min="0"
-                step="0.01"
-                value={paid || ""}
-                onChange={(event) =>
-                  setPaid(Math.max(0, Number(event.target.value) || 0))
+                className="pricingCurrencyInput"
+                type="text"
+                inputMode="decimal"
+                placeholder="R$ 0,00"
+                value={
+                  paidEditing
+                    ? paidInput
+                    : paid > 0
+                      ? pricingFormatCurrency(paid)
+                      : ""
                 }
+                onFocus={() => {
+                  setPaidEditing(true);
+                  if (paid > 0) {
+                    setPaidInput(
+                      paid.toLocaleString("pt-BR", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      }),
+                    );
+                  }
+                }}
+                onChange={(event) => setPaidInput(event.target.value)}
+                onBlur={() => {
+                  const value = pricingParseCurrency(paidInput);
+                  setPaidInput(value > 0 ? pricingFormatCurrency(value) : "");
+                  setPaidEditing(false);
+                }}
               />
             </label>
 
-            <label>
-              <span>APC</span>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={apcMl || ""}
-                onChange={(event) => {
-                  setApcMl(Math.max(0, Number(event.target.value) || 0));
+            <div className="pricingApcField">
+              <Choices
+                label="APC"
+                a={["20 ml", "30 ml", "40 ml", "50 ml", "60 ml", "Outro valor"]}
+                v={
+                  apcChoice === "Outro valor"
+                    ? "Outro valor"
+                    : apcChoice + " ml"
+                }
+                set={(value) => {
+                  const nextChoice =
+                    value === "Outro valor" ? "Outro valor" : value.replace(" ml", "");
+                  if (nextChoice === "Outro valor" && !customApcMl) {
+                    setCustomApcMl(apcMl || pricingApcVolume(bottleMl));
+                  }
+                  setApcChoice(nextChoice);
                   setRowMarginOffsets((current) => {
                     const next = { ...current };
                     delete next.apc;
@@ -9028,11 +9100,33 @@ function PricingCalculator({
                   });
                 }}
               />
-              <small className="pricingFieldHint">
-                Pré-selecionado pela regra do volume do frasco. Você pode editar
-                manualmente os ml anunciados no APC.
-              </small>
-            </label>
+              {apcChoice === "Outro valor" ? (
+                <label className="pricingCustomApc">
+                  <span>Outro valor do APC (ml)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={customApcMl || ""}
+                    onChange={(event) => {
+                      setCustomApcMl(
+                        Math.max(0, Number(event.target.value) || 0),
+                      );
+                      setRowMarginOffsets((current) => {
+                        const next = { ...current };
+                        delete next.apc;
+                        return next;
+                      });
+                      setSupplyOverrides((current) => {
+                        const next = { ...current };
+                        delete next.apc;
+                        return next;
+                      });
+                    }}
+                  />
+                </label>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -9120,10 +9214,6 @@ function PricingCalculator({
           <div>
             <span className="eyebrow">Tabela sugerida</span>
             <h2>Preços de venda</h2>
-            <p>
-              O preço por ml cai conforme o volume aumenta. O 2 ml permanece
-              propositalmente próximo do 3 ml para estimular o upgrade.
-            </p>
           </div>
           <div className="pricingPanelActions">
             <button
@@ -9135,7 +9225,7 @@ function PricingCalculator({
               {copied ? "Copiado" : "Copiar tabela"}
             </button>
             <span className="pricingPanelIcon" aria-hidden="true">
-              <Sparkles />
+              <DollarSign />
             </span>
           </div>
         </div>
@@ -9173,18 +9263,12 @@ function PricingCalculator({
                   </td>
                   <td>
                     <div className="pricingMarginCell">
-                      <div>
-                        <b>
-                          {row.price
-                            ? row.margin.toFixed(1).replace(".", ",") + "%"
-                            : "—"}
-                        </b>
-                        <small>
-                          Alvo{" "}
-                          {row.targetMargin.toFixed(1).replace(".", ",")}% ·
-                          faixa {row.band.min}%–{row.band.max}%
-                        </small>
-                      </div>
+                      <span className="pricingMarginSpacer" aria-hidden="true" />
+                      <b className="pricingMarginValue">
+                        {row.price
+                          ? row.margin.toFixed(1).replace(".", ",") + "%"
+                          : "—"}
+                      </b>
                       <div className="pricingRowMarginButtons">
                         <button
                           type="button"
