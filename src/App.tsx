@@ -16,6 +16,8 @@ import {
   Building2,
   Wallet,
   Plus,
+  Minus,
+  Calculator,
   X,
   Check,
   Truck,
@@ -1209,7 +1211,8 @@ const action =
             : null;
   const stockSectionActive =
     page === "stock" || page === "stock-supplies" || page === "catalog";
-  const financeSectionActive = page === "finance" || page === "receivables";
+  const financeSectionActive =
+    page === "finance" || page === "receivables" || page === "finance-pricing";
   const shippingSectionActive =
     page === "shipping" || page === "shipping-mandabem";
   const orderedNav = [...nav].sort((a, b) => {
@@ -1229,7 +1232,9 @@ const action =
           ? "Catálogo"
           : page === "receivables"
             ? "Vendas a receber"
-            : page === "shipping-mandabem"
+            : page === "finance-pricing"
+              ? "Precificação"
+              : page === "shipping-mandabem"
               ? "MandaBem"
               : nav.find((item) => item[0] === page)?.[1] || "Painel";
   if (!ready)
@@ -1406,6 +1411,12 @@ const action =
                         {navAlerts.receivables ? (
                           <span className="subnavCount">{navAlerts.receivables}</span>
                         ) : null}
+                      </button>
+                      <button
+                        className={page === "finance-pricing" ? "on" : ""}
+                        onClick={() => setPage("finance-pricing")}
+                      >
+                        Precificação
                       </button>
                     </div>
                   ) : null}
@@ -1614,6 +1625,8 @@ const action =
               edit={(id) => setModal({ type: "supplier", id })}
               notify={notify}
             />
+          ) : page === "finance-pricing" ? (
+            <PricingCalculator d={data} />
           ) : page === "settings" ? (
             <SettingsPage
               theme={theme}
