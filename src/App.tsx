@@ -1626,7 +1626,7 @@ const action =
               notify={notify}
             />
           ) : page === "finance-pricing" ? (
-            <PricingCalculator d={data} />
+            <PricingCalculator d={data} notify={notify} />
           ) : page === "settings" ? (
             <SettingsPage
               theme={theme}
@@ -8597,12 +8597,19 @@ function PaymentBreakdown({
 }
 
 type PricingSupplyOverrides = Record<string, Record<string, number>>;
+type PricingMarginOffsets = Record<string, number>;
 
 type PricingSimulation = {
   key: string;
   label: string;
   ml: number;
   isApc: boolean;
+};
+
+type PricingMarginBand = {
+  min: number;
+  max: number;
+  base: number;
 };
 
 const PRICING_APC_VOLUMES: Record<number, number> = {
@@ -8615,13 +8622,21 @@ const PRICING_APC_VOLUMES: Record<number, number> = {
   200: 60,
 };
 
-const PRICING_BASE_MARGINS: Record<number, number> = {
-  2: 41,
-  3: 39,
-  5: 39.5,
-  7: 39,
-  10: 38.5,
-  15: 38,
+const PRICING_MARGIN_BANDS: Record<number, PricingMarginBand> = {
+  1: { min: 55, max: 65, base: 60 },
+  2: { min: 42, max: 48, base: 45 },
+  3: { min: 38, max: 44, base: 41 },
+  5: { min: 35, max: 41, base: 38 },
+  7: { min: 33, max: 39, base: 36 },
+  10: { min: 30, max: 37, base: 33.5 },
+  15: { min: 28, max: 35, base: 31.5 },
+  20: { min: 28, max: 35, base: 31.5 },
+};
+
+const PRICING_APC_MARGIN_BAND: PricingMarginBand = {
+  min: 30,
+  max: 37,
+  base: 33.5,
 };
 
 function pricingSupplyIdentity(value: unknown) {
@@ -8649,57 +8664,31 @@ function pricingCommercialCeil(value: number) {
   return Math.max(0.9, Math.ceil(value - 0.9) + 0.9);
 }
 
-function pricingProductDefaults(product: P | undefined, d: D) {
-  if (!product) return { bottleMl: 100, paid: 0 };
-
-  const history = [...(product.bottleHistory || [])]
-    .filter((entry) => Number(entry.ml) > 0)
-    .sort((a, b) => Number(b.number || 0) - Number(a.number || 0));
-  const latestBottle = history[0];
-  const purchase = latestBottle?.purchaseId
-    ? d.purchases.find((item) => item.id === latestBottle.purchaseId)
-    : undefined;
-  const bottleMl = Math.max(
-    1,
-    Number(latestBottle?.ml || purchase?.mlPerBottle || 100),
-  );
-  const paid =
-    purchase && Number(purchase.qty) > 0
-      ? Number(purchase.total || 0) / Number(purchase.qty)
-      : Math.max(0, Number(product.cost || 0)) * bottleMl;
-
-  return { bottleMl, paid };
+function pricingClamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
 }
 
-function PricingCalculator({ d }: { d: D }) {
-  const orderedProducts = useMemo(
-    () =>
-      [...d.products].sort((a, b) =>
-        productDisplayName(a).localeCompare(productDisplayName(b), "pt-BR"),
-      ),
-    [d.products],
-  );
-  const initialProduct = orderedProducts[0];
-  const initialDefaults = pricingProductDefaults(initialProduct, d);
-  const [mode, setMode] = useState<"existing" | "free">(
-    initialProduct ? "existing" : "free",
-  );
-  const [productId, setProductId] = useState(initialProduct?.id || 0);
-  const [category, setCategory] = useState(initialProduct?.category || "Designer");
-  const [bottleMl, setBottleMl] = useState(initialDefaults.bottleMl);
-  const [paid, setPaid] = useState(initialDefaults.paid);
+function PricingCalculator({
+  d,
+  notify,
+}: {
+  d: D;
+  notify: (message: string) => void;
+}) {
+  const [category, setCategory] = useState("Designer");
+  const [bottleMl, setBottleMl] = useState(100);
+  const [paid, setPaid] = useState(0);
+  const [apcMl, setApcMl] = useState(pricingApcVolume(100));
   const [marginStep, setMarginStep] = useState(0);
+  const [rowMarginOffsets, setRowMarginOffsets] =
+    useState<PricingMarginOffsets>({});
   const [suppliesOpen, setSuppliesOpen] = useState(false);
   const [supplyOverrides, setSupplyOverrides] =
     useState<PricingSupplyOverrides>({});
+  const [copied, setCopied] = useState(false);
 
-  const selectedProduct = d.products.find((product) => product.id === productId);
-  const isArabic =
-    perfumeIdentity("", category || selectedProduct?.category || "").includes(
-      "arabe",
-    );
+  const isArabic = perfumeIdentity("", category).includes("arabe");
   const volumes = isArabic ? [2, 3, 5, 7, 10, 15] : [2, 3, 5, 7, 10];
-  const apcMl = pricingApcVolume(bottleMl);
   const simulations: PricingSimulation[] = [
     ...volumes.map((ml) => ({
       key: String(ml),
@@ -8707,22 +8696,10 @@ function PricingCalculator({ d }: { d: D }) {
       ml,
       isApc: false,
     })),
-    ...(apcMl
+    ...(apcMl > 0
       ? [{ key: "apc", label: "APC " + apcMl + " ml", ml: apcMl, isApc: true }]
       : []),
   ];
-
-  function applyProduct(nextId: number) {
-    const product = d.products.find((item) => item.id === nextId);
-    setProductId(nextId);
-    if (!product) return;
-    const defaults = pricingProductDefaults(product, d);
-    setCategory(product.category || "Designer");
-    setBottleMl(defaults.bottleMl);
-    setPaid(defaults.paid);
-    setMarginStep(0);
-    setSupplyOverrides({});
-  }
 
   function simulationSale(simulation: PricingSimulation) {
     return {
@@ -8772,6 +8749,41 @@ function PricingCalculator({ d }: { d: D }) {
     });
   }
 
+  function marginBand(simulation: PricingSimulation) {
+    return simulation.isApc
+      ? PRICING_APC_MARGIN_BAND
+      : PRICING_MARGIN_BANDS[simulation.ml] || {
+          min: 30,
+          max: 40,
+          base: 35,
+        };
+  }
+
+  function targetMargin(simulation: PricingSimulation) {
+    const band = marginBand(simulation);
+    return pricingClamp(
+      band.base + marginStep + (rowMarginOffsets[simulation.key] || 0),
+      band.min,
+      band.max,
+    );
+  }
+
+  function adjustRowMargin(simulation: PricingSimulation, delta: number) {
+    const band = marginBand(simulation);
+    const currentTarget = targetMargin(simulation);
+    const nextTarget = pricingClamp(
+      currentTarget + delta,
+      band.min,
+      band.max,
+    );
+    const currentOffset = rowMarginOffsets[simulation.key] || 0;
+    setRowMarginOffsets((current) => ({
+      ...current,
+      [simulation.key]:
+        currentOffset + (nextTarget - currentTarget),
+    }));
+  }
+
   const supplyNames = Array.from(
     new Map(
       simulations
@@ -8789,29 +8801,26 @@ function PricingCalculator({ d }: { d: D }) {
   );
 
   const perfumeUnitCost = bottleMl > 0 ? paid / bottleMl : 0;
-  const adjustment = marginStep;
   const decantRows = simulations
     .filter((simulation) => !simulation.isApc)
     .map((simulation) => {
       const supply = packaging(simulationSale(simulation), d.supplies);
       const perfumeCost = perfumeUnitCost * simulation.ml;
       const totalCost = perfumeCost + supply.total;
-      const targetMargin = Math.max(
-        20,
-        Math.min(
-          55,
-          (PRICING_BASE_MARGINS[simulation.ml] || 38) + adjustment,
-        ),
-      );
+      const band = marginBand(simulation);
+      const desiredMargin = targetMargin(simulation);
       const rawPrice =
-        totalCost > 0 ? totalCost / Math.max(0.01, 1 - targetMargin / 100) : 0;
+        totalCost > 0
+          ? totalCost / Math.max(0.01, 1 - desiredMargin / 100)
+          : 0;
       return {
         ...simulation,
         perfumeCost,
         supplyCost: supply.total,
         totalCost,
         missing: supply.missing,
-        targetMargin,
+        band,
+        targetMargin: desiredMargin,
         price: pricingCommercialNearest(rawPrice),
       };
     });
@@ -8820,10 +8829,18 @@ function PricingCalculator({ d }: { d: D }) {
     const current = decantRows[index];
     const next = decantRows[index + 1];
     if (!current.price || !next.price) continue;
-    const minimumUnitPrice = (next.price / next.ml) * 1.025;
+    const minimumUnitPrice = (next.price / next.ml) * 1.015;
     const minimumPrice = minimumUnitPrice * current.ml;
-    if (current.price < minimumPrice) {
-      current.price = pricingCommercialCeil(minimumPrice);
+    const maximumPriceInsideBand =
+      current.totalCost > 0
+        ? current.totalCost / Math.max(0.01, 1 - current.band.max / 100)
+        : 0;
+    const candidate = pricingCommercialCeil(minimumPrice);
+    if (current.price < candidate) {
+      current.price =
+        maximumPriceInsideBand > 0
+          ? Math.min(candidate, pricingCommercialNearest(maximumPriceInsideBand))
+          : candidate;
     }
   }
 
@@ -8831,22 +8848,16 @@ function PricingCalculator({ d }: { d: D }) {
   const row3 = decantRows.find((row) => row.ml === 3);
   if (row2 && row3 && row3.price > 0) {
     const upgradeFloor = row3.price * 0.82;
+    const row2MaxPrice =
+      row2.totalCost > 0
+        ? row2.totalCost / Math.max(0.01, 1 - row2.band.max / 100)
+        : 0;
     if (row2.price < upgradeFloor) {
-      row2.price = pricingCommercialCeil(upgradeFloor);
-    }
-    if (row2.price >= row3.price) {
-      row3.price = pricingCommercialCeil(row2.price / 0.9);
-    }
-  }
-
-  for (let index = decantRows.length - 2; index >= 0; index -= 1) {
-    const current = decantRows[index];
-    const next = decantRows[index + 1];
-    if (!current.price || !next.price) continue;
-    const minimumUnitPrice = (next.price / next.ml) * 1.015;
-    const minimumPrice = minimumUnitPrice * current.ml;
-    if (current.price < minimumPrice) {
-      current.price = pricingCommercialCeil(minimumPrice);
+      const upgraded = pricingCommercialCeil(upgradeFloor);
+      row2.price =
+        row2MaxPrice > 0
+          ? Math.min(upgraded, pricingCommercialNearest(row2MaxPrice))
+          : upgraded;
     }
   }
 
@@ -8856,13 +8867,11 @@ function PricingCalculator({ d }: { d: D }) {
         const supply = packaging(simulationSale(apcSimulation), d.supplies);
         const perfumeCost = perfumeUnitCost * apcSimulation.ml;
         const totalCost = perfumeCost + supply.total;
-        const targetMargin = Math.max(
-          22,
-          Math.min(33, 27.5 + adjustment),
-        );
+        const band = marginBand(apcSimulation);
+        const desiredMargin = targetMargin(apcSimulation);
         const rawPrice =
           totalCost > 0
-            ? totalCost / Math.max(0.01, 1 - targetMargin / 100)
+            ? totalCost / Math.max(0.01, 1 - desiredMargin / 100)
             : 0;
         return {
           ...apcSimulation,
@@ -8870,7 +8879,8 @@ function PricingCalculator({ d }: { d: D }) {
           supplyCost: supply.total,
           totalCost,
           missing: supply.missing,
-          targetMargin,
+          band,
+          targetMargin: desiredMargin,
           price: pricingCommercialNearest(rawPrice),
         };
       })()
@@ -8879,6 +8889,7 @@ function PricingCalculator({ d }: { d: D }) {
   const rows = [...decantRows, ...(apcRow ? [apcRow] : [])].map((row) => ({
     ...row,
     unitPrice: row.price > 0 ? row.price / row.ml : 0,
+    profit: Math.max(0, row.price - row.totalCost),
     margin:
       row.price > 0 ? ((row.price - row.totalCost) / row.price) * 100 : 0,
   }));
@@ -8888,10 +8899,46 @@ function PricingCalculator({ d }: { d: D }) {
   );
   const tenMlSupplyCost =
     rows.find((row) => row.ml === 10 && !row.isApc)?.supplyCost || 0;
-  const productLabel =
-    mode === "existing" && selectedProduct
-      ? productDisplayName(selectedProduct)
-      : "Cotação livre";
+
+  async function copyPricingTable() {
+    const text = rows
+      .filter((row) => row.price > 0)
+      .map((row) => {
+        const volume = row.isApc
+          ? "APC " + row.ml + "ml"
+          : row.ml + "ml";
+        const price =
+          "R$" +
+          row.price.toLocaleString("pt-BR", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        return volume + " — " + price;
+      })
+      .join("\n");
+
+    if (!text) {
+      notify("Informe o valor pago para gerar a tabela de precificação.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = text;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    setCopied(true);
+    notify("Tabela de precificação copiada.");
+    window.setTimeout(() => setCopied(false), 1800);
+  }
 
   return (
     <div className="pricingWorkspace">
@@ -8900,33 +8947,9 @@ function PricingCalculator({ d }: { d: D }) {
           <span className="eyebrow">Financeiro · Precificação</span>
           <h2>Calculadora de decants</h2>
           <p>
-            Sugestões calculadas pelo custo real do perfume, insumos cadastrados
-            no sistema e margem comercial da DAF Splits.
+            Sugestões calculadas pelo custo do perfume, insumos cadastrados no
+            sistema e faixa de margem comercial da DAF Splits.
           </p>
-        </div>
-        <div className="pricingModeSwitch" aria-label="Tipo de precificação">
-          <button
-            type="button"
-            className={mode === "existing" ? "on" : ""}
-            onClick={() => {
-              setMode("existing");
-              const targetId = productId || orderedProducts[0]?.id || 0;
-              if (targetId) applyProduct(targetId);
-            }}
-          >
-            Perfume cadastrado
-          </button>
-          <button
-            type="button"
-            className={mode === "free" ? "on" : ""}
-            onClick={() => {
-              setMode("free");
-              setMarginStep(0);
-              setSupplyOverrides({});
-            }}
-          >
-            Cotação por preço
-          </button>
         </div>
       </div>
 
@@ -8935,47 +8958,26 @@ function PricingCalculator({ d }: { d: D }) {
           <div className="panelHeading">
             <div>
               <span className="eyebrow">Base da cotação</span>
-              <h2>{productLabel}</h2>
-              <p>
-                Os campos de volume e valor são editáveis mesmo ao selecionar
-                um perfume já cadastrado.
-              </p>
+              <h2>Dados do perfume</h2>
+              <p>Informe os dados usados para calcular a tabela de venda.</p>
             </div>
             <Calculator />
           </div>
 
-          {mode === "existing" ? (
-            <label>
-              <span>Perfume</span>
-              <select
-                value={productId}
-                onChange={(event) => applyProduct(Number(event.target.value))}
-              >
-                {orderedProducts.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {productDisplayName(product)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <label>
-              <span>Categoria da cotação</span>
-              <select
-                value={category}
-                onChange={(event) => {
-                  setCategory(event.target.value);
+          <div className="pricingStackFields">
+            <div className="pricingCategoryField">
+              <Choices
+                label="Categoria do perfume"
+                a={["Designer", "Nicho", "Árabe"]}
+                v={category}
+                set={(value) => {
+                  setCategory(value);
+                  setRowMarginOffsets({});
                   setSupplyOverrides({});
                 }}
-              >
-                <option value="Designer">Designer</option>
-                <option value="Nicho">Nicho</option>
-                <option value="Árabe">Árabe</option>
-              </select>
-            </label>
-          )}
+              />
+            </div>
 
-          <div className="pricingInputRow">
             <label>
               <span>ML total do frasco</span>
               <input
@@ -8984,13 +8986,16 @@ function PricingCalculator({ d }: { d: D }) {
                 step="1"
                 value={bottleMl || ""}
                 onChange={(event) => {
-                  setBottleMl(Math.max(0, Number(event.target.value) || 0));
+                  const value = Math.max(0, Number(event.target.value) || 0);
+                  setBottleMl(value);
+                  setApcMl(pricingApcVolume(value));
                   setSupplyOverrides({});
                 }}
               />
             </label>
+
             <label>
-              <span>Valor pago no perfume</span>
+              <span>Valor total pago</span>
               <input
                 type="number"
                 min="0"
@@ -9001,26 +9006,44 @@ function PricingCalculator({ d }: { d: D }) {
                 }
               />
             </label>
-          </div>
 
-          {mode === "existing" && selectedProduct ? (
-            <div className="pricingSourceNote">
-              <b>{selectedProduct.category}</b>
-              <span>
-                Custo médio atual: {brl(selectedProduct.cost)}/ml · Estoque{" "}
-                {selectedProduct.stock.toLocaleString("pt-BR")} ml
-              </span>
-            </div>
-          ) : null}
+            <label>
+              <span>APC</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={apcMl || ""}
+                onChange={(event) => {
+                  setApcMl(Math.max(0, Number(event.target.value) || 0));
+                  setRowMarginOffsets((current) => {
+                    const next = { ...current };
+                    delete next.apc;
+                    return next;
+                  });
+                  setSupplyOverrides((current) => {
+                    const next = { ...current };
+                    delete next.apc;
+                    return next;
+                  });
+                }}
+              />
+              <small className="pricingFieldHint">
+                Pré-selecionado pela regra do volume do frasco. Você pode editar
+                manualmente os ml anunciados no APC.
+              </small>
+            </label>
+          </div>
         </div>
 
         <div className="panel pricingControlPanel">
           <div className="panelHeading">
             <div>
-              <span className="eyebrow">Ajuste comercial</span>
-              <h2>Margem sugerida</h2>
+              <span className="eyebrow">Ajuste geral</span>
+              <h2>Margem da tabela</h2>
               <p>
-                Use − ou + para reduzir ou elevar suavemente todos os preços.
+                Use − ou + para reduzir ou elevar todas as margens dentro das
+                faixas comerciais.
               </p>
             </div>
             <TrendingUp />
@@ -9029,7 +9052,7 @@ function PricingCalculator({ d }: { d: D }) {
           <div className="pricingMarginControl">
             <button
               type="button"
-              aria-label="Reduzir margem"
+              aria-label="Reduzir margem geral"
               disabled={marginStep <= -4}
               onClick={() => setMarginStep((value) => Math.max(-4, value - 1))}
             >
@@ -9044,7 +9067,7 @@ function PricingCalculator({ d }: { d: D }) {
             </div>
             <button
               type="button"
-              aria-label="Aumentar margem"
+              aria-label="Aumentar margem geral"
               disabled={marginStep >= 4}
               onClick={() => setMarginStep((value) => Math.min(4, value + 1))}
             >
@@ -9062,114 +9085,25 @@ function PricingCalculator({ d }: { d: D }) {
               <b>{brl(tenMlSupplyCost)}</b>
             </div>
             <div>
-              <span>APC calculado</span>
+              <span>APC selecionado</span>
               <b>{apcMl ? apcMl + " ml" : "—"}</b>
             </div>
             <div>
-              <span>Margem-base APC</span>
-              <b>{(27.5 + adjustment).toFixed(1).replace(".", ",")}%</b>
+              <span>Faixa-base APC</span>
+              <b>30% a 37%</b>
             </div>
           </div>
 
           <button
             type="button"
             className="secondary pricingSuppliesButton"
-            onClick={() => setSuppliesOpen((open) => !open)}
+            onClick={() => setSuppliesOpen(true)}
           >
             <SlidersHorizontal />
-            {suppliesOpen ? "Fechar editor de insumos" : "Editar insumos da margem"}
+            Editar insumos da margem
           </button>
         </div>
       </div>
-
-      {suppliesOpen ? (
-        <div className="panel pricingSupplyEditor">
-          <div className="panelHeading">
-            <div>
-              <span className="eyebrow">Custos operacionais</span>
-              <h2>Insumos considerados por volume</h2>
-              <p>
-                As quantidades começam com a mesma regra usada nas vendas. Assim,
-                15 ml usa automaticamente 2 frascos de 10 ml.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="secondary"
-              disabled={!Object.keys(supplyOverrides).length}
-              onClick={() => setSupplyOverrides({})}
-            >
-              <RotateCcw />
-              Restaurar automático
-            </button>
-          </div>
-
-          <div className="pricingSupplyTableWrap">
-            <table className="pricingSupplyTable">
-              <thead>
-                <tr>
-                  <th>Insumo</th>
-                  <th>Custo unit.</th>
-                  {simulations.map((simulation) => (
-                    <th key={simulation.key}>{simulation.label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {supplyNames.map((name) => {
-                  const supply = d.supplies.find(
-                    (item) =>
-                      pricingSupplyIdentity(item.name) ===
-                      pricingSupplyIdentity(name),
-                  );
-                  return (
-                    <tr key={name}>
-                      <td>
-                        <b>{name}</b>
-                        {!supply || supply.cost == null ? (
-                          <small className="pricingMissingCost">
-                            Custo não cadastrado
-                          </small>
-                        ) : null}
-                      </td>
-                      <td>{supply?.cost != null ? brl(supply.cost) : "—"}</td>
-                      {simulations.map((simulation) => {
-                        const auto = automaticQty(simulation, name);
-                        const value = effectiveQty(simulation, name);
-                        const overridden =
-                          supplyOverrides[simulation.key]?.[name] != null;
-                        return (
-                          <td key={simulation.key}>
-                            <input
-                              className={overridden ? "overridden" : ""}
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={value}
-                              title={"Automático: " + auto}
-                              onChange={(event) =>
-                                updateSupplyQty(
-                                  simulation,
-                                  name,
-                                  Number(event.target.value),
-                                )
-                              }
-                            />
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <small className="pricingSupplyHint">
-            Campos dourados foram alterados manualmente. Para ignorar um insumo
-            em determinado volume, informe 0.
-          </small>
-        </div>
-      ) : null}
 
       {missingSupplies.length ? (
         <div className="pricingWarning" role="alert">
@@ -9191,7 +9125,19 @@ function PricingCalculator({ d }: { d: D }) {
               propositalmente próximo do 3 ml para estimular o upgrade.
             </p>
           </div>
-          <Sparkles />
+          <div className="pricingPanelActions">
+            <button
+              type="button"
+              className="secondary pricingCopyButton"
+              onClick={copyPricingTable}
+            >
+              <Copy />
+              {copied ? "Copiado" : "Copiar tabela"}
+            </button>
+            <span className="pricingPanelIcon" aria-hidden="true">
+              <Sparkles />
+            </span>
+          </div>
         </div>
 
         <div className="pricingTableWrap">
@@ -9204,6 +9150,7 @@ function PricingCalculator({ d }: { d: D }) {
                 <th>Custo perfume</th>
                 <th>Insumos</th>
                 <th>Custo total</th>
+                <th>Lucro</th>
                 <th>Margem</th>
               </tr>
             </thead>
@@ -9221,15 +9168,42 @@ function PricingCalculator({ d }: { d: D }) {
                   <td>{brl(row.perfumeCost)}</td>
                   <td>{brl(row.supplyCost)}</td>
                   <td>{brl(row.totalCost)}</td>
+                  <td className="pricingProfit">
+                    {row.price ? brl(row.profit) : "—"}
+                  </td>
                   <td>
-                    <b>
-                      {row.price
-                        ? row.margin.toFixed(1).replace(".", ",") + "%"
-                        : "—"}
-                    </b>
-                    <small>
-                      Alvo {row.targetMargin.toFixed(1).replace(".", ",")}%
-                    </small>
+                    <div className="pricingMarginCell">
+                      <div>
+                        <b>
+                          {row.price
+                            ? row.margin.toFixed(1).replace(".", ",") + "%"
+                            : "—"}
+                        </b>
+                        <small>
+                          Alvo{" "}
+                          {row.targetMargin.toFixed(1).replace(".", ",")}% ·
+                          faixa {row.band.min}%–{row.band.max}%
+                        </small>
+                      </div>
+                      <div className="pricingRowMarginButtons">
+                        <button
+                          type="button"
+                          aria-label={"Aumentar margem de " + row.label}
+                          disabled={row.targetMargin >= row.band.max}
+                          onClick={() => adjustRowMargin(row, 1)}
+                        >
+                          <Plus />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={"Reduzir margem de " + row.label}
+                          disabled={row.targetMargin <= row.band.min}
+                          onClick={() => adjustRowMargin(row, -1)}
+                        >
+                          <Minus />
+                        </button>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -9240,12 +9214,134 @@ function PricingCalculator({ d }: { d: D }) {
         <div className="pricingMethodNote">
           <b>Como o cálculo funciona</b>
           <span>
-            Margem = (preço de venda − custo do perfume − insumos) ÷ preço de
-            venda. O APC parte de 27,5% e usa {apcMl || "o volume"} ml conforme
-            o tamanho do frasco.
+            Margem = (preço de venda − custo do perfume − insumos) ÷ preço de venda.
           </span>
         </div>
       </div>
+
+      {suppliesOpen ? (
+        <div
+          className="overlay pricingSuppliesOverlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setSuppliesOpen(false);
+          }}
+        >
+          <div
+            className="systemDialog pricingSupplyModal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Editar insumos da margem"
+          >
+            <header>
+              <div>
+                <span className="eyebrow">Custos operacionais</span>
+                <h2>Insumos considerados por volume</h2>
+                <p>
+                  As quantidades começam com a mesma regra usada nas vendas.
+                  Assim, 15 ml usa automaticamente 2 frascos de 10 ml.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Fechar editor de insumos"
+                onClick={() => setSuppliesOpen(false)}
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="pricingSupplyModalBody">
+              <div className="pricingSupplyActions">
+                <small>
+                  Edite apenas o que quiser simular. Quantidades alteradas ficam
+                  destacadas em dourado.
+                </small>
+                <button
+                  type="button"
+                  className="secondary"
+                  disabled={!Object.keys(supplyOverrides).length}
+                  onClick={() => setSupplyOverrides({})}
+                >
+                  <RotateCcw />
+                  Restaurar automático
+                </button>
+              </div>
+
+              <div className="pricingSupplyTableWrap">
+                <table className="pricingSupplyTable">
+                  <thead>
+                    <tr>
+                      <th>Insumo</th>
+                      <th>Custo unit.</th>
+                      {simulations.map((simulation) => (
+                        <th key={simulation.key}>{simulation.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {supplyNames.map((name) => {
+                      const supply = d.supplies.find(
+                        (item) =>
+                          pricingSupplyIdentity(item.name) ===
+                          pricingSupplyIdentity(name),
+                      );
+                      return (
+                        <tr key={name}>
+                          <td>
+                            <b>{name}</b>
+                            {!supply || supply.cost == null ? (
+                              <small className="pricingMissingCost">
+                                Custo não cadastrado
+                              </small>
+                            ) : null}
+                          </td>
+                          <td>{supply?.cost != null ? brl(supply.cost) : "—"}</td>
+                          {simulations.map((simulation) => {
+                            const auto = automaticQty(simulation, name);
+                            const value = effectiveQty(simulation, name);
+                            const overridden =
+                              supplyOverrides[simulation.key]?.[name] != null;
+                            return (
+                              <td key={simulation.key}>
+                                <input
+                                  className={overridden ? "overridden" : ""}
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={value}
+                                  title={"Automático: " + auto}
+                                  onChange={(event) =>
+                                    updateSupplyQty(
+                                      simulation,
+                                      name,
+                                      Number(event.target.value),
+                                    )
+                                  }
+                                />
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <footer className="pricingSupplyModalFooter">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setSuppliesOpen(false)}
+              >
+                Concluir
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
