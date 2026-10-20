@@ -934,14 +934,52 @@ function System({ session }: { session: Session }) {
     catch { blockEditing("O rascunho está apenas na memória: o armazenamento local falhou. Exporte-o antes de fechar e carregue o estado salvo para continuar."); setDataState(next); return; }
     setDataState(next);
   }
+  async function mirrorPublishedCatalog(
+    publication: Awaited<ReturnType<FabioStateWriter["publish"]>>,
+  ) {
+    if (publication.status !== "published") return;
+    const payload = publication.data;
+    if (!Array.isArray(payload?.items) || typeof payload?.revision !== "string")
+      return;
+
+    try {
+      const response = await fetch("/api/catalog-mirror", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          revision: payload.revision,
+          items: payload.items,
+          updatedAt: payload.updatedAt,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result?.error || "Falha ao atualizar o catálogo externo.");
+      }
+    } catch {
+      if (mounted.current) {
+        setCatalogNotice(
+          "Catálogo salvo no sistema principal, mas o catálogo externo não foi atualizado. Tente publicar novamente.",
+        );
+      }
+    }
+  }
+
   function recordPublication(publication: Awaited<ReturnType<FabioStateWriter["publish"]>>) {
     const cache = committedCatalogCache(publication);
     if (cache && !optionalLocalSet(PUBLISHED_CATALOG_KEY, cache)) {
-      setCatalogNotice("Dados e catálogo confirmados no servidor; o cache local do catálogo está indisponível."); return;
+      setCatalogNotice("Dados e catálogo confirmados no servidor; o cache local do catálogo está indisponível.");
+      void mirrorPublishedCatalog(publication);
+      return;
     }
     setCatalogNotice(publication.status === "published" ? "" : publication.status === "stale"
       ? "O catálogo aguarda a revisão atual. Outra sessão salvou durante a publicação."
       : "Dados salvos; o catálogo ainda não foi publicado. Tente publicar novamente após conferir a revisão.");
+    void mirrorPublishedCatalog(publication);
   }
   function fallbackCatalog(persisted: D) { return catalogSnapshotPayload(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), persisted.catalogSettings); }
   async function buildCatalog(persisted: D, signal?: AbortSignal) {
@@ -1535,7 +1573,11 @@ const action =
               <button
                 className="secondary catalogPublicButton"
                 onClick={() =>
-                  window.open("/catalogo", "_blank", "noopener,noreferrer")
+                  window.open(
+                    import.meta.env.VITE_PUBLIC_CATALOG_URL || "/catalogo",
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
                 }
               >
                 <PackageOpen /> Abrir catálogo público
