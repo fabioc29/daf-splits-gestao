@@ -8839,6 +8839,17 @@ function PricingCalculator({ d }: { d: D }) {
     }
   }
 
+  for (let index = decantRows.length - 2; index >= 0; index -= 1) {
+    const current = decantRows[index];
+    const next = decantRows[index + 1];
+    if (!current.price || !next.price) continue;
+    const minimumUnitPrice = (next.price / next.ml) * 1.015;
+    const minimumPrice = minimumUnitPrice * current.ml;
+    if (current.price < minimumPrice) {
+      current.price = pricingCommercialCeil(minimumPrice);
+    }
+  }
+
   const apcSimulation = simulations.find((simulation) => simulation.isApc);
   const apcRow = apcSimulation
     ? (() => {
@@ -8899,7 +8910,8 @@ function PricingCalculator({ d }: { d: D }) {
             className={mode === "existing" ? "on" : ""}
             onClick={() => {
               setMode("existing");
-              if (!productId && orderedProducts[0]) applyProduct(orderedProducts[0].id);
+              const targetId = productId || orderedProducts[0]?.id || 0;
+              if (targetId) applyProduct(targetId);
             }}
           >
             Perfume cadastrado
