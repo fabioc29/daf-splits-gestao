@@ -3207,7 +3207,7 @@ function HealthGauge({
   const cashRatio = gross ? (cashGeneration / gross) * 100 : -100;
   const receivedRatio = gross ? (paid / gross) * 100 : 0;
   const expenseRatio = gross
-    ? ((operatingCosts + purchases) / gross) * 100
+    ? (operatingCosts / gross) * 100
     : 100;
 
   const revenueRatio =
@@ -3270,10 +3270,10 @@ function HealthGauge({
   let score = gross
     ? Math.round(
         revenueScore * 0.45 +
-          marginScore * 0.2 +
-          cashScore * 0.15 +
+          marginScore * 0.25 +
+          cashScore * 0.05 +
           receivedScore * 0.1 +
-          efficiencyScore * 0.1,
+          efficiencyScore * 0.15,
       )
     : 0;
 
@@ -3285,7 +3285,6 @@ function HealthGauge({
     else if (revenueRatio < 0.7) score = Math.min(score, 59);
   }
   if (operatingResult < 0) score = Math.min(score, 45);
-  if (cashGeneration < 0) score = Math.min(score, 49);
 
   const status =
     !gross
@@ -4374,10 +4373,8 @@ function saleOriginBadge(s: V) {
 }
 
 function saleShippingLabel(s: V) {
-  const method = String(
-    s.shippingMethod || (isMarketplaceSale(s) ? s.marketplace || "" : ""),
-  ).trim();
-  return method;
+  if (isMarketplaceSale(s)) return "";
+  return String(s.shippingMethod || "").trim();
 }
 
 function Prepare({
@@ -6474,56 +6471,48 @@ function Receivables({
   edit: (id: number) => void;
   notify: (message: string) => void;
 }) {
-  const [receivableTab, setReceivableTab] = useState<"direct" | "marketplace">(
-    "direct",
-  );
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [paymentSale, setPaymentSale] = useState<V | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentError, setPaymentError] = useState("");
   const allPendingSales = d.sales
     .filter(
-      (s) =>
-        s.status !== "cancelled" &&
-        !isNoCost(s) &&
-        (marketplacePending(s) || (!isMarketplaceSale(s) && s.paid < s.total)),
-    );
-  const pendingSales = allPendingSales.filter(
       (sale) =>
-        !overdueOnly ||
-        ((sale.installments || []).length
-          ? (sale.installments || []).some(
-              (installment) =>
-                !installment.paid &&
-                Boolean(installment.date) &&
-                installment.date < today(),
-            )
-          : Boolean(sale.dueDate) && sale.dueDate! < today()),
+        sale.status !== "cancelled" &&
+        !isNoCost(sale) &&
+        !isMarketplaceSale(sale) &&
+        sale.paid < sale.total,
     )
     .sort((a, b) => a.date.localeCompare(b.date));
-  const directList = pendingSales.filter((sale) => !isMarketplaceSale(sale));
-  const marketplaceList = pendingSales.filter(isMarketplaceSale);
-  const list = receivableTab === "marketplace" ? marketplaceList : directList;
-  const directTotal = allPendingSales
-    .filter((sale) => !isMarketplaceSale(sale))
-    .reduce((sum, sale) => sum + amountDue(sale), 0);
-  const marketplaceTotal = allPendingSales
-    .filter(isMarketplaceSale)
-    .reduce((sum, sale) => sum + amountDue(sale), 0);
-  function recordPayment(s: V) {
-    if (isMarketplaceSale(s)) {
-      set((x: D) => ({
-        ...x,
-        sales: x.sales.map((sale) =>
-          sale.id === s.id
-            ? { ...sale, marketplacePayoutReceived: true }
-            : sale,
-        ),
-      }));
-      notify(`Repasse do pedido #${orderNo(s.id)} confirmado.`);
-      return;
-    }
-    setPaymentSale(s);
+  const pendingSales = allPendingSales.filter(
+    (sale) =>
+      !overdueOnly ||
+      ((sale.installments || []).length
+        ? (sale.installments || []).some(
+            (installment) =>
+              !installment.paid &&
+              Boolean(installment.date) &&
+              installment.date < today(),
+          )
+        : Boolean(sale.dueDate) && sale.dueDate! < today()),
+  );
+  const directTotal = allPendingSales.reduce(
+    (sum, sale) => sum + amountDue(sale),
+    0,
+  );
+  const overdueCount = allPendingSales.filter((sale) =>
+    (sale.installments || []).length
+      ? (sale.installments || []).some(
+          (installment) =>
+            !installment.paid &&
+            Boolean(installment.date) &&
+            installment.date < today(),
+        )
+      : Boolean(sale.dueDate) && sale.dueDate! < today(),
+  ).length;
+
+  function recordPayment(sale: V) {
+    setPaymentSale(sale);
     setPaymentAmount("");
     setPaymentError("");
   }
@@ -6575,41 +6564,21 @@ function Receivables({
     setPaymentAmount("");
     setPaymentError("");
   }
+
   return (
     <>
       <Cards
         v={[
-          [brl(directTotal + marketplaceTotal), "Total geral a receber"],
-          [brl(directTotal), "Vendas diretas a receber"],
-          [brl(marketplaceTotal), "Marketplace a receber"],
-          [String(allPendingSales.length), "Total de vendas pendentes"],
+          [brl(directTotal), "Total a receber"],
+          [String(allPendingSales.length), "Vendas pendentes"],
+          [String(overdueCount), "Vendas vencidas"],
         ]}
       />
       <div className="panel table">
         <div className="receivableHeader">
           <div>
             <h2>Vendas a receber</h2>
-            <p>Inclui vendas pendentes de qualquer mês.</p>
-          </div>
-          <div className="receivableTabs" role="tablist" aria-label="Tipo de venda">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={receivableTab === "direct"}
-              className={receivableTab === "direct" ? "active" : ""}
-              onClick={() => setReceivableTab("direct")}
-            >
-              Vendas diretas <b>{directList.length}</b>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={receivableTab === "marketplace"}
-              className={receivableTab === "marketplace" ? "active" : ""}
-              onClick={() => setReceivableTab("marketplace")}
-            >
-              Marketplace <b>{marketplaceList.length}</b>
-            </button>
+            <p>Apenas vendas diretas pendentes, independentemente do mês.</p>
           </div>
           <button
             type="button"
@@ -6631,28 +6600,19 @@ function Receivables({
             </tr>
           </thead>
           <tbody>
-            {list.map((s) => (
-              <tr key={s.id}>
-                <td>#{orderNo(s.id)}</td>
+            {pendingSales.map((sale) => (
+              <tr key={sale.id}>
+                <td>#{orderNo(sale.id)}</td>
+                <td>{saleCustomer(sale, d)}</td>
+                <td>{dateBR(sale.date)}</td>
+                <td><b>{brl(amountDue(sale))}</b></td>
                 <td>
-                  {saleCustomer(s, d)}
-                  {isMarketplaceSale(s) ? (
-                    <small className="marketplaceReceivableLabel">
-                      {s.marketplace || "Marketplace"}
-                    </small>
-                  ) : null}
-                </td>
-                <td>{dateBR(s.date)}</td>
-                <td>
-                  <b>{brl(amountDue(s))}</b>
-                </td>
-                <td>
-                  {s.installments?.length ? (
-                    s.installments
-                      .filter((p) => !p.paid)
-                      .map((p, i) => (
-                        <small key={i}>
-                          {p.date ? dateBR(p.date) : "Sem data"} — {brl(p.amount)}
+                  {sale.installments?.length ? (
+                    sale.installments
+                      .filter((installment) => !installment.paid)
+                      .map((installment, index) => (
+                        <small key={index}>
+                          {installment.date ? dateBR(installment.date) : "Sem data"} — {brl(installment.amount)}
                         </small>
                       ))
                   ) : (
@@ -6663,11 +6623,11 @@ function Receivables({
                   <div className="tableActions">
                     <button
                       className="iconButton payButton"
-                      onClick={() => recordPayment(s)}
+                      onClick={() => recordPayment(sale)}
                     >
                       <Wallet /> Dar baixa
                     </button>
-                    <button className="iconButton" onClick={() => edit(s.id)}>
+                    <button className="iconButton" onClick={() => edit(sale.id)}>
                       <Pencil /> Editar
                     </button>
                   </div>
@@ -6676,9 +6636,11 @@ function Receivables({
             ))}
           </tbody>
         </table>
-        {!list.length ? (
+        {!pendingSales.length ? (
           <p className="empty">
-            Nenhuma venda pendente nesta categoria.
+            {overdueOnly
+              ? "Nenhuma venda direta vencida."
+              : "Nenhuma venda direta pendente."}
           </p>
         ) : null}
       </div>
@@ -9912,7 +9874,16 @@ function ProfitControl({
     const expenseBreakdown = saleExpenseBreakdown(sale, d);
     const expenses = expenseBreakdown.total;
     const profit = (isNoCost(sale) ? 0 : sale.total) - perfumeCost - expenses;
-    return { sale, perfumeCost, expenses, expenseBreakdown, profit };
+    const orderMargin =
+      !isNoCost(sale) && sale.total > 0 ? (profit / sale.total) * 100 : null;
+    return {
+      sale,
+      perfumeCost,
+      expenses,
+      expenseBreakdown,
+      profit,
+      orderMargin,
+    };
   });
   const revenue = rows.reduce(
     (sum, row) => sum + (isNoCost(row.sale) ? 0 : row.sale.total),
@@ -9961,6 +9932,7 @@ function ProfitControl({
               <th>Custo perfume</th>
               <th>Despesas</th>
               <th>Lucro</th>
+              <th>Margem de lucro</th>
               <th>Ação</th>
             </tr>
           </thead>
@@ -9972,6 +9944,7 @@ function ProfitControl({
                 expenses: expense,
                 expenseBreakdown,
                 profit: rowProfit,
+                orderMargin,
               }) => (
                 <tr key={sale.id}>
                   <td>#{orderNo(sale.id)}</td>
@@ -10020,6 +9993,11 @@ function ProfitControl({
                     </details>
                   </td>
                   <td>{brl(rowProfit)}</td>
+                  <td className={orderMargin !== null && orderMargin < 0 ? "profitMargin negative" : "profitMargin"}>
+                    {orderMargin === null
+                      ? "—"
+                      : `${orderMargin.toFixed(1).replace(".", ",")}%`}
+                  </td>
                   <td>
                     <button
                       className="iconButton"
