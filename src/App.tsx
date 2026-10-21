@@ -219,6 +219,7 @@ type D = {
   brands: string[];
   orderSequenceVersion?: number;
   supplyInventoryVersion?: number;
+  hacivatBottleCorrectionVersion?: number;
   marketplacePayoutDays?: { "TikTok Shop": number; Shopee: number };
   catalogSettings: CatalogSettings;
   dashboardSupplyReportIds: number[];
@@ -232,8 +233,7 @@ const DEFAULT_MENU_ORDER = [
   "shipping",
   "purchases",
   "stock",
-  "clients",
-  "suppliers",
+  "registrations",
   "finance",
   "settings",
 ];
@@ -858,8 +858,7 @@ const nav = [
   ["shipping", "Envios", Truck],
   ["purchases", "Compras", ShoppingCart],
   ["stock", "Estoque", Box],
-  ["clients", "Clientes", Users],
-  ["suppliers", "Fornecedores", Building2],
+  ["registrations", "Cadastros", Users],
   ["finance", "Financeiro", Wallet],
   ["settings", "Configurações", Settings],
   ["crm", "Integração CRM", Cloud],
@@ -973,6 +972,7 @@ function System({ session }: { session: Session }) {
     [toast, setToast] = useState("");
   const modalRef = useRef(modal); modalRef.current = modal;
   const [stockMenuOpen, setStockMenuOpen] = useState(false);
+  const [registrationsMenuOpen, setRegistrationsMenuOpen] = useState(false);
   const [financeMenuOpen, setFinanceMenuOpen] = useState(false);
   const [shippingMenuOpen, setShippingMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -1212,6 +1212,8 @@ const action =
             : null;
   const stockSectionActive =
     page === "stock" || page === "stock-supplies" || page === "catalog";
+  const registrationsSectionActive =
+    page === "clients" || page === "suppliers" || page === "brands";
   const financeSectionActive =
     page === "finance" || page === "receivables" || page === "finance-pricing";
   const shippingSectionActive =
@@ -1231,7 +1233,13 @@ const action =
         ? "Estoque de insumos"
         : page === "catalog"
           ? "Catálogo"
-          : page === "receivables"
+          : page === "clients"
+            ? "Clientes"
+            : page === "suppliers"
+              ? "Fornecedores"
+              : page === "brands"
+                ? "Marcas"
+                : page === "receivables"
             ? "Vendas a receber"
             : page === "finance-pricing"
               ? "Precificação"
@@ -1305,6 +1313,53 @@ const action =
                         onClick={() => setPage("catalog")}
                       >
                         Catálogo
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+
+            if (id === "registrations") {
+              return (
+                <div className="stockNavGroup registrationsNavGroup" key={id}>
+                  <button
+                    className={
+                      registrationsSectionActive ? "on stockParent" : "stockParent"
+                    }
+                    onClick={() =>
+                      setRegistrationsMenuOpen((open) => !open)
+                    }
+                    aria-expanded={registrationsMenuOpen}
+                  >
+                    <Icon />
+                    {label}
+                    <ChevronDown
+                      className={
+                        "stockNavChevron" +
+                        (registrationsMenuOpen ? " open" : "")
+                      }
+                    />
+                  </button>
+                  {registrationsMenuOpen ? (
+                    <div className="stockSubnav">
+                      <button
+                        className={page === "clients" ? "on" : ""}
+                        onClick={() => setPage("clients")}
+                      >
+                        Clientes
+                      </button>
+                      <button
+                        className={page === "suppliers" ? "on" : ""}
+                        onClick={() => setPage("suppliers")}
+                      >
+                        Fornecedores
+                      </button>
+                      <button
+                        className={page === "brands" ? "on" : ""}
+                        onClick={() => setPage("brands")}
+                      >
+                        Marcas
                       </button>
                     </div>
                   ) : null}
@@ -1587,7 +1642,6 @@ const action =
               set={setData}
               add={() => setModal({ type: "supply" })}
               addProduct={() => setModal({ type: "product" })}
-              manageBrands={() => setModal({ type: "brands" })}
               editSupply={(id) => setModal({ type: "supplyEdit", id })}
               edit={(id) => setModal({ type: "product", id })}
               notify={notify}
@@ -1626,6 +1680,13 @@ const action =
               edit={(id) => setModal({ type: "supplier", id })}
               notify={notify}
             />
+          ) : page === "brands" ? (
+            <BrandManager
+              d={data}
+              set={setData}
+              notify={notify}
+              embedded
+            />
           ) : page === "finance-pricing" ? (
             <PricingCalculator d={data} notify={notify} />
           ) : page === "settings" ? (
@@ -1649,13 +1710,6 @@ const action =
           d={data}
           set={setData}
           close={() => setModal(null)}
-        />
-      ) : modal?.type === "brands" ? (
-        <BrandManager
-          d={data}
-          set={setData}
-          close={() => setModal(null)}
-          notify={notify}
         />
       ) : modal?.type === "stockReport" ? (
         <StockReport
@@ -6754,13 +6808,15 @@ function StockReport({
 function BrandManager({
   d,
   set,
-  close,
+  close = () => {},
   notify,
+  embedded = false,
 }: {
   d: D;
   set: any;
-  close: () => void;
+  close?: () => void;
   notify: (message: string) => void;
+  embedded?: boolean;
 }) {
   const brands = Array.from(
     new Set([
@@ -6880,16 +6936,24 @@ function BrandManager({
   }
 
   return (
-    <div className="overlay">
-      <div className="systemDialog brandManagerDialog">
+    <div className={embedded ? "brandManagerPage" : "overlay"}>
+      <div
+        className={
+          embedded
+            ? "panel brandManagerDialog brandManagerPagePanel"
+            : "systemDialog brandManagerDialog"
+        }
+      >
         <header>
           <div>
             <small>GESTÃO DE CADASTROS</small>
             <h2>Marcas</h2>
           </div>
-          <button type="button" onClick={close} aria-label="Fechar marcas">
-            <X />
-          </button>
+          {!embedded ? (
+            <button type="button" onClick={close} aria-label="Fechar marcas">
+              <X />
+            </button>
+          ) : null}
         </header>
 
         <p className="brandManagerHint">
@@ -6987,11 +7051,13 @@ function BrandManager({
           ) : null}
         </div>
 
-        <footer>
-          <button type="button" onClick={close}>
-            Fechar
-          </button>
-        </footer>
+        {!embedded ? (
+          <footer>
+            <button type="button" onClick={close}>
+              Fechar
+            </button>
+          </footer>
+        ) : null}
       </div>
 
       {addingOpen ? (
@@ -7119,7 +7185,6 @@ function Stock({
   mode,
   add,
   addProduct,
-  manageBrands,
   editSupply,
   edit,
   set,
@@ -7129,7 +7194,6 @@ function Stock({
   mode: "perfumes" | "supplies";
   add: () => void;
   addProduct: () => void;
-  manageBrands: () => void;
   editSupply: (id: number) => void;
   edit: (id: number) => void;
   set: any;
@@ -7292,15 +7356,6 @@ function Stock({
           </p>
         </div>
         <div className="stockHeadActions">
-          {view !== "supplies" ? (
-            <button
-              type="button"
-              className="brandManagerButton"
-              onClick={manageBrands}
-            >
-              Marcas
-            </button>
-          ) : null}
           <button
             className="primary stockAction"
             onClick={view !== "supplies" ? addProduct : add}
