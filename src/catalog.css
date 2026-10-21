@@ -4280,3 +4280,125 @@ vercel-toolbar {
     height: 120px;
   }
 }
+
+
+/* PR32 21-10 late pass: inline image editor */
+.catalogEditorDialog.imageMode {
+  position: relative;
+  overflow: hidden !important;
+  min-height: min(760px, calc(94dvh - 44px));
+}
+
+.catalogImageEditorInline {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.catalogImageEditorInline > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.catalogImageEditorInline > header > div > span {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: .09em;
+}
+
+.catalogImageEditorInline > header h2 {
+  margin: 5px 0 0;
+  color: var(--text);
+  font-size: 22px;
+}
+
+.catalogImageEditorInline > header p {
+  max-width: 620px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.catalogImageEditorInline > header > button {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.catalogImageEditorInline > header > button svg {
+  width: 17px;
+  height: 17px;
+  color: var(--text);
+  stroke: var(--text);
+}
+
+.catalogImageEditorInline > .catalogImageEditorError {
+  margin: 12px 18px 0;
+}
+
+.catalogImageEditorInline > .catalogImageEditorList {
+  min-height: 0;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 16px 18px;
+  background: var(--panel);
+}
+
+.catalogImageEditorInline > footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+@media (max-width: 900px) {
+  .catalogEditorDialog.imageMode {
+    min-height: calc(100dvh - 44px);
+  }
+
+  .catalogImageEditorInline .catalogImageEditorRow {
+    grid-template-columns: minmax(0, 1fr) 68px !important;
+  }
+
+  .catalogImageEditorInline .catalogImageEditorRow > label:not(.catalogUploadImageButton),
+  .catalogImageEditorInline .catalogImageEditorRow > .catalogUploadImageButton,
+  .catalogImageEditorInline .catalogImageEditorRow > .catalogRemoveManualImage {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .catalogImageEditorInline > header,
+  .catalogImageEditorInline > .catalogImageEditorList,
+  .catalogImageEditorInline > footer {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .catalogImageEditorInline .catalogImageEditorRow {
+    grid-template-columns: 1fr !important;
+  }
+}
