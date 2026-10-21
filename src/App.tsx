@@ -946,7 +946,18 @@ function System({ session }: { session: Session }) {
       const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
       if (!mounted.current || version !== saveVersion.current) { current.dispose(); return; }
       writer.current?.dispose(); writer.current = current;
-      const normalized = normalizeData(current.snapshot.data);
+      let normalized = normalizeData(current.snapshot.data);
+      if (
+        Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
+        normalized.hacivatBottleCorrectionVersion === 1 &&
+        current.snapshot.identitiesReady
+      ) {
+        const migrated = await current.save(normalized);
+        normalized = normalizeData(migrated.saved.data);
+        void migrated.publication.then((publication) => {
+          if (mounted.current) recordPublication(publication);
+        });
+      }
       lastSynced.current = JSON.stringify(normalized);
       // Clear only this tab's record. Other tabs' drafts are retained for recovery.
       recovery.current ||= new LocalRecovery(session.user.id);
@@ -1061,11 +1072,23 @@ function System({ session }: { session: Session }) {
         const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
         if (!active) { current.dispose(); return; }
         writer.current = current;
-        const normalized = normalizeData(current.snapshot.data);
-        lastSynced.current = JSON.stringify(normalized);
         recovery.current = new LocalRecovery(session.user.id);
         const pending = recovery.current.list();
         recoveredDrafts.current = pending;
+        let normalized = normalizeData(current.snapshot.data);
+        if (
+          !pending.length &&
+          Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
+          normalized.hacivatBottleCorrectionVersion === 1 &&
+          current.snapshot.identitiesReady
+        ) {
+          const migrated = await current.save(normalized);
+          normalized = normalizeData(migrated.saved.data);
+          void migrated.publication.then((publication) => {
+            if (mounted.current) recordPublication(publication);
+          });
+        }
+        lastSynced.current = JSON.stringify(normalized);
         blocked.current = pending.length > 0 || !current.snapshot.identitiesReady;
         setEditingBlocked(blocked.current);
         // Never replay a recovered draft or silently rebase it over a different revision.
