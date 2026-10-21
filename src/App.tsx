@@ -9911,8 +9911,8 @@ function ProfitControl({
       >
         {showOrders ? "Ocultar pedidos" : "Ver pedidos"}
       </button>
-      {showOrders ? <div className="table">
-        <table>
+      {showOrders ? <div className="table profitOrdersTableWrap">
+        <table className="profitOrdersTable">
           <thead>
             <tr>
               <th>Pedido</th>
