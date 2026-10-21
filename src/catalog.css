@@ -3712,3 +3712,286 @@ vercel-toolbar {
     height: 120px;
   }
 }
+
+
+/* =========================================================
+   Organização e imagens do editor do catálogo
+   ========================================================= */
+
+.catalogEditorClose,
+.catalogImageEditorDialog > header > button {
+  color: #fff !important;
+}
+
+.catalogEditorClose svg,
+.catalogImageEditorDialog > header > button svg {
+  color: #fff !important;
+  stroke: #fff !important;
+}
+
+.catalogEditorOrdering {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--catalog-editor-line, #2d3748);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--catalog-panel) 92%, transparent);
+}
+
+.catalogEditorOrdering > header strong,
+.catalogEditorOrdering > header span {
+  display: block;
+}
+
+.catalogEditorOrdering > header span {
+  margin-top: 3px;
+  color: var(--catalog-muted);
+  font-size: 11px;
+}
+
+.catalogOrderingGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.catalogCategoryOrder,
+.catalogProductOrder {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.catalogCategoryOrder > span,
+.catalogProductOrder > span {
+  color: var(--catalog-muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.catalogCategoryOrder > div {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 10px;
+  background: var(--catalog-card);
+}
+
+.catalogCategoryOrder > div > div {
+  display: flex;
+  gap: 5px;
+}
+
+.catalogCategoryOrder button {
+  width: 31px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--catalog-line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--catalog-text);
+  cursor: pointer;
+}
+
+.catalogCategoryOrder button:disabled {
+  opacity: .3;
+  cursor: default;
+}
+
+.catalogCategoryOrder button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.catalogProductOrder > button {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 10px;
+  background: var(--catalog-card);
+  color: var(--catalog-text);
+  text-align: left;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.catalogProductOrder > button.active {
+  border-color: var(--catalog-gold);
+  background: color-mix(in srgb, var(--catalog-gold) 14%, var(--catalog-card));
+  color: var(--catalog-gold);
+}
+
+.catalogEditorCoverage {
+  gap: 12px;
+}
+
+.catalogCoverageActions {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.catalogCoverageActions > button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 9px;
+  background: var(--catalog-card);
+  color: var(--catalog-text);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.catalogCoverageActions > button:hover {
+  border-color: var(--catalog-gold);
+  color: var(--catalog-gold);
+}
+
+.catalogCoverageActions > button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.catalogNestedOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 72%);
+  backdrop-filter: blur(6px);
+}
+
+.catalogImageEditorDialog {
+  width: min(1180px, calc(100vw - 40px));
+  max-height: min(88vh, 920px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--catalog-line);
+  border-radius: 16px;
+  background: var(--catalog-panel);
+  color: var(--catalog-text);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
+}
+
+.catalogImageEditorDialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px;
+  border-bottom: 1px solid var(--catalog-line);
+}
+
+.catalogImageEditorDialog > header span {
+  color: var(--catalog-gold);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .11em;
+}
+
+.catalogImageEditorDialog > header h2 {
+  margin: 3px 0 4px;
+}
+
+.catalogImageEditorDialog > header p {
+  margin: 0;
+  color: var(--catalog-muted);
+  font-size: 11px;
+}
+
+.catalogImageEditorDialog > header > button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--catalog-line);
+  border-radius: 9px;
+  background: var(--catalog-card);
+  cursor: pointer;
+}
+
+.catalogImageEditorDialog > header > button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.catalogImageEditorDialog > .catalogImageEditorError {
+  margin: 12px 18px 0;
+}
+
+.catalogImageEditorList {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+}
+
+.catalogImageEditorRow {
+  display: grid;
+  grid-template-columns: minmax(180px, .8fr) 72px minmax(240px, 1.5fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 11px;
+  background: var(--catalog-card);
+}
+
+.catalogImageEditorRow > label:not(.catalogUploadImageButton) {
+  display: grid;
+  gap: 5px;
+}
+
+.catalogImageEditorRow > label:not(.catalogUploadImageButton) > span {
+  color: var(--catalog-muted);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.catalogImageEditorRow input[type="url"] {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--catalog-card) 88%, #000);
+  color: var(--catalog-text);
+}
+
+.catalogImageEditorDialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 18px;
+  border-top: 1px solid var(--catalog-line);
+}
+
+@media (max-width: 900px) {
+  .catalogOrderingGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .catalogImageEditorRow {
+    grid-template-columns: 1fr 64px;
+  }
+
+  .catalogImageEditorRow > label:not(.catalogUploadImageButton),
+  .catalogImageEditorRow > .catalogUploadImageButton,
+  .catalogImageEditorRow > .catalogRemoveManualImage {
+    grid-column: 1 / -1;
+  }
+}
