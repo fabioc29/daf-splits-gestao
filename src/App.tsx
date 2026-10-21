@@ -1637,7 +1637,7 @@ const action =
             ) : null}
           </div>
         </header>
-        <section className="content">
+        <section className={"content contentPage-" + page}>
           {saveNotice && <div className="card" role="alert"><p>{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button></div>}
           {catalogNotice && <div className="card" role="status"><p>{catalogNotice}</p><button disabled={sync !== "saved" || !ready} onClick={async () => { if (writer.current && !writer.current.pending && !blocked.current) recordPublication(await writer.current.publish()); }}>Publicar catálogo da revisão salva</button></div>}
           <div inert={editingBlocked} style={{display:"contents"}}>
@@ -3779,6 +3779,12 @@ function Dash({ d, set }: { d: D; set: any }) {
           <span>Volume vendido</span>
           <b>{metrics.ml.toLocaleString("pt-BR")} ml</b>
           <small>{brl(metrics.paid)} já recebidos</small>
+          <ComparisonBadge
+            value={metricDelta(metrics.ml, previousMetrics.ml)}
+            label={comparisonLabel}
+            previousValue={previousMetrics.ml.toLocaleString("pt-BR") + " ml"}
+            previousPeriod={previousPeriodLabel}
+          />
         </div>
       </div>
 
@@ -4163,7 +4169,7 @@ function Sales({
     notify?.("Venda excluída.");
   }
   return (
-    <div className="panel table">
+    <div className="panel table salesTablePanel">
       <div className="salesTitleRow">
         <h2>Vendas</h2>
         <span>
@@ -4232,6 +4238,7 @@ function Sales({
           </button>
         </div>
       ) : null}
+      <div className="recordsTableScroll">
       <table>
         <thead>
           <tr>
@@ -4325,6 +4332,7 @@ function Sales({
         </tbody>
       </table>
       {!filteredSales.length ? <p className="empty">Nenhuma venda encontrada.</p> : null}
+      </div>
     </div>
   );
 }
@@ -4363,6 +4371,13 @@ function saleOriginBadge(s: V) {
       : "shopee"
     : "direct";
   return <strong className={`prepareOrigin ${css}`}>{label}</strong>;
+}
+
+function saleShippingLabel(s: V) {
+  const method = String(
+    s.shippingMethod || (isMarketplaceSale(s) ? s.marketplace || "" : ""),
+  ).trim();
+  return method;
 }
 
 function Prepare({
@@ -4600,6 +4615,9 @@ function Prepare({
             sale.items.map((item) => ({ sale, item })),
           );
           const done = group.sales.every((sale) => sale.prepared);
+          const shippingMethods = Array.from(
+            new Set(group.sales.map(saleShippingLabel).filter(Boolean)),
+          );
           return (
             <div key={group.key} className={done ? "done" : ""}>
               <button
@@ -4628,7 +4646,15 @@ function Prepare({
                   </small>
                 ))}
               </span>
-              {saleOriginBadge(representative)}
+              <div className="prepareBadges">
+                {shippingMethods.length ? (
+                  <span className="prepareShippingMethod">
+                    <Truck />
+                    {shippingMethods.join(" · ")}
+                  </span>
+                ) : null}
+                {saleOriginBadge(representative)}
+              </div>
               <span className="prepareActions">
                 {done ? (
                   <em>Finalizado</em>
@@ -7697,7 +7723,7 @@ function Stock({
         </div>
       ) : null}
       {historyProduct ? (
-        <div className="overlay">
+        <div className="overlay productHistoryOverlay">
           <div className="systemDialog productSalesHistoryDialog">
             <header>
               <div>
@@ -7917,7 +7943,7 @@ function Purchases({
           [String(monthly.length), "Compras no mês"],
         ]}
       />
-      <div className="panel table">
+      <div className="panel table purchaseTablePanel">
         <h2>Histórico de compras</h2>
         <div className="salesToolbar purchaseMonthToolbar">
           <label className="salesSearch">
@@ -7979,6 +8005,7 @@ function Purchases({
           </div>
         ) : null}
 
+        <div className="recordsTableScroll">
         <table>
           <thead>
             <tr>
@@ -8025,6 +8052,7 @@ function Purchases({
             Nenhuma compra encontrada para o mês selecionado.
           </p>
         ) : null}
+        </div>
       </div>
     </>
   );
@@ -8827,10 +8855,10 @@ function PricingCalculator({
   notify: (message: string) => void;
 }) {
   const [category, setCategory] = useState("Designer");
-  const [bottleMl, setBottleMl] = useState(100);
+  const [bottleMl, setBottleMl] = useState(0);
   const [paidInput, setPaidInput] = useState("");
   const [paidEditing, setPaidEditing] = useState(false);
-  const initialApcMl = pricingApcVolume(100);
+  const initialApcMl = 0;
   const [apcChoice, setApcChoice] = useState(pricingApcChoice(initialApcMl));
   const [apcMenuOpen, setApcMenuOpen] = useState(false);
   const apcSelectRef = useRef<HTMLDivElement | null>(null);
