@@ -157,6 +157,20 @@ function extractFragranticaMetrics(html) {
   };
 }
 
+async function resolveMetricsFromSearch(brand, name) {
+  try {
+    const query =
+      `site:fragrantica.com.br/perfume "${brand}" "${name}" "votos"`;
+    const html = await fetchText(
+      "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
+    );
+    if (!html) return {};
+    return extractFragranticaMetrics(html);
+  } catch {
+    return {};
+  }
+}
+
 async function resolveFromDesigner(brand, name, exactId) {
   const normalizedBrand = normalize(brand);
   const mapped = DESIGNER_SLUGS[normalizedBrand];
@@ -290,25 +304,20 @@ export default async function handler(req, res) {
       : "https://www.fragrantica.com.br" + match.path;
 
     let metrics = {};
-    let debugPage = "";
     try {
       const perfumePage = await fetchText(sourceUrl);
-      debugPage = perfumePage;
       metrics = extractFragranticaMetrics(perfumePage);
     } catch {
       // A imagem continua válida mesmo se a página de avaliações não responder.
     }
-
-    if (String(req.query?.debug || "") === "1") {
-      const visible = decodeHtml(debugPage);
-      res.status(200).json({
-        sourceUrl,
-        htmlLength: debugPage.length,
-        visibleLength: visible.length,
-        hasAvaliacao: /avalia/i.test(visible),
-        sample: visible.slice(0, 1200),
-      });
-      return;
+    if (
+      !Number.isFinite(metrics.fragranticaRatingCount) ||
+      metrics.fragranticaRatingCount < 0
+    ) {
+      metrics = {
+        ...metrics,
+        ...(await resolveMetricsFromSearch(brand, name)),
+      };
     }
 
     res.setHeader(
