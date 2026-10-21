@@ -930,7 +930,14 @@ function System({ session }: { session: Session }) {
   }
   function fallbackCatalog(persisted: D) { return catalogSnapshotPayload(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), persisted.catalogSettings); }
   async function buildCatalog(persisted: D, signal?: AbortSignal) {
-    const items = await enrichCatalogItemsWithImages(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), signal);
+    const items = await enrichCatalogItemsWithImages(
+      catalogItemsFromProducts(
+        persisted.products,
+        persisted.catalogSettings?.manualImages,
+      ),
+      signal,
+      persisted.catalogSettings?.productOrder === "mostRated",
+    );
     return catalogSnapshotPayload(items, persisted.catalogSettings);
   }
   function exportDraft() {
