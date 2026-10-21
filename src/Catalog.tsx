@@ -439,6 +439,9 @@ export async function enrichCatalogItemsWithImages(
           brand: item.brand,
           name: item.name,
         });
+        if (item.fragranticaId) {
+          params.set("fragranticaId", String(item.fragranticaId));
+        }
         const deadline = AbortSignal.timeout(4000);
         const response = await fetch("/api/fragrantica-image?" + params.toString(), {
           signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
