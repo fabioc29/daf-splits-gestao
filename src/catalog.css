@@ -4173,3 +4173,110 @@ vercel-toolbar {
     min-height: 0;
   }
 }
+
+
+/* PR32 final pass: dedicated catalog image editor page */
+.catalogImageEditorPage {
+  width: 100%;
+  min-width: 0;
+  height: calc(100dvh - 122px);
+  min-height: 560px;
+  display: grid;
+  place-items: stretch;
+  overflow: hidden;
+}
+
+.catalogImageEditorStandalone {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  display: grid !important;
+  grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+  overflow: hidden !important;
+  border: 1px solid var(--line-strong, #354256) !important;
+  border-radius: 16px !important;
+  background: var(--panel, #111722) !important;
+  color: var(--text, #f4f7fb) !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.catalogImageEditorStandalone > header {
+  padding: 18px 20px;
+  background: var(--panel, #111722) !important;
+}
+
+.catalogImageEditorStandalone > header h2 {
+  margin: 4px 0 5px;
+  color: var(--text, #f4f7fb);
+}
+
+.catalogImageEditorStandalone > header p {
+  color: var(--muted, #93a0b5);
+}
+
+.catalogImageEditorStandalone > header > button {
+  color: var(--text, #f4f7fb) !important;
+  background: var(--panel-2, #182232) !important;
+}
+
+.catalogImageEditorStandalone > header > button svg {
+  color: var(--text, #f4f7fb) !important;
+  stroke: var(--text, #f4f7fb) !important;
+}
+
+.catalogImageEditorStandalone .catalogImageEditorList {
+  min-height: 0;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 16px 20px;
+  background: var(--panel, #111722);
+}
+
+.catalogImageEditorStandalone > footer {
+  padding: 14px 20px;
+  background: var(--panel, #111722) !important;
+}
+
+@media (max-width: 900px) {
+  .catalogImageEditorPage {
+    height: calc(100dvh - 96px);
+    min-height: 0;
+  }
+
+  .catalogImageEditorRow {
+    grid-template-columns: minmax(0, 1fr) 68px !important;
+  }
+
+  .catalogImageEditorRow > label:not(.catalogUploadImageButton),
+  .catalogImageEditorRow > .catalogUploadImageButton,
+  .catalogImageEditorRow > .catalogRemoveManualImage {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .catalogImageEditorPage {
+    height: calc(100dvh - 88px);
+  }
+
+  .catalogImageEditorStandalone > header,
+  .catalogImageEditorStandalone .catalogImageEditorList,
+  .catalogImageEditorStandalone > footer {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .catalogImageEditorRow {
+    grid-template-columns: 1fr !important;
+  }
+
+  .catalogManualImagePreview {
+    width: 100%;
+    height: 120px;
+  }
+}
