@@ -407,11 +407,11 @@ export async function enrichCatalogItemsWithImages(
   signal?: AbortSignal,
   includeMetrics = false,
 ): Promise<CatalogItem[]> {
-  const known = items.map((item) => applyKnownFragranticaImage(item));
-
   return Promise.all(
-    known.map(async (item) => {
-      if (item.imageUrl && !includeMetrics) return item;
+    items.map(async (item) => {
+      // Imagens manuais têm prioridade. Para as automáticas, a resolução remota
+      // usa sempre marca + nome antes de recorrer ao mapa local de contingência.
+      if (item.manualImage && item.imageUrl && !includeMetrics) return item;
 
       const cacheKey =
         "daf-fragrantica:" +
@@ -446,14 +446,16 @@ export async function enrichCatalogItemsWithImages(
         const response = await fetch("/api/fragrantica-image?" + params.toString(), {
           signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
         });
-        if (!response.ok) return item;
+        if (!response.ok) return applyKnownFragranticaImage(item, item.bottle);
         const data = await response.json();
         const resolvedImage = validFragranticaImageUrl(data?.imageUrl)
           ? data.imageUrl
           : undefined;
         const rating = Number(data?.fragranticaRating);
         const ratingCount = Number(data?.fragranticaRatingCount);
-        if (!resolvedImage && !Number.isFinite(ratingCount)) return item;
+        if (!resolvedImage && !Number.isFinite(ratingCount)) {
+          return applyKnownFragranticaImage(item, item.bottle);
+        }
 
         try {
           if (
@@ -485,7 +487,7 @@ export async function enrichCatalogItemsWithImages(
               : item.fragranticaRatingCount,
         };
       } catch {
-        return item;
+        return applyKnownFragranticaImage(item, item.bottle);
       }
     }),
   );
@@ -515,7 +517,7 @@ export function catalogItemsFromProducts(
           manualImage: true,
         };
       }
-      return applyKnownFragranticaImage(item, product.bottle);
+      return item;
     })
     .filter((item) => item.stock > 0)
     .sort((a, b) =>
