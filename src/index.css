@@ -11781,3 +11781,373 @@ main > header {
   color: #fff !important;
   stroke: #fff !important;
 }
+
+
+/* =========================================================
+   PR32 — correções visuais desktop/mobile 21/10/2026
+   ========================================================= */
+
+/* Marcas: modal integrado ao tema, sem controles nativos e com rolagem interna. */
+.brandProductsDialog {
+  width: min(720px, calc(100vw - 32px)) !important;
+  max-height: calc(100dvh - 40px) !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 14px;
+  margin: 0 !important;
+  border-color: var(--line-strong) !important;
+  background: var(--panel) !important;
+  color: var(--text) !important;
+}
+
+.brandProductsDialog > header {
+  align-items: flex-start;
+  padding-bottom: 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brandProductsDialog > header > button {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  appearance: none;
+}
+
+.brandProductsDialog > header > button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.brandProductsSummary > div,
+.brandProductsList > div {
+  border-color: var(--line-strong) !important;
+  background: var(--panel-2) !important;
+}
+
+.brandProductsSummary span,
+.brandProductsList small {
+  color: var(--muted) !important;
+}
+
+.brandProductsSummary b,
+.brandProductsList b,
+.brandProductsList strong {
+  color: var(--text) !important;
+}
+
+.brandProductsList {
+  min-height: 0;
+  max-height: none !important;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.brandProductsDialog > footer {
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+
+.brandProductsDialog > footer > button {
+  min-height: 40px;
+  padding: 0 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-weight: 850;
+  cursor: pointer;
+  appearance: none;
+}
+
+/* Histórico do perfume: o modal fica centralizado e somente compradores rolam. */
+.productHistoryOverlay {
+  place-items: center !important;
+  overflow: hidden !important;
+  padding: 18px !important;
+}
+
+.productSalesHistoryDialog {
+  width: min(980px, calc(100vw - 36px)) !important;
+  max-height: calc(100dvh - 36px) !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-rows: auto auto auto minmax(120px, 1fr) auto;
+  gap: 14px;
+}
+
+.productHistoryTableWrap {
+  min-height: 0;
+  max-height: none !important;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Pedidos para preparar: frete fica antes da origem. */
+.prepareBadges {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.prepareBadges > span,
+.prepareBadges > strong {
+  flex: 0 0 auto;
+}
+
+.prepareShippingMethod {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.prepareShippingMethod svg {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+}
+
+/* Vendas e compras: a tabela tem sua própria área de rolagem. */
+.salesTablePanel,
+.purchaseTablePanel {
+  min-height: 0;
+}
+
+.recordsTableScroll {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile */
+@media (max-width: 900px) {
+  /* Drawer: ícone, texto e alertas ocupam colunas próprias. */
+  .shell > aside.mobileOpen nav > button,
+  .shell > aside.mobileOpen nav .stockNavGroup > button {
+    display: grid !important;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    align-items: center !important;
+    column-gap: 11px !important;
+    text-align: left !important;
+  }
+
+  .shell > aside.mobileOpen nav .stockNavGroup > button {
+    grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  }
+
+  .shell > aside.mobileOpen nav button > svg:first-child {
+    position: static !important;
+    width: 20px !important;
+    height: 20px !important;
+    margin: 0 !important;
+    transform: none !important;
+    justify-self: center;
+  }
+
+  .shell > aside.mobileOpen nav button > .navAlertGroup {
+    position: static !important;
+    grid-column: 3;
+    margin: 0 !important;
+    justify-self: end;
+    align-self: center;
+    transform: none !important;
+  }
+
+  .shell > aside.mobileOpen nav .stockParent > .stockNavChevron {
+    position: static !important;
+    grid-column: 4;
+    margin: 0 !important;
+    justify-self: end;
+    transform-origin: center;
+  }
+
+  .shell > aside.mobileOpen .navAlert {
+    position: static !important;
+    min-width: 25px;
+    height: 25px;
+    padding: 0 7px;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    transform: none !important;
+  }
+
+  .shell > aside.mobileOpen .receivableDueAlert {
+    position: static !important;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 780px) {
+  /* Centraliza o total de clientes/fornecedores dentro dos cards. */
+  .clientsTopRow > .cards > div,
+  .suppliersTopRow > .cards > div {
+    min-height: 112px !important;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .clientsTopRow > .cards > div span,
+  .clientsTopRow > .cards > div b,
+  .suppliersTopRow > .cards > div span,
+  .suppliersTopRow > .cards > div b {
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Preparação: evita nome, produtos, badges e seletor disputando a mesma linha. */
+  .prepare > div {
+    display: grid !important;
+    grid-template-columns: 42px minmax(0, 1fr) !important;
+    grid-template-areas:
+      "check details"
+      "check badges"
+      "actions actions";
+    align-items: start !important;
+    gap: 10px 12px !important;
+    padding: 14px !important;
+  }
+
+  .prepare > div > .checkButton {
+    grid-area: check;
+    width: 42px !important;
+    height: 42px !important;
+    align-self: center;
+  }
+
+  .prepare > div > span:not(.prepareActions) {
+    grid-area: details;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .prepare > div > span:not(.prepareActions) > b {
+    font-size: 16px;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .prepare > div > span:not(.prepareActions) > small {
+    font-size: 11px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+  }
+
+  .prepareBadges {
+    grid-area: badges;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .prepareShippingMethod,
+  .prepareOrigin {
+    max-width: 100%;
+    min-height: 29px;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+
+  .prepareActions {
+    grid-area: actions;
+    width: 100%;
+  }
+
+  .preparationStatus,
+  .preparationStatus select {
+    width: 100%;
+    max-width: none !important;
+  }
+
+  /* Vendas/Compras ficam presas no viewport; só os registros rolam. */
+  .contentPage-sales,
+  .contentPage-purchases {
+    height: calc(100dvh - 72px);
+    max-height: calc(100dvh - 72px);
+    overflow: hidden !important;
+    align-content: stretch;
+  }
+
+  .contentPage-sales {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .contentPage-purchases {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .salesTablePanel,
+  .purchaseTablePanel {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  .salesTablePanel > .recordsTableScroll,
+  .purchaseTablePanel > .recordsTableScroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto !important;
+    scrollbar-gutter: stable;
+  }
+
+  .salesTablePanel > .salesToolbar,
+  .purchaseTablePanel > .salesToolbar,
+  .salesTablePanel > .salesFilters,
+  .purchaseTablePanel > .purchaseMonthFilters,
+  .salesTablePanel > .salesTitleRow,
+  .purchaseTablePanel > h2 {
+    flex: 0 0 auto;
+  }
+
+  .productHistoryOverlay {
+    padding: 10px !important;
+  }
+
+  .productSalesHistoryDialog {
+    width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    padding: 15px !important;
+    gap: 10px;
+    grid-template-rows: auto auto auto minmax(90px, 1fr) auto;
+  }
+
+  .brandProductsDialog {
+    width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    padding: 15px !important;
+  }
+}
