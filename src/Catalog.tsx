@@ -910,6 +910,18 @@ export function CatalogAdminPreview({
     if (!editorOpen && !imageEditorOpen) setDraft(normalizedSettings);
   }, [normalizedSettings, editorOpen, imageEditorOpen]);
 
+  useEffect(() => {
+    const openCatalogEditor = () => {
+      setDraft(normalizedSettings);
+      setImageEditorOpen(false);
+      setImageEditorError("");
+      setEditorOpen(true);
+    };
+    window.addEventListener("daf:catalog-edit", openCatalogEditor);
+    return () =>
+      window.removeEventListener("daf:catalog-edit", openCatalogEditor);
+  }, [normalizedSettings]);
+
   const updateDraft = (key: CatalogColorKey, value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
   };
@@ -996,141 +1008,8 @@ export function CatalogAdminPreview({
     },
   ];
 
-  if (imageEditorOpen) {
-    return (
-      <div className="catalogImageEditorPage">
-        <div className="catalogImageEditorDialog catalogImageEditorStandalone">
-          <header>
-            <div>
-              <span>IMAGENS DO CATÁLOGO</span>
-              <h2>Editar imagens dos perfumes</h2>
-              <p>
-                Cole o link da imagem ou envie um arquivo. As alterações ficam
-                preservadas ao voltar para o editor do catálogo.
-              </p>
-            </div>
-            <button
-              type="button"
-              aria-label="Voltar ao editor do catálogo"
-              onClick={() => setImageEditorOpen(false)}
-            >
-              <X />
-            </button>
-          </header>
-
-          {imageEditorError ? (
-            <p className="catalogImageEditorError">{imageEditorError}</p>
-          ) : null}
-
-          <div className="catalogImageEditorList">
-            {baseItems.map((item) => {
-              const manualValue = draft.manualImages[String(item.id)] || "";
-              const resolvedItem = previewItems.find(
-                (preview) => preview.id === item.id,
-              );
-              const previewUrl =
-                manualValue || resolvedItem?.imageUrl || item.imageUrl || "";
-              return (
-                <div className="catalogImageEditorRow" key={item.id}>
-                  <div className="catalogManualImageIdentity">
-                    <strong>{item.name}</strong>
-                    <span>{item.brand}</span>
-                  </div>
-                  <div className="catalogManualImagePreview">
-                    {previewUrl ? (
-                      <img src={previewUrl} alt="" />
-                    ) : (
-                      <ImageIcon />
-                    )}
-                  </div>
-                  <label>
-                    <span>Link da imagem</span>
-                    <input
-                      type="url"
-                      value={manualValue.startsWith("data:") ? "" : manualValue}
-                      placeholder="https://..."
-                      onChange={(event) => {
-                        setImageEditorError("");
-                        setManualImage(item.id, event.target.value);
-                      }}
-                    />
-                  </label>
-                  <label className="catalogUploadImageButton">
-                    <Upload />
-                    <span>Enviar arquivo</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={async (event) => {
-                        const input = event.currentTarget;
-                        const selected = input.files?.[0];
-                        if (!selected) return;
-                        try {
-                          setImageEditorError("");
-                          const dataUrl = await catalogFileToDataUrl(selected);
-                          setManualImage(item.id, dataUrl);
-                        } catch (error) {
-                          setImageEditorError(
-                            error instanceof Error
-                              ? error.message
-                              : "Não foi possível processar a imagem.",
-                          );
-                        } finally {
-                          input.value = "";
-                        }
-                      }}
-                    />
-                  </label>
-                  {manualValue ? (
-                    <button
-                      type="button"
-                      className="catalogRemoveManualImage"
-                      onClick={() => removeManualImage(item.id)}
-                    >
-                      <Trash2 />
-                      Remover manual
-                    </button>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-
-          <footer>
-            <button
-              type="button"
-              className="catalogSaveButton"
-              onClick={() => setImageEditorOpen(false)}
-            >
-              <Check />
-              Concluir
-            </button>
-          </footer>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="catalogAdminArea">
-      <div className="catalogAdminToolbar">
-        <div>
-          <span>Personalização</span>
-          <strong>Visual do catálogo público</strong>
-        </div>
-        <button
-          type="button"
-          className="catalogEditButton"
-          onClick={() => {
-            setDraft(normalizedSettings);
-            setEditorOpen(true);
-          }}
-        >
-          <Palette />
-          Editar
-        </button>
-      </div>
-
       <CatalogViewer
         items={previewItems}
         settings={normalizedSettings}
@@ -1140,7 +1019,126 @@ export function CatalogAdminPreview({
 
       {editorOpen ? (
         <div className="catalogEditorOverlay">
-          <div className="catalogEditorDialog">
+          <div className={imageEditorOpen ? "catalogEditorDialog imageMode" : "catalogEditorDialog"}>
+            {imageEditorOpen ? (
+              <div className="catalogImageEditorInline">
+                <header>
+                  <div>
+                    <span>IMAGENS DO CATÁLOGO</span>
+                    <h2>Editar imagens dos perfumes</h2>
+                    <p>
+                      Cole o link da imagem ou envie um arquivo. Ao concluir,
+                      você retorna à personalização do catálogo.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Voltar para personalização do catálogo"
+                    onClick={() => setImageEditorOpen(false)}
+                  >
+                    <X />
+                  </button>
+                </header>
+
+                {imageEditorError ? (
+                  <p className="catalogImageEditorError">{imageEditorError}</p>
+                ) : null}
+
+                <div className="catalogImageEditorList">
+                  {baseItems.map((item) => {
+                    const manualValue =
+                      draft.manualImages[String(item.id)] || "";
+                    const resolvedItem = previewItems.find(
+                      (preview) => preview.id === item.id,
+                    );
+                    const previewUrl =
+                      manualValue ||
+                      resolvedItem?.imageUrl ||
+                      item.imageUrl ||
+                      "";
+                    return (
+                      <div className="catalogImageEditorRow" key={item.id}>
+                        <div className="catalogManualImageIdentity">
+                          <strong>{item.name}</strong>
+                          <span>{item.brand}</span>
+                        </div>
+                        <div className="catalogManualImagePreview">
+                          {previewUrl ? (
+                            <img src={previewUrl} alt="" />
+                          ) : (
+                            <ImageIcon />
+                          )}
+                        </div>
+                        <label>
+                          <span>Link da imagem</span>
+                          <input
+                            type="url"
+                            value={
+                              manualValue.startsWith("data:")
+                                ? ""
+                                : manualValue
+                            }
+                            placeholder="https://..."
+                            onChange={(event) => {
+                              setImageEditorError("");
+                              setManualImage(item.id, event.target.value);
+                            }}
+                          />
+                        </label>
+                        <label className="catalogUploadImageButton">
+                          <Upload />
+                          <span>Enviar arquivo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (event) => {
+                              const input = event.currentTarget;
+                              const selected = input.files?.[0];
+                              if (!selected) return;
+                              try {
+                                setImageEditorError("");
+                                const dataUrl =
+                                  await catalogFileToDataUrl(selected);
+                                setManualImage(item.id, dataUrl);
+                              } catch (error) {
+                                setImageEditorError(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Não foi possível processar a imagem.",
+                                );
+                              } finally {
+                                input.value = "";
+                              }
+                            }}
+                          />
+                        </label>
+                        {manualValue ? (
+                          <button
+                            type="button"
+                            className="catalogRemoveManualImage"
+                            onClick={() => removeManualImage(item.id)}
+                          >
+                            <Trash2 />
+                            Remover manual
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <footer>
+                  <button
+                    type="button"
+                    className="catalogSaveButton"
+                    onClick={() => setImageEditorOpen(false)}
+                  >
+                    <Check />
+                    Concluir
+                  </button>
+                </footer>
+              </div>
+            ) : null}
             <header>
               <div>
                 <span>EDITOR DO CATÁLOGO</span>
