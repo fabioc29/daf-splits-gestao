@@ -12151,3 +12151,15 @@ main > header {
     padding: 15px !important;
   }
 }
+
+
+/* PR32 follow-up: profitability margin */
+.profitMargin {
+  font-weight: 900;
+  white-space: nowrap;
+  color: var(--success);
+}
+
+.profitMargin.negative {
+  color: var(--danger);
+}
