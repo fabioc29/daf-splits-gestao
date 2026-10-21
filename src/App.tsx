@@ -1613,6 +1613,16 @@ const action =
             ) : null}
             {page === "catalog" ? (
               <button
+                className="secondary catalogHeaderEditButton"
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("daf:catalog-edit"))
+                }
+              >
+                <Palette /> Editar
+              </button>
+            ) : null}
+            {page === "catalog" ? (
+              <button
                 className="secondary catalogPublicButton"
                 onClick={() =>
                   window.open(
@@ -8968,17 +8978,20 @@ function PricingCalculator({
     ).values(),
   );
 
-  const perfumeUnitCost = bottleMl > 0 ? paid / bottleMl : 0;
+  const pricingReady = bottleMl > 0 && paid > 0;
+  const perfumeUnitCost = pricingReady ? paid / bottleMl : 0;
   const decantRows = simulations
     .filter((simulation) => !simulation.isApc)
     .map((simulation) => {
-      const supply = packaging(simulationSale(simulation), d.supplies);
-      const perfumeCost = perfumeUnitCost * simulation.ml;
-      const totalCost = perfumeCost + supply.total;
+      const supply = pricingReady
+        ? packaging(simulationSale(simulation), d.supplies)
+        : { total: 0, missing: [] as string[] };
+      const perfumeCost = pricingReady ? perfumeUnitCost * simulation.ml : 0;
+      const totalCost = pricingReady ? perfumeCost + supply.total : 0;
       const band = marginBand(simulation);
       const desiredMargin = targetMargin(simulation);
       const rawPrice =
-        totalCost > 0
+        pricingReady && totalCost > 0
           ? totalCost / Math.max(0.01, 1 - desiredMargin / 100)
           : 0;
       return {
@@ -8996,13 +9009,15 @@ function PricingCalculator({
   const apcSimulation = simulations.find((simulation) => simulation.isApc);
   const apcRow = apcSimulation
     ? (() => {
-        const supply = packaging(simulationSale(apcSimulation), d.supplies);
-        const perfumeCost = perfumeUnitCost * apcSimulation.ml;
-        const totalCost = perfumeCost + supply.total;
+        const supply = pricingReady
+          ? packaging(simulationSale(apcSimulation), d.supplies)
+          : { total: 0, missing: [] as string[] };
+        const perfumeCost = pricingReady ? perfumeUnitCost * apcSimulation.ml : 0;
+        const totalCost = pricingReady ? perfumeCost + supply.total : 0;
         const band = marginBand(apcSimulation);
         const desiredMargin = targetMargin(apcSimulation);
         const rawPrice =
-          totalCost > 0
+          pricingReady && totalCost > 0
             ? totalCost / Math.max(0.01, 1 - desiredMargin / 100)
             : 0;
         return {
@@ -9375,27 +9390,25 @@ function PricingCalculator({
                     {row.isApc ? <small>Frasco + caixa originais</small> : null}
                   </td>
                   <td className="pricingSuggestedPrice">
-                    {row.price ? brl(row.price) : "—"}
+                    {brl(row.price || 0)}
                   </td>
-                  <td>{row.unitPrice ? brl(row.unitPrice) : "—"}</td>
+                  <td>{brl(row.unitPrice || 0)}</td>
                   <td>{brl(row.perfumeCost)}</td>
                   <td>{brl(row.supplyCost)}</td>
                   <td>{brl(row.totalCost)}</td>
                   <td className="pricingProfit">
-                    {row.price ? brl(row.profit) : "—"}
+                    {brl(row.profit || 0)}
                   </td>
                   <td className="pricingMarginColumn">
                     <div className="pricingMarginCell">
                       <b className="pricingMarginValue">
-                        {row.price
-                          ? row.margin.toFixed(1).replace(".", ",") + "%"
-                          : "—"}
+                        {(row.margin || 0).toFixed(1).replace(".", ",") + "%"}
                       </b>
                       <div className="pricingRowMarginButtons">
                         <button
                           type="button"
                           aria-label={"Aumentar margem de " + row.label}
-                          disabled={(rowMarginOffsets[row.key] || 0) >= 7}
+                          disabled={!pricingReady || (rowMarginOffsets[row.key] || 0) >= 7}
                           onClick={() => adjustRowMargin(row, 1)}
                         >
                           <Plus />
@@ -9403,7 +9416,7 @@ function PricingCalculator({
                         <button
                           type="button"
                           aria-label={"Reduzir margem de " + row.label}
-                          disabled={(rowMarginOffsets[row.key] || 0) <= -7}
+                          disabled={!pricingReady || (rowMarginOffsets[row.key] || 0) <= -7}
                           onClick={() => adjustRowMargin(row, -1)}
                         >
                           <Minus />
