@@ -1623,6 +1623,16 @@ const action =
             ) : null}
             {page === "catalog" ? (
               <button
+                className="secondary catalogHeaderImagesButton"
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("daf:catalog-images"))
+                }
+              >
+                <ImageIcon /> Imagens
+              </button>
+            ) : null}
+            {page === "catalog" ? (
+              <button
                 className="secondary catalogPublicButton"
                 onClick={() =>
                   window.open(
@@ -9863,23 +9873,13 @@ function ProfitControl({
     (sale) => sale.status !== "cancelled" && !isHistoricalSale(sale),
   );
   const rows = sales.map((sale) => {
-    const perfumeBreakdown = sale.items.map((item, index) => {
-      const product = d.products.find((p) => p.id === item.productId);
-      const unitCost =
-        item.unitCost ??
-        product?.cost ??
-        0;
-      return {
-        key: `${sale.id}-${item.productId}-${index}`,
-        name: product ? `${product.brand} ${product.name}`.trim() : `Perfume ${index + 1}`,
-        ml: item.ml,
-        isApc: Boolean(item.isApc),
-        unitCost,
-        total: item.ml * unitCost,
-      };
-    });
-    const perfumeCost = perfumeBreakdown.reduce(
-      (sum, item) => sum + item.total,
+    const perfumeCost = sale.items.reduce(
+      (sum, item) =>
+        sum +
+        item.ml *
+          (item.unitCost ??
+            d.products.find((p) => p.id === item.productId)?.cost ??
+            0),
       0,
     );
     const expenseBreakdown = saleExpenseBreakdown(sale, d);
@@ -9890,7 +9890,6 @@ function ProfitControl({
     return {
       sale,
       perfumeCost,
-      perfumeBreakdown,
       expenses,
       expenseBreakdown,
       profit,
@@ -9953,7 +9952,6 @@ function ProfitControl({
               ({
                 sale,
                 perfumeCost: cost,
-                perfumeBreakdown,
                 expenses: expense,
                 expenseBreakdown,
                 profit: rowProfit,
@@ -9962,26 +9960,7 @@ function ProfitControl({
                 <tr key={sale.id}>
                   <td>#{orderNo(sale.id)}</td>
                   <td>{brl(sale.total)}</td>
-                  <td>
-                    <b>{brl(cost)}</b>
-                    <details className="expenseBreakdownDetails perfumeBreakdownDetails">
-                      <summary>Ver perfumes</summary>
-                      <span className="expenseBreakdownSupplies perfumeBreakdownList">
-                        {perfumeBreakdown.map((item) => (
-                          <small key={item.key}>
-                            <span>
-                              {item.name} — {item.isApc ? "APC " : ""}{formatCopyMl(item.ml)}
-                            </span>
-                            <b>{brl(item.total)}</b>
-                          </small>
-                        ))}
-                      </span>
-                      <small className="expenseBreakdownTotal">
-                        <span>Total dos perfumes</span>
-                        <b>{brl(cost)}</b>
-                      </small>
-                    </details>
-                  </td>
+                  <td>{brl(cost)}</td>
                   <td>
                     <b>{brl(expense)}</b>
                     <details className="expenseBreakdownDetails">
