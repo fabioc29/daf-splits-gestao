@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import {
   ArrowDown,
   ArrowUp,
@@ -1212,7 +1213,7 @@ export function CatalogAdminPreview({
               ))}
             </div>
 
-            {imageEditorOpen ? (
+            {imageEditorOpen ? createPortal(
               <div
                 className="catalogNestedOverlay"
                 onMouseDown={(event) => {
@@ -1341,7 +1342,8 @@ export function CatalogAdminPreview({
                     </button>
                   </footer>
                 </div>
-              </div>
+              </div>,
+              document.body,
             ) : null}
 
             <footer>
