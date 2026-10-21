@@ -4114,3 +4114,62 @@ vercel-toolbar {
     padding: 12px 14px;
   }
 }
+
+
+/* PR32 follow-up: editor de imagens standalone */
+.catalogImageEditorOverlay {
+  z-index: 520 !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 16px !important;
+  overflow: hidden !important;
+  background: rgb(0 0 0 / 76%) !important;
+  backdrop-filter: blur(7px);
+}
+
+.catalogImageEditorOverlay .catalogImageEditorDialog {
+  position: relative !important;
+  z-index: 1 !important;
+  width: min(1180px, calc(100vw - 32px)) !important;
+  height: min(88dvh, 920px) !important;
+  max-height: calc(100dvh - 32px) !important;
+  min-height: 420px;
+  display: grid !important;
+  grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+  overflow: hidden !important;
+  border: 1px solid var(--line-strong, #354256) !important;
+  border-radius: 16px !important;
+  background: var(--panel, #111722) !important;
+  color: var(--text, #f4f7fb) !important;
+  box-shadow: 0 28px 90px rgb(0 0 0 / 58%) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+
+.catalogImageEditorOverlay .catalogImageEditorDialog > header,
+.catalogImageEditorOverlay .catalogImageEditorDialog > footer {
+  background: var(--panel, #111722) !important;
+}
+
+.catalogImageEditorOverlay .catalogImageEditorDialog > header > button {
+  color: var(--text, #f4f7fb) !important;
+}
+
+.catalogImageEditorOverlay .catalogImageEditorDialog > header > button svg {
+  color: var(--text, #f4f7fb) !important;
+  stroke: var(--text, #f4f7fb) !important;
+}
+
+@media (max-width: 700px) {
+  .catalogImageEditorOverlay {
+    padding: 10px !important;
+  }
+
+  .catalogImageEditorOverlay .catalogImageEditorDialog {
+    width: calc(100vw - 20px) !important;
+    height: calc(100dvh - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    min-height: 0;
+  }
+}
