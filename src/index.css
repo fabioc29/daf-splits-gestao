@@ -12163,3 +12163,231 @@ main > header {
 .profitMargin.negative {
   color: var(--danger);
 }
+
+
+/* PR32 final pass: modal stacking, profitability alignment and sale form */
+
+/* Rentabilidade: colunas e ações perfeitamente alinhadas. */
+.profitOrdersTableWrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.profitOrdersTable {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.profitOrdersTable th,
+.profitOrdersTable td {
+  vertical-align: middle;
+}
+
+.profitOrdersTable th:nth-child(1),
+.profitOrdersTable td:nth-child(1) { width: 9%; }
+
+.profitOrdersTable th:nth-child(2),
+.profitOrdersTable td:nth-child(2) { width: 11%; }
+
+.profitOrdersTable th:nth-child(3),
+.profitOrdersTable td:nth-child(3) { width: 13%; }
+
+.profitOrdersTable th:nth-child(4),
+.profitOrdersTable td:nth-child(4) { width: 24%; }
+
+.profitOrdersTable th:nth-child(5),
+.profitOrdersTable td:nth-child(5) {
+  width: 11%;
+  text-align: center;
+}
+
+.profitOrdersTable th:nth-child(6),
+.profitOrdersTable td:nth-child(6) {
+  width: 13%;
+  text-align: center;
+}
+
+.profitOrdersTable th:nth-child(7),
+.profitOrdersTable td:nth-child(7) {
+  width: 19%;
+  text-align: center;
+}
+
+.profitOrdersTable td:nth-child(6) .profitMargin,
+.profitOrdersTable .profitMargin {
+  display: inline-block;
+  width: 100%;
+  text-align: center;
+}
+
+.profitOrdersTable td:nth-child(7) .tableActions {
+  width: 100%;
+  justify-content: center;
+  align-items: center;
+}
+
+.profitOrdersTable td:nth-child(7) .iconButton {
+  margin-inline: auto;
+}
+
+/* Histórico do perfume: sempre acima do header e sem rolagem dupla. */
+.productHistoryOverlay {
+  z-index: 700 !important;
+  place-items: center !important;
+  padding: 18px !important;
+  overflow: hidden !important;
+}
+
+.productSalesHistoryDialog {
+  width: min(1120px, calc(100vw - 36px)) !important;
+  max-width: min(1120px, calc(100vw - 36px)) !important;
+  height: min(88dvh, 820px);
+  max-height: calc(100dvh - 36px) !important;
+  margin: 0 !important;
+  padding: 20px !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-self: center;
+}
+
+.productSalesHistoryDialog > header {
+  min-height: 64px;
+  align-items: center !important;
+  flex: 0 0 auto;
+}
+
+.productSalesHistoryDialog > header h2 {
+  margin: 4px 0 0;
+  line-height: 1.15;
+}
+
+.productBottleOverview,
+.productHistoryStats,
+.productHistoryFooter {
+  min-width: 0;
+}
+
+.productBottleOverview > div:not(.productBottleSequence),
+.productHistoryStats > div {
+  min-width: 0;
+}
+
+.productBottleSequence {
+  max-height: 92px;
+  overflow-y: auto;
+  align-content: flex-start;
+}
+
+.productHistoryTableWrap {
+  min-height: 0;
+  max-height: none !important;
+  overflow: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.productHistoryTable {
+  margin-top: 0 !important;
+  min-width: 760px;
+}
+
+.productHistoryTable thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--input);
+}
+
+.productHistoryFooter {
+  flex: 0 0 auto;
+  padding-top: 2px;
+}
+
+/* Lançamento de venda: acima do header e com apenas uma rolagem. */
+.saleRecordOverlay {
+  z-index: 700 !important;
+  place-items: center !important;
+  overflow: hidden !important;
+  padding: 14px !important;
+}
+
+.saleRecordOverlay > form.saleRecordForm {
+  width: min(980px, calc(100vw - 28px)) !important;
+  max-width: min(980px, calc(100vw - 28px)) !important;
+  height: min(92dvh, 900px);
+  max-height: calc(100dvh - 28px) !important;
+  margin: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.saleRecordForm > header {
+  position: sticky;
+  top: -24px;
+  z-index: 5;
+  margin: -24px -24px 0;
+  padding: 24px 24px 17px;
+  background: var(--panel);
+}
+
+.clientSaleIdentityRow {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.1fr) !important;
+}
+
+.clientSaleAddressRow {
+  grid-template-columns:
+    minmax(0, 2fr)
+    minmax(0, .68fr)
+    minmax(0, 1.18fr)
+    minmax(0, .9fr) !important;
+}
+
+@media (max-width: 900px) {
+  .productSalesHistoryDialog {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+    height: calc(100dvh - 20px);
+    max-height: calc(100dvh - 20px) !important;
+    padding: 14px !important;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  }
+
+  .saleRecordOverlay {
+    padding: 10px !important;
+  }
+
+  .saleRecordOverlay > form.saleRecordForm {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+    height: calc(100dvh - 20px);
+    max-height: calc(100dvh - 20px) !important;
+    padding: 16px !important;
+  }
+
+  .saleRecordForm > header {
+    top: -16px;
+    margin: -16px -16px 0;
+    padding: 16px 16px 14px;
+  }
+}
+
+@media (max-width: 700px) {
+  .clientSaleIdentityRow,
+  .clientSaleAddressRow {
+    grid-template-columns: 1fr !important;
+  }
+
+  .productBottleOverview,
+  .productHistoryStats {
+    grid-template-columns: 1fr !important;
+  }
+
+  .productBottleSequence {
+    max-height: 120px;
+  }
+}
