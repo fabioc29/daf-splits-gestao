@@ -126,6 +126,10 @@ async function fetchText(url) {
 
 function extractFragranticaMetrics(html) {
   const source = String(html || "");
+  const visible = decodeHtml(source);
+  const visibleMatch = visible.match(
+    /Avalia(?:ç|c)ão do perfume\s*([0-9]+(?:[.,][0-9]+)?)\s*fora de\s*5\s*com\s*([0-9][0-9.,\s]*)\s*votos/i,
+  );
   const ratingMatch =
     source.match(/["']ratingValue["']\s*:\s*["']?([0-9]+(?:[.,][0-9]+)?)/i) ||
     source.match(/itemprop=["']ratingValue["'][^>]*content=["']([0-9]+(?:[.,][0-9]+)?)/i);
@@ -134,11 +138,13 @@ function extractFragranticaMetrics(html) {
     source.match(/["']reviewCount["']\s*:\s*["']?([0-9][0-9.,\s]*)/i) ||
     source.match(/itemprop=["']ratingCount["'][^>]*content=["']([0-9][0-9.,\s]*)/i);
 
-  const rating = ratingMatch
-    ? Number(String(ratingMatch[1]).replace(",", "."))
+  const ratingRaw = visibleMatch?.[1] || ratingMatch?.[1];
+  const countRaw = visibleMatch?.[2] || countMatch?.[1];
+  const rating = ratingRaw
+    ? Number(String(ratingRaw).replace(",", "."))
     : undefined;
-  const ratingCount = countMatch
-    ? Number(String(countMatch[1]).replace(/[^0-9]/g, ""))
+  const ratingCount = countRaw
+    ? Number(String(countRaw).replace(/[^0-9]/g, ""))
     : undefined;
 
   return {
@@ -151,7 +157,7 @@ function extractFragranticaMetrics(html) {
   };
 }
 
-async function resolveFromDesigner(brand, name) {
+async function resolveFromDesigner(brand, name, exactId) {
   const normalizedBrand = normalize(brand);
   const mapped = DESIGNER_SLUGS[normalizedBrand];
   const generic = slugify(brand);
@@ -169,6 +175,11 @@ async function resolveFromDesigner(brand, name) {
         // tenta próxima variante
       }
     }
+  }
+
+  if (Number.isFinite(exactId) && exactId > 0) {
+    const exact = candidates.find((candidate) => candidate.id === exactId);
+    if (exact) return exact;
   }
 
   const target = normalize(name);
@@ -235,6 +246,7 @@ export default async function handler(req, res) {
 
   const brand = String(req.query?.brand || "").trim().slice(0, 100);
   const name = String(req.query?.name || "").trim().slice(0, 160);
+  const requestedId = Number(req.query?.fragranticaId || 0);
 
   if (!name) {
     res.status(400).json({ error: "Nome do perfume é obrigatório." });
@@ -242,9 +254,29 @@ export default async function handler(req, res) {
   }
 
   try {
-    const match =
-      (await resolveFromDesigner(brand, name)) ||
+    let match =
+      (await resolveFromDesigner(
+        brand,
+        name,
+        Number.isFinite(requestedId) && requestedId > 0
+          ? requestedId
+          : undefined,
+      )) ||
       (await resolveFromSearch(brand, name));
+
+    if (
+      Number.isFinite(requestedId) &&
+      requestedId > 0 &&
+      (!match || match.id !== requestedId)
+    ) {
+      const normalizedBrand = normalize(brand);
+      const brandSlug = DESIGNER_SLUGS[normalizedBrand] || slugify(brand);
+      match = {
+        id: requestedId,
+        path: `/perfume/${brandSlug}/${slugify(name)}-${requestedId}.html`,
+        name: normalize(name),
+      };
+    }
 
     if (!match?.id) {
       res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
