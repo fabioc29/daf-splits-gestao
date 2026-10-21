@@ -4057,3 +4057,60 @@ vercel-toolbar {
   background: var(--input);
   color: var(--text);
 }
+
+
+/* PR32: editor de imagens sempre acima do editor principal */
+.catalogNestedOverlay {
+  z-index: 1600 !important;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.catalogImageEditorDialog {
+  position: relative;
+  z-index: 1;
+  width: min(1180px, calc(100vw - 32px));
+  height: min(88dvh, 920px);
+  max-height: calc(100dvh - 32px);
+  min-height: 0;
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  opacity: 1;
+}
+
+.catalogImageEditorDialog > header,
+.catalogImageEditorDialog > footer {
+  background: var(--panel);
+}
+
+.catalogImageEditorList {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 700px) {
+  .catalogNestedOverlay {
+    padding: 10px;
+  }
+
+  .catalogImageEditorDialog {
+    width: calc(100vw - 20px);
+    height: calc(100dvh - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+
+  .catalogImageEditorDialog > header {
+    padding: 14px;
+  }
+
+  .catalogImageEditorList {
+    padding: 12px 14px;
+  }
+
+  .catalogImageEditorDialog > footer {
+    padding: 12px 14px;
+  }
+}
