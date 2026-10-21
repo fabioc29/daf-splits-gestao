@@ -328,6 +328,7 @@ export default async function handler(req, res) {
       fragranticaId: match.id,
       imageUrl,
       sourceUrl,
+      candidateName: match.name,
       ...metrics,
     });
   } catch (error) {
