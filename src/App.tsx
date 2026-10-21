@@ -7354,8 +7354,8 @@ function Stock({
         a.sale.date.localeCompare(b.sale.date) || a.sale.id - b.sale.id,
     );
     const lines = orderedRows.map(
-      ({ sale, ml }) =>
-        `${formatCopyMl(ml)} — ${saleCustomer(sale, d)}`,
+      ({ sale, ml, hasApc }) =>
+        `${hasApc ? "APC " : ""}${formatCopyMl(ml)} — ${saleCustomer(sale, d)}`,
     );
     lines.push(
       `📊 ESTOQUE: ${formatCopyMl(historyRemainingMl)} disponíveis`,
@@ -8806,6 +8806,7 @@ function pricingFormatCurrency(value: number) {
 }
 
 function pricingApcChoice(value: number) {
+  if (!value) return "";
   return [20, 30, 40, 50, 60].includes(value) ? String(value) : "Outro valor";
 }
 
@@ -8821,17 +8822,17 @@ function PricingCalculator({
   const [paidInput, setPaidInput] = useState("");
   const [paidEditing, setPaidEditing] = useState(false);
   const initialApcMl = 0;
-  const [apcChoice, setApcChoice] = useState(pricingApcChoice(initialApcMl));
+  const [apcChoice, setApcChoice] = useState("");
   const [apcMenuOpen, setApcMenuOpen] = useState(false);
   const apcSelectRef = useRef<HTMLDivElement | null>(null);
-  const [customApcMl, setCustomApcMl] = useState(
-    pricingApcChoice(initialApcMl) === "Outro valor" ? initialApcMl : 0,
-  );
+  const [customApcMl, setCustomApcMl] = useState(0);
   const paid = pricingParseCurrency(paidInput);
   const apcMl =
     apcChoice === "Outro valor"
       ? Math.max(0, Number(customApcMl) || 0)
-      : Math.max(0, Number(apcChoice) || 0);
+      : apcChoice
+        ? Math.max(0, Number(apcChoice) || 0)
+        : 0;
   const [marginStep, setMarginStep] = useState(0);
   const [rowMarginOffsets, setRowMarginOffsets] =
     useState<PricingMarginOffsets>({});
@@ -9073,17 +9074,6 @@ function PricingCalculator({
 
   return (
     <div className="pricingWorkspace">
-      <div className="pricingHero panel">
-        <div>
-          <span className="eyebrow">Financeiro · Precificação</span>
-          <h2>Calculadora de preços</h2>
-          <p>
-            Sugestões calculadas pelo custo do perfume, insumos cadastrados no
-            sistema e faixa de margem comercial da DAF Splits.
-          </p>
-        </div>
-      </div>
-
       <div className="pricingSetupGrid">
         <div className="panel pricingInputsPanel">
           <div className="panelHeading">
@@ -9120,12 +9110,8 @@ function PricingCalculator({
                   const value = Math.max(0, Number(event.target.value) || 0);
                   setBottleMl(value);
                   resetPricingMargins();
-                  const suggestedApc = pricingApcVolume(value);
-                  const suggestedChoice = pricingApcChoice(suggestedApc);
-                  setApcChoice(suggestedChoice);
-                  setCustomApcMl(
-                    suggestedChoice === "Outro valor" ? suggestedApc : 0,
-                  );
+                  setApcChoice("");
+                  setCustomApcMl(0);
                   setSupplyOverrides({});
                 }}
               />
@@ -9181,7 +9167,9 @@ function PricingCalculator({
                   <span>
                     {apcChoice === "Outro valor"
                       ? "Outro valor"
-                      : apcChoice + " ml"}
+                      : apcChoice
+                        ? apcChoice + " ml"
+                        : "Selecione..."}
                   </span>
                   <ChevronDown className={apcMenuOpen ? "open" : ""} />
                 </button>
@@ -11334,7 +11322,7 @@ function Form({
           ? "Cadastrar suprimento/insumo"
           : "Registrar compra/despesa";
   return (
-    <div className="overlay">
+    <div className={isSale ? "overlay saleRecordOverlay" : "overlay"}>
       <form
         onSubmit={submit}
         className={isSale ? "recordForm saleRecordForm" : "recordForm"}
@@ -11464,16 +11452,16 @@ function Form({
                 </label>
                 {newClient ? (
                   <>
-                    <div className="row three">
+                    <div className="row three clientSaleIdentityRow">
                       <label><span>Nome</span><input name="newName" value={clientDraft.name} onChange={(e) => setClientDraft((c) => ({ ...c, name: e.target.value }))} required /></label>
-                      <label><span>WhatsApp (opcional)</span><input name="newPhone" inputMode="tel" value={clientDraft.phone} onChange={(e) => setClientDraft((c) => ({ ...c, phone: formatClientPhone(e.target.value) }))} /></label>
                       <label><span>CPF (opcional)</span><input name="newCpf" inputMode="numeric" maxLength={14} value={clientDraft.cpf} onChange={(e) => setClientDraft((c) => ({ ...c, cpf: formatCpf(e.target.value) }))} onBlur={(e) => findClientByCpf(e.target.value)} /></label>
+                      <label><span>WhatsApp (opcional)</span><input name="newPhone" inputMode="tel" value={clientDraft.phone} onChange={(e) => setClientDraft((c) => ({ ...c, phone: formatClientPhone(e.target.value) }))} /></label>
                     </div>
                     <div className="clientSaleAddressRow">
                       <label><span>Endereço (opcional)</span><input name="newAddress" value={clientDraft.address} onChange={(e) => setClientDraft((c) => ({ ...c, address: e.target.value }))} /></label>
-                      <label><span>CEP (opcional)</span><input name="newCep" value={clientDraft.cep} onChange={(e) => setClientDraft((c) => ({ ...c, cep: e.target.value }))} onBlur={(e) => fillAddressFromCep(e.target.value)} /></label>
                       <label><span>Número (opcional)</span><input name="newNumber" value={clientDraft.number} onChange={(e) => setClientDraft((c) => ({ ...c, number: e.target.value }))} /></label>
                       <label><span>Complemento (opcional)</span><input name="newComplement" value={clientDraft.complement} onChange={(e) => setClientDraft((c) => ({ ...c, complement: e.target.value }))} placeholder="Apto, bloco, sala..." /></label>
+                      <label><span>CEP (opcional)</span><input name="newCep" value={clientDraft.cep} onChange={(e) => setClientDraft((c) => ({ ...c, cep: e.target.value }))} onBlur={(e) => fillAddressFromCep(e.target.value)} /></label>
                     </div>
                     <div className="row three">
                       <label><span>Bairro (opcional)</span><input name="newDistrict" value={clientDraft.district} onChange={(e) => setClientDraft((c) => ({ ...c, district: e.target.value }))} /></label>
