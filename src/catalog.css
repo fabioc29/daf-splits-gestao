@@ -3995,3 +3995,65 @@ vercel-toolbar {
     grid-column: 1 / -1;
   }
 }
+
+
+/* Correção de variáveis: controles administrativos usam o tema do sistema */
+.catalogEditorOrdering {
+  border-color: var(--line);
+  background: var(--panel-2);
+}
+
+.catalogEditorOrdering > header span,
+.catalogCategoryOrder > span,
+.catalogProductOrder > span,
+.catalogImageEditorDialog > header p,
+.catalogImageEditorRow > label:not(.catalogUploadImageButton) > span {
+  color: var(--muted);
+}
+
+.catalogCategoryOrder > div,
+.catalogProductOrder > button,
+.catalogCoverageActions > button,
+.catalogImageEditorDialog > header > button,
+.catalogImageEditorRow {
+  border-color: var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.catalogCategoryOrder button {
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.catalogProductOrder > button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel-2));
+  color: var(--accent);
+}
+
+.catalogCoverageActions > button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.catalogImageEditorDialog {
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.catalogImageEditorDialog > header,
+.catalogImageEditorDialog > footer {
+  border-color: var(--line);
+}
+
+.catalogImageEditorDialog > header span {
+  color: var(--accent);
+}
+
+.catalogImageEditorRow input[type="url"] {
+  border-color: var(--line);
+  background: var(--input);
+  color: var(--text);
+}
