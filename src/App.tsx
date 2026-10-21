@@ -2094,7 +2094,7 @@ function normalizeData(stored: any): D {
       .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
       .forEach((sale, index) => sequentialIds.set(sale.id, index + 1));
   }
-  const normalizedSales = rawSales.map((s: V) => {
+  let normalizedSales = rawSales.map((s: V) => {
     const marketplaceSale = isMarketplaceSale(s);
     const linkedCustomer = normalizedClients.find(
       (client: C) => client.id === s.clientId,
@@ -2169,6 +2169,46 @@ function normalizeData(stored: any): D {
           : [],
     } as V;
   });
+
+  const needsHacivatBottleCorrection =
+    Math.max(0, Number(merged.hacivatBottleCorrectionVersion) || 0) < 1;
+  if (needsHacivatBottleCorrection) {
+    const hacivatIndex = products.findIndex((product) =>
+      perfumeIdentity(product.brand, product.name).endsWith(" hacivat"),
+    );
+    if (hacivatIndex >= 0) {
+      const hacivat = products[hacivatIndex];
+      const hacivatId = hacivat.id;
+      normalizedSales = normalizedSales.map((sale) => ({
+        ...sale,
+        items: sale.items.map((item) =>
+          item.productId === hacivatId && Number(item.bottleNumber) === 4
+            ? { ...item, bottleNumber: 3 }
+            : item,
+        ),
+      }));
+
+      const correctedBottleNumber = 4;
+      const correctedHistory = normalizeBottleHistory(
+        {
+          ...hacivat,
+          bottleNumber: correctedBottleNumber,
+        },
+        correctedBottleNumber,
+      ).map((entry) =>
+        entry.number === 3 || entry.number === 4
+          ? { ...entry, assumedSold: false }
+          : entry,
+      );
+
+      products[hacivatIndex] = {
+        ...hacivat,
+        bottleNumber: correctedBottleNumber,
+        bottleHistory: correctedHistory,
+      };
+    }
+  }
+
   let normalizedSupplies = (merged.supplies || []).map((s: S) => {
     const pendingLots = (s.pendingLots || []).map((lot) => ({
       ...lot,
@@ -2218,6 +2258,7 @@ function normalizeData(stored: any): D {
     products,
     orderSequenceVersion: 1,
     supplyInventoryVersion: 1,
+    hacivatBottleCorrectionVersion: 1,
     marketplacePayoutDays: {
       "TikTok Shop": Number(merged.marketplacePayoutDays?.["TikTok Shop"] || 9),
       Shopee: Number(merged.marketplacePayoutDays?.Shopee || 7),
@@ -8712,7 +8753,7 @@ function pricingApcVolume(bottleMl: number) {
 
 function pricingCommercialNearest(value: number) {
   if (!Number.isFinite(value) || value <= 0) return 0;
-  return Math.max(0.9, Math.round(value - 0.9) + 0.9);
+  return Math.max(0.1, Math.round(value * 10) / 10);
 }
 
 function pricingCommercialCeil(value: number) {
@@ -8855,6 +8896,11 @@ function PricingCalculator({
     });
   }
 
+  function resetPricingMargins() {
+    setMarginStep(0);
+    setRowMarginOffsets({});
+  }
+
   function marginBand(simulation: PricingSimulation) {
     return simulation.isApc
       ? PRICING_APC_MARGIN_BAND
@@ -8869,25 +8915,20 @@ function PricingCalculator({
     const band = marginBand(simulation);
     return pricingClamp(
       band.base + marginStep + (rowMarginOffsets[simulation.key] || 0),
-      band.min,
-      band.max,
+      10,
+      75,
     );
   }
 
   function adjustRowMargin(simulation: PricingSimulation, delta: number) {
-    const band = marginBand(simulation);
-    const currentTarget = targetMargin(simulation);
-    const nextTarget = pricingClamp(
-      currentTarget + delta,
-      band.min,
-      band.max,
-    );
-    const currentOffset = rowMarginOffsets[simulation.key] || 0;
-    setRowMarginOffsets((current) => ({
-      ...current,
-      [simulation.key]:
-        currentOffset + (nextTarget - currentTarget),
-    }));
+    setRowMarginOffsets((current) => {
+      const currentOffset = current[simulation.key] || 0;
+      const nextOffset = pricingClamp(currentOffset + delta, -7, 7);
+      return {
+        ...current,
+        [simulation.key]: nextOffset,
+      };
+    });
   }
 
   const supplyNames = Array.from(
@@ -8930,42 +8971,6 @@ function PricingCalculator({
         price: pricingCommercialNearest(rawPrice),
       };
     });
-
-  for (let index = decantRows.length - 2; index >= 0; index -= 1) {
-    const current = decantRows[index];
-    const next = decantRows[index + 1];
-    if (!current.price || !next.price) continue;
-    const minimumUnitPrice = (next.price / next.ml) * 1.015;
-    const minimumPrice = minimumUnitPrice * current.ml;
-    const maximumPriceInsideBand =
-      current.totalCost > 0
-        ? current.totalCost / Math.max(0.01, 1 - current.band.max / 100)
-        : 0;
-    const candidate = pricingCommercialCeil(minimumPrice);
-    if (current.price < candidate) {
-      current.price =
-        maximumPriceInsideBand > 0
-          ? Math.min(candidate, pricingCommercialNearest(maximumPriceInsideBand))
-          : candidate;
-    }
-  }
-
-  const row2 = decantRows.find((row) => row.ml === 2);
-  const row3 = decantRows.find((row) => row.ml === 3);
-  if (row2 && row3 && row3.price > 0) {
-    const upgradeFloor = row3.price * 0.82;
-    const row2MaxPrice =
-      row2.totalCost > 0
-        ? row2.totalCost / Math.max(0.01, 1 - row2.band.max / 100)
-        : 0;
-    if (row2.price < upgradeFloor) {
-      const upgraded = pricingCommercialCeil(upgradeFloor);
-      row2.price =
-        row2MaxPrice > 0
-          ? Math.min(upgraded, pricingCommercialNearest(row2MaxPrice))
-          : upgraded;
-    }
-  }
 
   const apcSimulation = simulations.find((simulation) => simulation.isApc);
   const apcRow = apcSimulation
@@ -9078,7 +9083,7 @@ function PricingCalculator({
                 v={category}
                 set={(value) => {
                   setCategory(value);
-                  setRowMarginOffsets({});
+                  resetPricingMargins();
                   setSupplyOverrides({});
                 }}
               />
@@ -9094,17 +9099,13 @@ function PricingCalculator({
                 onChange={(event) => {
                   const value = Math.max(0, Number(event.target.value) || 0);
                   setBottleMl(value);
+                  resetPricingMargins();
                   const suggestedApc = pricingApcVolume(value);
                   const suggestedChoice = pricingApcChoice(suggestedApc);
                   setApcChoice(suggestedChoice);
                   setCustomApcMl(
                     suggestedChoice === "Outro valor" ? suggestedApc : 0,
                   );
-                  setRowMarginOffsets((current) => {
-                    const next = { ...current };
-                    delete next.apc;
-                    return next;
-                  });
                   setSupplyOverrides({});
                 }}
               />
@@ -9135,7 +9136,10 @@ function PricingCalculator({
                     );
                   }
                 }}
-                onChange={(event) => setPaidInput(event.target.value)}
+                onChange={(event) => {
+                  setPaidInput(event.target.value);
+                  resetPricingMargins();
+                }}
                 onBlur={() => {
                   const value = pricingParseCurrency(paidInput);
                   setPaidInput(value > 0 ? pricingFormatCurrency(value) : "");
@@ -9182,11 +9186,7 @@ function PricingCalculator({
                               }
                               setApcChoice(option);
                               setApcMenuOpen(false);
-                              setRowMarginOffsets((current) => {
-                                const next = { ...current };
-                                delete next.apc;
-                                return next;
-                              });
+                              resetPricingMargins();
                               setSupplyOverrides((current) => {
                                 const next = { ...current };
                                 delete next.apc;
@@ -9220,11 +9220,7 @@ function PricingCalculator({
                       setCustomApcMl(
                         Math.max(0, Number(event.target.value) || 0),
                       );
-                      setRowMarginOffsets((current) => {
-                        const next = { ...current };
-                        delete next.apc;
-                        return next;
-                      });
+                      resetPricingMargins();
                       setSupplyOverrides((current) => {
                         const next = { ...current };
                         delete next.apc;
@@ -9255,8 +9251,8 @@ function PricingCalculator({
             <button
               type="button"
               aria-label="Reduzir margem geral"
-              disabled={marginStep <= -4}
-              onClick={() => setMarginStep((value) => Math.max(-4, value - 1))}
+              disabled={marginStep <= -7}
+              onClick={() => setMarginStep((value) => Math.max(-7, value - 1))}
             >
               <Minus />
             </button>
@@ -9270,8 +9266,8 @@ function PricingCalculator({
             <button
               type="button"
               aria-label="Aumentar margem geral"
-              disabled={marginStep >= 4}
-              onClick={() => setMarginStep((value) => Math.min(4, value + 1))}
+              disabled={marginStep >= 7}
+              onClick={() => setMarginStep((value) => Math.min(7, value + 1))}
             >
               <Plus />
             </button>
@@ -9324,6 +9320,17 @@ function PricingCalculator({
             <h2>Preços de venda</h2>
           </div>
           <div className="pricingPanelActions">
+            <button
+              type="button"
+              className="secondary pricingResetButton"
+              onClick={resetPricingMargins}
+              disabled={
+                marginStep === 0 && !Object.values(rowMarginOffsets).some(Boolean)
+              }
+            >
+              <RotateCcw />
+              Resetar
+            </button>
             <button
               type="button"
               className="secondary pricingCopyButton"
@@ -9380,7 +9387,7 @@ function PricingCalculator({
                         <button
                           type="button"
                           aria-label={"Aumentar margem de " + row.label}
-                          disabled={row.targetMargin >= row.band.max}
+                          disabled={(rowMarginOffsets[row.key] || 0) >= 7}
                           onClick={() => adjustRowMargin(row, 1)}
                         >
                           <Plus />
@@ -9388,7 +9395,7 @@ function PricingCalculator({
                         <button
                           type="button"
                           aria-label={"Reduzir margem de " + row.label}
-                          disabled={row.targetMargin <= row.band.min}
+                          disabled={(rowMarginOffsets[row.key] || 0) <= -7}
                           onClick={() => adjustRowMargin(row, -1)}
                         >
                           <Minus />
