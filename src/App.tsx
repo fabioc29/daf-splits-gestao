@@ -9863,13 +9863,23 @@ function ProfitControl({
     (sale) => sale.status !== "cancelled" && !isHistoricalSale(sale),
   );
   const rows = sales.map((sale) => {
-    const perfumeCost = sale.items.reduce(
-      (sum, item) =>
-        sum +
-        item.ml *
-          (item.unitCost ??
-            d.products.find((p) => p.id === item.productId)?.cost ??
-            0),
+    const perfumeBreakdown = sale.items.map((item, index) => {
+      const product = d.products.find((p) => p.id === item.productId);
+      const unitCost =
+        item.unitCost ??
+        product?.cost ??
+        0;
+      return {
+        key: `${sale.id}-${item.productId}-${index}`,
+        name: product ? `${product.brand} ${product.name}`.trim() : `Perfume ${index + 1}`,
+        ml: item.ml,
+        isApc: Boolean(item.isApc),
+        unitCost,
+        total: item.ml * unitCost,
+      };
+    });
+    const perfumeCost = perfumeBreakdown.reduce(
+      (sum, item) => sum + item.total,
       0,
     );
     const expenseBreakdown = saleExpenseBreakdown(sale, d);
@@ -9880,6 +9890,7 @@ function ProfitControl({
     return {
       sale,
       perfumeCost,
+      perfumeBreakdown,
       expenses,
       expenseBreakdown,
       profit,
@@ -9942,6 +9953,7 @@ function ProfitControl({
               ({
                 sale,
                 perfumeCost: cost,
+                perfumeBreakdown,
                 expenses: expense,
                 expenseBreakdown,
                 profit: rowProfit,
@@ -9950,7 +9962,26 @@ function ProfitControl({
                 <tr key={sale.id}>
                   <td>#{orderNo(sale.id)}</td>
                   <td>{brl(sale.total)}</td>
-                  <td>{brl(cost)}</td>
+                  <td>
+                    <b>{brl(cost)}</b>
+                    <details className="expenseBreakdownDetails perfumeBreakdownDetails">
+                      <summary>Ver perfumes</summary>
+                      <span className="expenseBreakdownSupplies perfumeBreakdownList">
+                        {perfumeBreakdown.map((item) => (
+                          <small key={item.key}>
+                            <span>
+                              {item.name} — {item.isApc ? "APC " : ""}{formatCopyMl(item.ml)}
+                            </span>
+                            <b>{brl(item.total)}</b>
+                          </small>
+                        ))}
+                      </span>
+                      <small className="expenseBreakdownTotal">
+                        <span>Total dos perfumes</span>
+                        <b>{brl(cost)}</b>
+                      </small>
+                    </details>
+                  </td>
                   <td>
                     <b>{brl(expense)}</b>
                     <details className="expenseBreakdownDetails">
@@ -10292,8 +10323,8 @@ function InventoryEdit({
     close();
   }
   return (
-    <div className="overlay">
-      <form onSubmit={save}>
+    <div className="overlay inventoryEditOverlay">
+      <form className="inventoryEditForm" onSubmit={save}>
         <header>
           <h2>{supply ? "Editar suprimento" : "Editar compra"}</h2>
           <button type="button" onClick={close}>
@@ -10309,7 +10340,7 @@ function InventoryEdit({
               n="cost"
               l="Preço por unidade (R$)"
               t="number"
-              v={supply.cost || 0}
+              v={Number((Number(supply.cost) || 0).toFixed(6))}
             />
             <Choices
               name="attachCost"
