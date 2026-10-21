@@ -290,11 +290,25 @@ export default async function handler(req, res) {
       : "https://www.fragrantica.com.br" + match.path;
 
     let metrics = {};
+    let debugPage = "";
     try {
       const perfumePage = await fetchText(sourceUrl);
+      debugPage = perfumePage;
       metrics = extractFragranticaMetrics(perfumePage);
     } catch {
       // A imagem continua válida mesmo se a página de avaliações não responder.
+    }
+
+    if (String(req.query?.debug || "") === "1") {
+      const visible = decodeHtml(debugPage);
+      res.status(200).json({
+        sourceUrl,
+        htmlLength: debugPage.length,
+        visibleLength: visible.length,
+        hasAvaliacao: /avalia/i.test(visible),
+        sample: visible.slice(0, 1200),
+      });
+      return;
     }
 
     res.setHeader(
