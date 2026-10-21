@@ -11700,3 +11700,84 @@ aside nav::-webkit-scrollbar-thumb:hover {
     margin-top: 7px;
   }
 }
+
+
+/* =========================================================
+   Cadastros, precificação e botões de fechamento
+   ========================================================= */
+
+main > header {
+  z-index: 100;
+}
+
+.pricingApcSelect {
+  z-index: 2;
+}
+
+.pricingPanelActions .pricingResetButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.brandManagerPage {
+  width: 100%;
+  min-width: 0;
+}
+
+.brandManagerPagePanel {
+  width: 100%;
+  max-width: none;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.brandManagerPagePanel > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.brandManagerPagePanel .brandManagerHint {
+  color: var(--muted);
+}
+
+.brandManagerPagePanel .brandManagerList {
+  max-height: none;
+}
+
+.brandManagerPagePanel .brandManagerRow {
+  background: var(--panel-2);
+  border-color: var(--line);
+}
+
+.brandManagerPagePanel .brandManagerRow b,
+.brandManagerPagePanel .brandManagerRow input,
+.brandManagerPagePanel .brandManagerSearch input {
+  color: var(--text);
+}
+
+.brandManagerPagePanel .brandManagerRow input,
+.brandManagerPagePanel .brandManagerSearch input {
+  background: var(--input);
+  border-color: var(--line);
+}
+
+.overlay header > button,
+.systemDialog > header > button,
+.costEditor > header > button,
+.mobileNavClose {
+  color: #fff !important;
+}
+
+.overlay header > button svg,
+.systemDialog > header > button svg,
+.costEditor > header > button svg,
+.mobileNavClose svg {
+  color: #fff !important;
+  stroke: #fff !important;
+}
