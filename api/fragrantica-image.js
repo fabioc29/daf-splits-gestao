@@ -85,7 +85,16 @@ function extractCandidates(html) {
     const label = decodeHtml(match[3]);
     const slugName = candidateNameFromPath(path);
     const name = normalize(label + " " + slugName);
-    if (!candidates.has(id)) candidates.set(id, { id, path, name });
+    const numericTokens = (label.match(/\b\d{1,6}\b/g) || [])
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value));
+    const ratingCount =
+      [...numericTokens]
+        .reverse()
+        .find((value) => value < 1900 || value > 2100) || undefined;
+    if (!candidates.has(id)) {
+      candidates.set(id, { id, path, name, ratingCount });
+    }
   }
   return [...candidates.values()];
 }
@@ -155,20 +164,6 @@ function extractFragranticaMetrics(html) {
         ? ratingCount
         : undefined,
   };
-}
-
-async function resolveMetricsFromSearch(brand, name) {
-  try {
-    const query =
-      `site:fragrantica.com.br/perfume "${brand}" "${name}" "votos"`;
-    const html = await fetchText(
-      "https://html.duckduckgo.com/html/?q=" + encodeURIComponent(query),
-    );
-    if (!html) return {};
-    return extractFragranticaMetrics(html);
-  } catch {
-    return {};
-  }
 }
 
 async function resolveFromDesigner(brand, name, exactId) {
@@ -311,12 +306,13 @@ export default async function handler(req, res) {
       // A imagem continua válida mesmo se a página de avaliações não responder.
     }
     if (
-      !Number.isFinite(metrics.fragranticaRatingCount) ||
-      metrics.fragranticaRatingCount < 0
+      (!Number.isFinite(metrics.fragranticaRatingCount) ||
+        metrics.fragranticaRatingCount < 0) &&
+      Number.isFinite(Number(match.ratingCount))
     ) {
       metrics = {
         ...metrics,
-        ...(await resolveMetricsFromSearch(brand, name)),
+        fragranticaRatingCount: Number(match.ratingCount),
       };
     }
 
@@ -328,7 +324,6 @@ export default async function handler(req, res) {
       fragranticaId: match.id,
       imageUrl,
       sourceUrl,
-      candidateName: match.name,
       ...metrics,
     });
   } catch (error) {
