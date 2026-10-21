@@ -124,6 +124,33 @@ async function fetchText(url) {
   return response.text();
 }
 
+function extractFragranticaMetrics(html) {
+  const source = String(html || "");
+  const ratingMatch =
+    source.match(/["']ratingValue["']\s*:\s*["']?([0-9]+(?:[.,][0-9]+)?)/i) ||
+    source.match(/itemprop=["']ratingValue["'][^>]*content=["']([0-9]+(?:[.,][0-9]+)?)/i);
+  const countMatch =
+    source.match(/["']ratingCount["']\s*:\s*["']?([0-9][0-9.,\s]*)/i) ||
+    source.match(/["']reviewCount["']\s*:\s*["']?([0-9][0-9.,\s]*)/i) ||
+    source.match(/itemprop=["']ratingCount["'][^>]*content=["']([0-9][0-9.,\s]*)/i);
+
+  const rating = ratingMatch
+    ? Number(String(ratingMatch[1]).replace(",", "."))
+    : undefined;
+  const ratingCount = countMatch
+    ? Number(String(countMatch[1]).replace(/[^0-9]/g, ""))
+    : undefined;
+
+  return {
+    fragranticaRating:
+      Number.isFinite(rating) && rating > 0 ? rating : undefined,
+    fragranticaRatingCount:
+      Number.isFinite(ratingCount) && ratingCount >= 0
+        ? ratingCount
+        : undefined,
+  };
+}
+
 async function resolveFromDesigner(brand, name) {
   const normalizedBrand = normalize(brand);
   const mapped = DESIGNER_SLUGS[normalizedBrand];
@@ -226,6 +253,18 @@ export default async function handler(req, res) {
     }
 
     const imageUrl = `${SOCIAL_CARD_BASE}${match.id}.jpeg`;
+    const sourceUrl = match.path.startsWith("http")
+      ? match.path
+      : "https://www.fragrantica.com.br" + match.path;
+
+    let metrics = {};
+    try {
+      const perfumePage = await fetchText(sourceUrl);
+      metrics = extractFragranticaMetrics(perfumePage);
+    } catch {
+      // A imagem continua válida mesmo se a página de avaliações não responder.
+    }
+
     res.setHeader(
       "Cache-Control",
       "public, s-maxage=604800, stale-while-revalidate=2592000",
@@ -233,9 +272,8 @@ export default async function handler(req, res) {
     res.status(200).json({
       fragranticaId: match.id,
       imageUrl,
-      sourceUrl: match.path.startsWith("http")
-        ? match.path
-        : "https://www.fragrantica.com.br" + match.path,
+      sourceUrl,
+      ...metrics,
     });
   } catch (error) {
     res.status(500).json({
