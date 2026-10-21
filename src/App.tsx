@@ -50,6 +50,7 @@ import {
   Menu,
   ArrowUp,
   ArrowDown,
+  Image as ImageIcon,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
