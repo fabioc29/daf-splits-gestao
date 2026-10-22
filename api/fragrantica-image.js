@@ -85,7 +85,16 @@ function extractCandidates(html) {
     const label = decodeHtml(match[3]);
     const slugName = candidateNameFromPath(path);
     const name = normalize(label + " " + slugName);
-    if (!candidates.has(id)) candidates.set(id, { id, path, name });
+    const numericTokens = (label.match(/\b\d{1,6}\b/g) || [])
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value));
+    const ratingCount =
+      [...numericTokens]
+        .reverse()
+        .find((value) => value < 1900 || value > 2100) || undefined;
+    if (!candidates.has(id)) {
+      candidates.set(id, { id, path, name, ratingCount });
+    }
   }
   return [...candidates.values()];
 }
@@ -124,7 +133,40 @@ async function fetchText(url) {
   return response.text();
 }
 
-async function resolveFromDesigner(brand, name) {
+function extractFragranticaMetrics(html) {
+  const source = String(html || "");
+  const visible = decodeHtml(source);
+  const visibleMatch = visible.match(
+    /Avalia(?:ç|c)ão do perfume\s*([0-9]+(?:[.,][0-9]+)?)\s*fora de\s*5\s*com\s*([0-9][0-9.,\s]*)\s*votos/i,
+  );
+  const ratingMatch =
+    source.match(/["']ratingValue["']\s*:\s*["']?([0-9]+(?:[.,][0-9]+)?)/i) ||
+    source.match(/itemprop=["']ratingValue["'][^>]*content=["']([0-9]+(?:[.,][0-9]+)?)/i);
+  const countMatch =
+    source.match(/["']ratingCount["']\s*:\s*["']?([0-9][0-9.,\s]*)/i) ||
+    source.match(/["']reviewCount["']\s*:\s*["']?([0-9][0-9.,\s]*)/i) ||
+    source.match(/itemprop=["']ratingCount["'][^>]*content=["']([0-9][0-9.,\s]*)/i);
+
+  const ratingRaw = visibleMatch?.[1] || ratingMatch?.[1];
+  const countRaw = visibleMatch?.[2] || countMatch?.[1];
+  const rating = ratingRaw
+    ? Number(String(ratingRaw).replace(",", "."))
+    : undefined;
+  const ratingCount = countRaw
+    ? Number(String(countRaw).replace(/[^0-9]/g, ""))
+    : undefined;
+
+  return {
+    fragranticaRating:
+      Number.isFinite(rating) && rating > 0 ? rating : undefined,
+    fragranticaRatingCount:
+      Number.isFinite(ratingCount) && ratingCount >= 0
+        ? ratingCount
+        : undefined,
+  };
+}
+
+async function resolveFromDesigner(brand, name, exactId) {
   const normalizedBrand = normalize(brand);
   const mapped = DESIGNER_SLUGS[normalizedBrand];
   const generic = slugify(brand);
@@ -142,6 +184,11 @@ async function resolveFromDesigner(brand, name) {
         // tenta próxima variante
       }
     }
+  }
+
+  if (Number.isFinite(exactId) && exactId > 0) {
+    const exact = candidates.find((candidate) => candidate.id === exactId);
+    if (exact) return exact;
   }
 
   const target = normalize(name);
@@ -208,6 +255,7 @@ export default async function handler(req, res) {
 
   const brand = String(req.query?.brand || "").trim().slice(0, 100);
   const name = String(req.query?.name || "").trim().slice(0, 160);
+  const requestedId = Number(req.query?.fragranticaId || 0);
 
   if (!name) {
     res.status(400).json({ error: "Nome do perfume é obrigatório." });
@@ -215,9 +263,29 @@ export default async function handler(req, res) {
   }
 
   try {
-    const match =
-      (await resolveFromDesigner(brand, name)) ||
+    let match =
+      (await resolveFromDesigner(
+        brand,
+        name,
+        Number.isFinite(requestedId) && requestedId > 0
+          ? requestedId
+          : undefined,
+      )) ||
       (await resolveFromSearch(brand, name));
+
+    if (
+      Number.isFinite(requestedId) &&
+      requestedId > 0 &&
+      (!match || match.id !== requestedId)
+    ) {
+      const normalizedBrand = normalize(brand);
+      const brandSlug = DESIGNER_SLUGS[normalizedBrand] || slugify(brand);
+      match = {
+        id: requestedId,
+        path: `/perfume/${brandSlug}/${slugify(name)}-${requestedId}.html`,
+        name: normalize(name),
+      };
+    }
 
     if (!match?.id) {
       res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
@@ -226,6 +294,28 @@ export default async function handler(req, res) {
     }
 
     const imageUrl = `${SOCIAL_CARD_BASE}${match.id}.jpeg`;
+    const sourceUrl = match.path.startsWith("http")
+      ? match.path
+      : "https://www.fragrantica.com.br" + match.path;
+
+    let metrics = {};
+    try {
+      const perfumePage = await fetchText(sourceUrl);
+      metrics = extractFragranticaMetrics(perfumePage);
+    } catch {
+      // A imagem continua válida mesmo se a página de avaliações não responder.
+    }
+    if (
+      (!Number.isFinite(metrics.fragranticaRatingCount) ||
+        metrics.fragranticaRatingCount < 0) &&
+      Number.isFinite(Number(match.ratingCount))
+    ) {
+      metrics = {
+        ...metrics,
+        fragranticaRatingCount: Number(match.ratingCount),
+      };
+    }
+
     res.setHeader(
       "Cache-Control",
       "public, s-maxage=604800, stale-while-revalidate=2592000",
@@ -233,9 +323,8 @@ export default async function handler(req, res) {
     res.status(200).json({
       fragranticaId: match.id,
       imageUrl,
-      sourceUrl: match.path.startsWith("http")
-        ? match.path
-        : "https://www.fragrantica.com.br" + match.path,
+      sourceUrl,
+      ...metrics,
     });
   } catch (error) {
     res.status(500).json({

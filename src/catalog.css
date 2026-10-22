@@ -3712,3 +3712,984 @@ vercel-toolbar {
     height: 120px;
   }
 }
+
+
+/* =========================================================
+   Organização e imagens do editor do catálogo
+   ========================================================= */
+
+.catalogEditorClose,
+.catalogImageEditorDialog > header > button {
+  color: #fff !important;
+}
+
+.catalogEditorClose svg,
+.catalogImageEditorDialog > header > button svg {
+  color: #fff !important;
+  stroke: #fff !important;
+}
+
+.catalogEditorOrdering {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--catalog-editor-line, #2d3748);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--catalog-panel) 92%, transparent);
+}
+
+.catalogEditorOrdering > header strong,
+.catalogEditorOrdering > header span {
+  display: block;
+}
+
+.catalogEditorOrdering > header span {
+  margin-top: 3px;
+  color: var(--catalog-muted);
+  font-size: 11px;
+}
+
+.catalogOrderingGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.catalogCategoryOrder,
+.catalogProductOrder {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.catalogCategoryOrder > span,
+.catalogProductOrder > span {
+  color: var(--catalog-muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.catalogCategoryOrder > div {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 10px;
+  background: var(--catalog-card);
+}
+
+.catalogCategoryOrder > div > div {
+  display: flex;
+  gap: 5px;
+}
+
+.catalogCategoryOrder button {
+  width: 31px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--catalog-line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--catalog-text);
+  cursor: pointer;
+}
+
+.catalogCategoryOrder button:disabled {
+  opacity: .3;
+  cursor: default;
+}
+
+.catalogCategoryOrder button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.catalogProductOrder > button {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 10px;
+  background: var(--catalog-card);
+  color: var(--catalog-text);
+  text-align: left;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.catalogProductOrder > button.active {
+  border-color: var(--catalog-gold);
+  background: color-mix(in srgb, var(--catalog-gold) 14%, var(--catalog-card));
+  color: var(--catalog-gold);
+}
+
+.catalogEditorCoverage {
+  gap: 12px;
+}
+
+.catalogCoverageActions {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.catalogCoverageActions > button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 9px;
+  background: var(--catalog-card);
+  color: var(--catalog-text);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.catalogCoverageActions > button:hover {
+  border-color: var(--catalog-gold);
+  color: var(--catalog-gold);
+}
+
+.catalogCoverageActions > button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.catalogNestedOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 72%);
+  backdrop-filter: blur(6px);
+}
+
+.catalogImageEditorDialog {
+  width: min(1180px, calc(100vw - 40px));
+  max-height: min(88vh, 920px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--catalog-line);
+  border-radius: 16px;
+  background: var(--catalog-panel);
+  color: var(--catalog-text);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
+}
+
+.catalogImageEditorDialog > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px;
+  border-bottom: 1px solid var(--catalog-line);
+}
+
+.catalogImageEditorDialog > header span {
+  color: var(--catalog-gold);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .11em;
+}
+
+.catalogImageEditorDialog > header h2 {
+  margin: 3px 0 4px;
+}
+
+.catalogImageEditorDialog > header p {
+  margin: 0;
+  color: var(--catalog-muted);
+  font-size: 11px;
+}
+
+.catalogImageEditorDialog > header > button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--catalog-line);
+  border-radius: 9px;
+  background: var(--catalog-card);
+  cursor: pointer;
+}
+
+.catalogImageEditorDialog > header > button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.catalogImageEditorDialog > .catalogImageEditorError {
+  margin: 12px 18px 0;
+}
+
+.catalogImageEditorList {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+}
+
+.catalogImageEditorRow {
+  display: grid;
+  grid-template-columns: minmax(180px, .8fr) 72px minmax(240px, 1.5fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 11px;
+  background: var(--catalog-card);
+}
+
+.catalogImageEditorRow > label:not(.catalogUploadImageButton) {
+  display: grid;
+  gap: 5px;
+}
+
+.catalogImageEditorRow > label:not(.catalogUploadImageButton) > span {
+  color: var(--catalog-muted);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.catalogImageEditorRow input[type="url"] {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--catalog-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--catalog-card) 88%, #000);
+  color: var(--catalog-text);
+}
+
+.catalogImageEditorDialog > footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 18px;
+  border-top: 1px solid var(--catalog-line);
+}
+
+@media (max-width: 900px) {
+  .catalogOrderingGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .catalogImageEditorRow {
+    grid-template-columns: 1fr 64px;
+  }
+
+  .catalogImageEditorRow > label:not(.catalogUploadImageButton),
+  .catalogImageEditorRow > .catalogUploadImageButton,
+  .catalogImageEditorRow > .catalogRemoveManualImage {
+    grid-column: 1 / -1;
+  }
+}
+
+
+/* Correção de variáveis: controles administrativos usam o tema do sistema */
+.catalogEditorOrdering {
+  border-color: var(--line);
+  background: var(--panel-2);
+}
+
+.catalogEditorOrdering > header span,
+.catalogCategoryOrder > span,
+.catalogProductOrder > span,
+.catalogImageEditorDialog > header p,
+.catalogImageEditorRow > label:not(.catalogUploadImageButton) > span {
+  color: var(--muted);
+}
+
+.catalogCategoryOrder > div,
+.catalogProductOrder > button,
+.catalogCoverageActions > button,
+.catalogImageEditorDialog > header > button,
+.catalogImageEditorRow {
+  border-color: var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.catalogCategoryOrder button {
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.catalogProductOrder > button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel-2));
+  color: var(--accent);
+}
+
+.catalogCoverageActions > button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.catalogImageEditorDialog {
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.catalogImageEditorDialog > header,
+.catalogImageEditorDialog > footer {
+  border-color: var(--line);
+}
+
+.catalogImageEditorDialog > header span {
+  color: var(--accent);
+}
+
+.catalogImageEditorRow input[type="url"] {
+  border-color: var(--line);
+  background: var(--input);
+  color: var(--text);
+}
+
+
+/* PR32: editor de imagens sempre acima do editor principal */
+.catalogNestedOverlay {
+  z-index: 1600 !important;
+  padding: 16px;
+  overflow: hidden;
+}
+
+.catalogImageEditorDialog {
+  position: relative;
+  z-index: 1;
+  width: min(1180px, calc(100vw - 32px));
+  height: min(88dvh, 920px);
+  max-height: calc(100dvh - 32px);
+  min-height: 0;
+  background: var(--panel) !important;
+  color: var(--text) !important;
+  opacity: 1;
+}
+
+.catalogImageEditorDialog > header,
+.catalogImageEditorDialog > footer {
+  background: var(--panel);
+}
+
+.catalogImageEditorList {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 700px) {
+  .catalogNestedOverlay {
+    padding: 10px;
+  }
+
+  .catalogImageEditorDialog {
+    width: calc(100vw - 20px);
+    height: calc(100dvh - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+
+  .catalogImageEditorDialog > header {
+    padding: 14px;
+  }
+
+  .catalogImageEditorList {
+    padding: 12px 14px;
+  }
+
+  .catalogImageEditorDialog > footer {
+    padding: 12px 14px;
+  }
+}
+
+
+/* PR32 follow-up: editor de imagens standalone */
+.catalogImageEditorOverlay {
+  z-index: 520 !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 16px !important;
+  overflow: hidden !important;
+  background: rgb(0 0 0 / 76%) !important;
+  backdrop-filter: blur(7px);
+}
+
+.catalogImageEditorOverlay .catalogImageEditorDialog {
+  position: relative !important;
+  z-index: 1 !important;
+  width: min(1180px, calc(100vw - 32px)) !important;
+  height: min(88dvh, 920px) !important;
+  max-height: calc(100dvh - 32px) !important;
+  min-height: 420px;
+  display: grid !important;
+  grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+  overflow: hidden !important;
+  border: 1px solid var(--line-strong, #354256) !important;
+  border-radius: 16px !important;
+  background: var(--panel, #111722) !important;
+  color: var(--text, #f4f7fb) !important;
+  box-shadow: 0 28px 90px rgb(0 0 0 / 58%) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+
+.catalogImageEditorOverlay .catalogImageEditorDialog > header,
+.catalogImageEditorOverlay .catalogImageEditorDialog > footer {
+  background: var(--panel, #111722) !important;
+}
+
+.catalogImageEditorOverlay .catalogImageEditorDialog > header > button {
+  color: var(--text, #f4f7fb) !important;
+}
+
+.catalogImageEditorOverlay .catalogImageEditorDialog > header > button svg {
+  color: var(--text, #f4f7fb) !important;
+  stroke: var(--text, #f4f7fb) !important;
+}
+
+@media (max-width: 700px) {
+  .catalogImageEditorOverlay {
+    padding: 10px !important;
+  }
+
+  .catalogImageEditorOverlay .catalogImageEditorDialog {
+    width: calc(100vw - 20px) !important;
+    height: calc(100dvh - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    min-height: 0;
+  }
+}
+
+
+/* PR32 final pass: dedicated catalog image editor page */
+.catalogImageEditorPage {
+  width: 100%;
+  min-width: 0;
+  height: calc(100dvh - 122px);
+  min-height: 560px;
+  display: grid;
+  place-items: stretch;
+  overflow: hidden;
+}
+
+.catalogImageEditorStandalone {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100% !important;
+  max-height: none !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  display: grid !important;
+  grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+  overflow: hidden !important;
+  border: 1px solid var(--line-strong, #354256) !important;
+  border-radius: 16px !important;
+  background: var(--panel, #111722) !important;
+  color: var(--text, #f4f7fb) !important;
+  box-shadow: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.catalogImageEditorStandalone > header {
+  padding: 18px 20px;
+  background: var(--panel, #111722) !important;
+}
+
+.catalogImageEditorStandalone > header h2 {
+  margin: 4px 0 5px;
+  color: var(--text, #f4f7fb);
+}
+
+.catalogImageEditorStandalone > header p {
+  color: var(--muted, #93a0b5);
+}
+
+.catalogImageEditorStandalone > header > button {
+  color: var(--text, #f4f7fb) !important;
+  background: var(--panel-2, #182232) !important;
+}
+
+.catalogImageEditorStandalone > header > button svg {
+  color: var(--text, #f4f7fb) !important;
+  stroke: var(--text, #f4f7fb) !important;
+}
+
+.catalogImageEditorStandalone .catalogImageEditorList {
+  min-height: 0;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 16px 20px;
+  background: var(--panel, #111722);
+}
+
+.catalogImageEditorStandalone > footer {
+  padding: 14px 20px;
+  background: var(--panel, #111722) !important;
+}
+
+@media (max-width: 900px) {
+  .catalogImageEditorPage {
+    height: calc(100dvh - 96px);
+    min-height: 0;
+  }
+
+  .catalogImageEditorRow {
+    grid-template-columns: minmax(0, 1fr) 68px !important;
+  }
+
+  .catalogImageEditorRow > label:not(.catalogUploadImageButton),
+  .catalogImageEditorRow > .catalogUploadImageButton,
+  .catalogImageEditorRow > .catalogRemoveManualImage {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .catalogImageEditorPage {
+    height: calc(100dvh - 88px);
+  }
+
+  .catalogImageEditorStandalone > header,
+  .catalogImageEditorStandalone .catalogImageEditorList,
+  .catalogImageEditorStandalone > footer {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .catalogImageEditorRow {
+    grid-template-columns: 1fr !important;
+  }
+
+  .catalogManualImagePreview {
+    width: 100%;
+    height: 120px;
+  }
+}
+
+
+/* PR32 21-10 late pass: inline image editor */
+.catalogEditorDialog.imageMode {
+  position: relative;
+  overflow: hidden !important;
+  min-height: min(760px, calc(94dvh - 44px));
+}
+
+.catalogImageEditorInline {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.catalogImageEditorInline > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.catalogImageEditorInline > header > div > span {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: .09em;
+}
+
+.catalogImageEditorInline > header h2 {
+  margin: 5px 0 0;
+  color: var(--text);
+  font-size: 22px;
+}
+
+.catalogImageEditorInline > header p {
+  max-width: 620px;
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.catalogImageEditorInline > header > button {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.catalogImageEditorInline > header > button svg {
+  width: 17px;
+  height: 17px;
+  color: var(--text);
+  stroke: var(--text);
+}
+
+.catalogImageEditorInline > .catalogImageEditorError {
+  margin: 12px 18px 0;
+}
+
+.catalogImageEditorInline > .catalogImageEditorList {
+  min-height: 0;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 16px 18px;
+  background: var(--panel);
+}
+
+.catalogImageEditorInline > footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+@media (max-width: 900px) {
+  .catalogEditorDialog.imageMode {
+    min-height: calc(100dvh - 44px);
+  }
+
+  .catalogImageEditorInline .catalogImageEditorRow {
+    grid-template-columns: minmax(0, 1fr) 68px !important;
+  }
+
+  .catalogImageEditorInline .catalogImageEditorRow > label:not(.catalogUploadImageButton),
+  .catalogImageEditorInline .catalogImageEditorRow > .catalogUploadImageButton,
+  .catalogImageEditorInline .catalogImageEditorRow > .catalogRemoveManualImage {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .catalogImageEditorInline > header,
+  .catalogImageEditorInline > .catalogImageEditorList,
+  .catalogImageEditorInline > footer {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .catalogImageEditorInline .catalogImageEditorRow {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+
+/* PR32: gerenciador de imagens como página normal, sem modal */
+.catalogImageManagerPage {
+  width: 100%;
+  min-width: 0;
+  display: block;
+}
+
+.catalogImageManagerPanel {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--line-strong, #354256);
+  border-radius: 16px;
+  background: var(--panel, #111722);
+  color: var(--text, #f4f7fb);
+}
+
+.catalogImageManagerHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px;
+  border-bottom: 1px solid var(--line, #2c3747);
+}
+
+.catalogImageManagerHeader > div:first-child {
+  min-width: 0;
+}
+
+.catalogImageManagerHeader h2 {
+  margin: 5px 0 6px;
+  color: var(--text, #f4f7fb);
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.catalogImageManagerHeader p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--muted, #93a0b5);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.catalogImageManagerActions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.catalogImageManagerActions button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.catalogImageManagerActions svg {
+  width: 16px;
+  height: 16px;
+}
+
+.catalogImageManagerPanel > .catalogImageEditorError {
+  margin: 14px 20px 0;
+}
+
+.catalogImageManagerList {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 0;
+}
+
+.catalogImageManagerRow {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(250px, .9fr) minmax(320px, 1.4fr) auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line, #2c3747);
+  background: var(--panel, #111722);
+}
+
+.catalogImageManagerRow:last-child {
+  border-bottom: 0;
+}
+
+.catalogImageManagerRow:hover {
+  background: var(--panel-2, #182232);
+}
+
+.catalogImageManagerIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.catalogImageManagerIdentity > div:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.catalogImageManagerIdentity strong {
+  min-width: 0;
+  color: var(--text, #f4f7fb);
+  font-size: 12px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.catalogImageManagerIdentity span {
+  color: var(--muted, #93a0b5);
+  font-size: 10px;
+}
+
+.catalogImageManagerPreview {
+  width: 54px;
+  height: 66px;
+  flex: 0 0 54px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line, #2c3747);
+  border-radius: 10px;
+  background: var(--input, #0d1420);
+}
+
+.catalogImageManagerPreview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 4px;
+}
+
+.catalogImageManagerPreview svg {
+  width: 22px;
+  height: 22px;
+  color: var(--muted, #93a0b5);
+}
+
+.catalogImageManagerUrl {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.catalogImageManagerUrl > span {
+  color: var(--muted, #93a0b5);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.catalogImageManagerUrl input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--line, #2c3747);
+  border-radius: 10px;
+  padding: 0 11px;
+  background: var(--input, #0d1420);
+  color: var(--text, #f4f7fb);
+}
+
+.catalogImageManagerUpload,
+.catalogImageManagerRemove,
+.catalogImageManagerAuto {
+  min-height: 40px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.catalogImageManagerUpload {
+  position: relative;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong, #354256);
+  background: var(--panel-2, #182232);
+  color: var(--text, #f4f7fb);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.catalogImageManagerUpload input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.catalogImageManagerUpload svg,
+.catalogImageManagerRemove svg {
+  width: 15px;
+  height: 15px;
+}
+
+.catalogImageManagerRemove {
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--danger, #f35d6f) 45%, var(--line));
+  background: color-mix(in srgb, var(--danger, #f35d6f) 9%, var(--panel-2));
+  color: var(--danger, #f35d6f);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.catalogImageManagerAuto {
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line, #2c3747);
+  color: var(--muted, #93a0b5);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+@media (max-width: 1100px) {
+  .catalogImageManagerHeader {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .catalogImageManagerActions {
+    justify-content: flex-start;
+  }
+
+  .catalogImageManagerRow {
+    grid-template-columns: minmax(220px, .85fr) minmax(260px, 1.2fr) auto;
+  }
+
+  .catalogImageManagerRow > .catalogImageManagerAuto,
+  .catalogImageManagerRow > .catalogImageManagerRemove {
+    grid-column: 3;
+  }
+
+  .catalogImageManagerRow > .catalogImageManagerUpload {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .catalogImageManagerHeader {
+    padding: 15px;
+  }
+
+  .catalogImageManagerActions {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .catalogImageManagerActions button {
+    width: 100%;
+  }
+
+  .catalogImageManagerRow {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    padding: 14px 15px;
+  }
+
+  .catalogImageManagerUpload,
+  .catalogImageManagerRemove,
+  .catalogImageManagerAuto {
+    width: 100%;
+    grid-column: 1 !important;
+    grid-row: auto !important;
+  }
+}

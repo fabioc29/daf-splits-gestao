@@ -50,6 +50,7 @@ import {
   Menu,
   ArrowUp,
   ArrowDown,
+  Image as ImageIcon,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
@@ -219,6 +220,7 @@ type D = {
   brands: string[];
   orderSequenceVersion?: number;
   supplyInventoryVersion?: number;
+  hacivatBottleCorrectionVersion?: number;
   marketplacePayoutDays?: { "TikTok Shop": number; Shopee: number };
   catalogSettings: CatalogSettings;
   dashboardSupplyReportIds: number[];
@@ -232,8 +234,7 @@ const DEFAULT_MENU_ORDER = [
   "shipping",
   "purchases",
   "stock",
-  "clients",
-  "suppliers",
+  "registrations",
   "finance",
   "settings",
 ];
@@ -858,8 +859,7 @@ const nav = [
   ["shipping", "Envios", Truck],
   ["purchases", "Compras", ShoppingCart],
   ["stock", "Estoque", Box],
-  ["clients", "Clientes", Users],
-  ["suppliers", "Fornecedores", Building2],
+  ["registrations", "Cadastros", Users],
   ["finance", "Financeiro", Wallet],
   ["settings", "Configurações", Settings],
   ["crm", "Integração CRM", Cloud],
@@ -931,7 +931,14 @@ function System({ session }: { session: Session }) {
   }
   function fallbackCatalog(persisted: D) { return catalogSnapshotPayload(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), persisted.catalogSettings); }
   async function buildCatalog(persisted: D, signal?: AbortSignal) {
-    const items = await enrichCatalogItemsWithImages(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), signal);
+    const items = await enrichCatalogItemsWithImages(
+      catalogItemsFromProducts(
+        persisted.products,
+        persisted.catalogSettings?.manualImages,
+      ),
+      signal,
+      persisted.catalogSettings?.productOrder === "mostRated",
+    );
     return catalogSnapshotPayload(items, persisted.catalogSettings);
   }
   function exportDraft() {
@@ -947,7 +954,18 @@ function System({ session }: { session: Session }) {
       const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
       if (!mounted.current || version !== saveVersion.current) { current.dispose(); return; }
       writer.current?.dispose(); writer.current = current;
-      const normalized = normalizeData(current.snapshot.data);
+      let normalized = normalizeData(current.snapshot.data);
+      if (
+        Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
+        normalized.hacivatBottleCorrectionVersion === 1 &&
+        current.snapshot.identitiesReady
+      ) {
+        const migrated = await current.save(normalized);
+        normalized = normalizeData(migrated.saved.data);
+        void migrated.publication.then((publication) => {
+          if (mounted.current) recordPublication(publication);
+        });
+      }
       lastSynced.current = JSON.stringify(normalized);
       // Clear only this tab's record. Other tabs' drafts are retained for recovery.
       recovery.current ||= new LocalRecovery(session.user.id);
@@ -973,6 +991,7 @@ function System({ session }: { session: Session }) {
     [toast, setToast] = useState("");
   const modalRef = useRef(modal); modalRef.current = modal;
   const [stockMenuOpen, setStockMenuOpen] = useState(false);
+  const [registrationsMenuOpen, setRegistrationsMenuOpen] = useState(false);
   const [financeMenuOpen, setFinanceMenuOpen] = useState(false);
   const [shippingMenuOpen, setShippingMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -1061,11 +1080,23 @@ function System({ session }: { session: Session }) {
         const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
         if (!active) { current.dispose(); return; }
         writer.current = current;
-        const normalized = normalizeData(current.snapshot.data);
-        lastSynced.current = JSON.stringify(normalized);
         recovery.current = new LocalRecovery(session.user.id);
         const pending = recovery.current.list();
         recoveredDrafts.current = pending;
+        let normalized = normalizeData(current.snapshot.data);
+        if (
+          !pending.length &&
+          Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
+          normalized.hacivatBottleCorrectionVersion === 1 &&
+          current.snapshot.identitiesReady
+        ) {
+          const migrated = await current.save(normalized);
+          normalized = normalizeData(migrated.saved.data);
+          void migrated.publication.then((publication) => {
+            if (mounted.current) recordPublication(publication);
+          });
+        }
+        lastSynced.current = JSON.stringify(normalized);
         blocked.current = pending.length > 0 || !current.snapshot.identitiesReady;
         setEditingBlocked(blocked.current);
         // Never replay a recovered draft or silently rebase it over a different revision.
@@ -1212,6 +1243,8 @@ const action =
             : null;
   const stockSectionActive =
     page === "stock" || page === "stock-supplies" || page === "catalog";
+  const registrationsSectionActive =
+    page === "clients" || page === "suppliers" || page === "brands";
   const financeSectionActive =
     page === "finance" || page === "receivables" || page === "finance-pricing";
   const shippingSectionActive =
@@ -1231,7 +1264,13 @@ const action =
         ? "Estoque de insumos"
         : page === "catalog"
           ? "Catálogo"
-          : page === "receivables"
+          : page === "clients"
+            ? "Clientes"
+            : page === "suppliers"
+              ? "Fornecedores"
+              : page === "brands"
+                ? "Marcas"
+                : page === "receivables"
             ? "Vendas a receber"
             : page === "finance-pricing"
               ? "Precificação"
@@ -1305,6 +1344,53 @@ const action =
                         onClick={() => setPage("catalog")}
                       >
                         Catálogo
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+
+            if (id === "registrations") {
+              return (
+                <div className="stockNavGroup registrationsNavGroup" key={id}>
+                  <button
+                    className={
+                      registrationsSectionActive ? "on stockParent" : "stockParent"
+                    }
+                    onClick={() =>
+                      setRegistrationsMenuOpen((open) => !open)
+                    }
+                    aria-expanded={registrationsMenuOpen}
+                  >
+                    <Icon />
+                    {label}
+                    <ChevronDown
+                      className={
+                        "stockNavChevron" +
+                        (registrationsMenuOpen ? " open" : "")
+                      }
+                    />
+                  </button>
+                  {registrationsMenuOpen ? (
+                    <div className="stockSubnav">
+                      <button
+                        className={page === "clients" ? "on" : ""}
+                        onClick={() => setPage("clients")}
+                      >
+                        Clientes
+                      </button>
+                      <button
+                        className={page === "suppliers" ? "on" : ""}
+                        onClick={() => setPage("suppliers")}
+                      >
+                        Fornecedores
+                      </button>
+                      <button
+                        className={page === "brands" ? "on" : ""}
+                        onClick={() => setPage("brands")}
+                      >
+                        Marcas
                       </button>
                     </div>
                   ) : null}
@@ -1528,6 +1614,26 @@ const action =
             ) : null}
             {page === "catalog" ? (
               <button
+                className="secondary catalogHeaderEditButton"
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("daf:catalog-edit"))
+                }
+              >
+                <Palette /> Editar
+              </button>
+            ) : null}
+            {page === "catalog" ? (
+              <button
+                className="secondary catalogHeaderImagesButton"
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("daf:catalog-images"))
+                }
+              >
+                <ImageIcon /> Imagens
+              </button>
+            ) : null}
+            {page === "catalog" ? (
+              <button
                 className="secondary catalogPublicButton"
                 onClick={() =>
                   window.open(
@@ -1552,7 +1658,7 @@ const action =
             ) : null}
           </div>
         </header>
-        <section className="content">
+        <section className={"content contentPage-" + page}>
           {saveNotice && <div className="card" role="alert"><p>{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button></div>}
           {catalogNotice && <div className="card" role="status"><p>{catalogNotice}</p><button disabled={sync !== "saved" || !ready} onClick={async () => { if (writer.current && !writer.current.pending && !blocked.current) recordPublication(await writer.current.publish()); }}>Publicar catálogo da revisão salva</button></div>}
           <div inert={editingBlocked} style={{display:"contents"}}>
@@ -1587,7 +1693,6 @@ const action =
               set={setData}
               add={() => setModal({ type: "supply" })}
               addProduct={() => setModal({ type: "product" })}
-              manageBrands={() => setModal({ type: "brands" })}
               editSupply={(id) => setModal({ type: "supplyEdit", id })}
               edit={(id) => setModal({ type: "product", id })}
               notify={notify}
@@ -1626,6 +1731,13 @@ const action =
               edit={(id) => setModal({ type: "supplier", id })}
               notify={notify}
             />
+          ) : page === "brands" ? (
+            <BrandManager
+              d={data}
+              set={setData}
+              notify={notify}
+              embedded
+            />
           ) : page === "finance-pricing" ? (
             <PricingCalculator d={data} notify={notify} />
           ) : page === "settings" ? (
@@ -1649,13 +1761,6 @@ const action =
           d={data}
           set={setData}
           close={() => setModal(null)}
-        />
-      ) : modal?.type === "brands" ? (
-        <BrandManager
-          d={data}
-          set={setData}
-          close={() => setModal(null)}
-          notify={notify}
         />
       ) : modal?.type === "stockReport" ? (
         <StockReport
@@ -2040,7 +2145,7 @@ function normalizeData(stored: any): D {
       .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
       .forEach((sale, index) => sequentialIds.set(sale.id, index + 1));
   }
-  const normalizedSales = rawSales.map((s: V) => {
+  let normalizedSales = rawSales.map((s: V) => {
     const marketplaceSale = isMarketplaceSale(s);
     const linkedCustomer = normalizedClients.find(
       (client: C) => client.id === s.clientId,
@@ -2115,6 +2220,46 @@ function normalizeData(stored: any): D {
           : [],
     } as V;
   });
+
+  const needsHacivatBottleCorrection =
+    Math.max(0, Number(merged.hacivatBottleCorrectionVersion) || 0) < 1;
+  if (needsHacivatBottleCorrection) {
+    const hacivatIndex = products.findIndex((product) =>
+      perfumeIdentity(product.brand, product.name).endsWith(" hacivat"),
+    );
+    if (hacivatIndex >= 0) {
+      const hacivat = products[hacivatIndex];
+      const hacivatId = hacivat.id;
+      normalizedSales = normalizedSales.map((sale) => ({
+        ...sale,
+        items: sale.items.map((item) =>
+          item.productId === hacivatId && Number(item.bottleNumber) === 4
+            ? { ...item, bottleNumber: 3 }
+            : item,
+        ),
+      }));
+
+      const correctedBottleNumber = 4;
+      const correctedHistory = normalizeBottleHistory(
+        {
+          ...hacivat,
+          bottleNumber: correctedBottleNumber,
+        },
+        correctedBottleNumber,
+      ).map((entry) =>
+        entry.number === 3 || entry.number === 4
+          ? { ...entry, assumedSold: false }
+          : entry,
+      );
+
+      products[hacivatIndex] = {
+        ...hacivat,
+        bottleNumber: correctedBottleNumber,
+        bottleHistory: correctedHistory,
+      };
+    }
+  }
+
   let normalizedSupplies = (merged.supplies || []).map((s: S) => {
     const pendingLots = (s.pendingLots || []).map((lot) => ({
       ...lot,
@@ -2164,6 +2309,7 @@ function normalizeData(stored: any): D {
     products,
     orderSequenceVersion: 1,
     supplyInventoryVersion: 1,
+    hacivatBottleCorrectionVersion: 1,
     marketplacePayoutDays: {
       "TikTok Shop": Number(merged.marketplacePayoutDays?.["TikTok Shop"] || 9),
       Shopee: Number(merged.marketplacePayoutDays?.Shopee || 7),
@@ -3082,7 +3228,7 @@ function HealthGauge({
   const cashRatio = gross ? (cashGeneration / gross) * 100 : -100;
   const receivedRatio = gross ? (paid / gross) * 100 : 0;
   const expenseRatio = gross
-    ? ((operatingCosts + purchases) / gross) * 100
+    ? (operatingCosts / gross) * 100
     : 100;
 
   const revenueRatio =
@@ -3145,10 +3291,10 @@ function HealthGauge({
   let score = gross
     ? Math.round(
         revenueScore * 0.45 +
-          marginScore * 0.2 +
-          cashScore * 0.15 +
+          marginScore * 0.25 +
+          cashScore * 0.05 +
           receivedScore * 0.1 +
-          efficiencyScore * 0.1,
+          efficiencyScore * 0.15,
       )
     : 0;
 
@@ -3160,7 +3306,6 @@ function HealthGauge({
     else if (revenueRatio < 0.7) score = Math.min(score, 59);
   }
   if (operatingResult < 0) score = Math.min(score, 45);
-  if (cashGeneration < 0) score = Math.min(score, 49);
 
   const status =
     !gross
@@ -3654,6 +3799,12 @@ function Dash({ d, set }: { d: D; set: any }) {
           <span>Volume vendido</span>
           <b>{metrics.ml.toLocaleString("pt-BR")} ml</b>
           <small>{brl(metrics.paid)} já recebidos</small>
+          <ComparisonBadge
+            value={metricDelta(metrics.ml, previousMetrics.ml)}
+            label={comparisonLabel}
+            previousValue={previousMetrics.ml.toLocaleString("pt-BR") + " ml"}
+            previousPeriod={previousPeriodLabel}
+          />
         </div>
       </div>
 
@@ -4038,7 +4189,7 @@ function Sales({
     notify?.("Venda excluída.");
   }
   return (
-    <div className="panel table">
+    <div className="panel table salesTablePanel">
       <div className="salesTitleRow">
         <h2>Vendas</h2>
         <span>
@@ -4107,6 +4258,7 @@ function Sales({
           </button>
         </div>
       ) : null}
+      <div className="recordsTableScroll">
       <table>
         <thead>
           <tr>
@@ -4200,6 +4352,7 @@ function Sales({
         </tbody>
       </table>
       {!filteredSales.length ? <p className="empty">Nenhuma venda encontrada.</p> : null}
+      </div>
     </div>
   );
 }
@@ -4238,6 +4391,11 @@ function saleOriginBadge(s: V) {
       : "shopee"
     : "direct";
   return <strong className={`prepareOrigin ${css}`}>{label}</strong>;
+}
+
+function saleShippingLabel(s: V) {
+  if (isMarketplaceSale(s)) return "";
+  return String(s.shippingMethod || "").trim();
 }
 
 function Prepare({
@@ -4475,6 +4633,9 @@ function Prepare({
             sale.items.map((item) => ({ sale, item })),
           );
           const done = group.sales.every((sale) => sale.prepared);
+          const shippingMethods = Array.from(
+            new Set(group.sales.map(saleShippingLabel).filter(Boolean)),
+          );
           return (
             <div key={group.key} className={done ? "done" : ""}>
               <button
@@ -4503,7 +4664,15 @@ function Prepare({
                   </small>
                 ))}
               </span>
-              {saleOriginBadge(representative)}
+              <div className="prepareBadges">
+                {shippingMethods.length ? (
+                  <span className="prepareShippingMethod">
+                    <Truck />
+                    {shippingMethods.join(" · ")}
+                  </span>
+                ) : null}
+                {saleOriginBadge(representative)}
+              </div>
               <span className="prepareActions">
                 {done ? (
                   <em>Finalizado</em>
@@ -6323,56 +6492,48 @@ function Receivables({
   edit: (id: number) => void;
   notify: (message: string) => void;
 }) {
-  const [receivableTab, setReceivableTab] = useState<"direct" | "marketplace">(
-    "direct",
-  );
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [paymentSale, setPaymentSale] = useState<V | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentError, setPaymentError] = useState("");
   const allPendingSales = d.sales
     .filter(
-      (s) =>
-        s.status !== "cancelled" &&
-        !isNoCost(s) &&
-        (marketplacePending(s) || (!isMarketplaceSale(s) && s.paid < s.total)),
-    );
-  const pendingSales = allPendingSales.filter(
       (sale) =>
-        !overdueOnly ||
-        ((sale.installments || []).length
-          ? (sale.installments || []).some(
-              (installment) =>
-                !installment.paid &&
-                Boolean(installment.date) &&
-                installment.date < today(),
-            )
-          : Boolean(sale.dueDate) && sale.dueDate! < today()),
+        sale.status !== "cancelled" &&
+        !isNoCost(sale) &&
+        !isMarketplaceSale(sale) &&
+        sale.paid < sale.total,
     )
     .sort((a, b) => a.date.localeCompare(b.date));
-  const directList = pendingSales.filter((sale) => !isMarketplaceSale(sale));
-  const marketplaceList = pendingSales.filter(isMarketplaceSale);
-  const list = receivableTab === "marketplace" ? marketplaceList : directList;
-  const directTotal = allPendingSales
-    .filter((sale) => !isMarketplaceSale(sale))
-    .reduce((sum, sale) => sum + amountDue(sale), 0);
-  const marketplaceTotal = allPendingSales
-    .filter(isMarketplaceSale)
-    .reduce((sum, sale) => sum + amountDue(sale), 0);
-  function recordPayment(s: V) {
-    if (isMarketplaceSale(s)) {
-      set((x: D) => ({
-        ...x,
-        sales: x.sales.map((sale) =>
-          sale.id === s.id
-            ? { ...sale, marketplacePayoutReceived: true }
-            : sale,
-        ),
-      }));
-      notify(`Repasse do pedido #${orderNo(s.id)} confirmado.`);
-      return;
-    }
-    setPaymentSale(s);
+  const pendingSales = allPendingSales.filter(
+    (sale) =>
+      !overdueOnly ||
+      ((sale.installments || []).length
+        ? (sale.installments || []).some(
+            (installment) =>
+              !installment.paid &&
+              Boolean(installment.date) &&
+              installment.date < today(),
+          )
+        : Boolean(sale.dueDate) && sale.dueDate! < today()),
+  );
+  const directTotal = allPendingSales.reduce(
+    (sum, sale) => sum + amountDue(sale),
+    0,
+  );
+  const overdueCount = allPendingSales.filter((sale) =>
+    (sale.installments || []).length
+      ? (sale.installments || []).some(
+          (installment) =>
+            !installment.paid &&
+            Boolean(installment.date) &&
+            installment.date < today(),
+        )
+      : Boolean(sale.dueDate) && sale.dueDate! < today(),
+  ).length;
+
+  function recordPayment(sale: V) {
+    setPaymentSale(sale);
     setPaymentAmount("");
     setPaymentError("");
   }
@@ -6424,41 +6585,21 @@ function Receivables({
     setPaymentAmount("");
     setPaymentError("");
   }
+
   return (
     <>
       <Cards
         v={[
-          [brl(directTotal + marketplaceTotal), "Total geral a receber"],
-          [brl(directTotal), "Vendas diretas a receber"],
-          [brl(marketplaceTotal), "Marketplace a receber"],
-          [String(allPendingSales.length), "Total de vendas pendentes"],
+          [brl(directTotal), "Total a receber"],
+          [String(allPendingSales.length), "Vendas pendentes"],
+          [String(overdueCount), "Vendas vencidas"],
         ]}
       />
       <div className="panel table">
         <div className="receivableHeader">
           <div>
             <h2>Vendas a receber</h2>
-            <p>Inclui vendas pendentes de qualquer mês.</p>
-          </div>
-          <div className="receivableTabs" role="tablist" aria-label="Tipo de venda">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={receivableTab === "direct"}
-              className={receivableTab === "direct" ? "active" : ""}
-              onClick={() => setReceivableTab("direct")}
-            >
-              Vendas diretas <b>{directList.length}</b>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={receivableTab === "marketplace"}
-              className={receivableTab === "marketplace" ? "active" : ""}
-              onClick={() => setReceivableTab("marketplace")}
-            >
-              Marketplace <b>{marketplaceList.length}</b>
-            </button>
+            <p>Apenas vendas diretas pendentes, independentemente do mês.</p>
           </div>
           <button
             type="button"
@@ -6480,28 +6621,19 @@ function Receivables({
             </tr>
           </thead>
           <tbody>
-            {list.map((s) => (
-              <tr key={s.id}>
-                <td>#{orderNo(s.id)}</td>
+            {pendingSales.map((sale) => (
+              <tr key={sale.id}>
+                <td>#{orderNo(sale.id)}</td>
+                <td>{saleCustomer(sale, d)}</td>
+                <td>{dateBR(sale.date)}</td>
+                <td><b>{brl(amountDue(sale))}</b></td>
                 <td>
-                  {saleCustomer(s, d)}
-                  {isMarketplaceSale(s) ? (
-                    <small className="marketplaceReceivableLabel">
-                      {s.marketplace || "Marketplace"}
-                    </small>
-                  ) : null}
-                </td>
-                <td>{dateBR(s.date)}</td>
-                <td>
-                  <b>{brl(amountDue(s))}</b>
-                </td>
-                <td>
-                  {s.installments?.length ? (
-                    s.installments
-                      .filter((p) => !p.paid)
-                      .map((p, i) => (
-                        <small key={i}>
-                          {p.date ? dateBR(p.date) : "Sem data"} — {brl(p.amount)}
+                  {sale.installments?.length ? (
+                    sale.installments
+                      .filter((installment) => !installment.paid)
+                      .map((installment, index) => (
+                        <small key={index}>
+                          {installment.date ? dateBR(installment.date) : "Sem data"} — {brl(installment.amount)}
                         </small>
                       ))
                   ) : (
@@ -6512,11 +6644,11 @@ function Receivables({
                   <div className="tableActions">
                     <button
                       className="iconButton payButton"
-                      onClick={() => recordPayment(s)}
+                      onClick={() => recordPayment(sale)}
                     >
                       <Wallet /> Dar baixa
                     </button>
-                    <button className="iconButton" onClick={() => edit(s.id)}>
+                    <button className="iconButton" onClick={() => edit(sale.id)}>
                       <Pencil /> Editar
                     </button>
                   </div>
@@ -6525,9 +6657,11 @@ function Receivables({
             ))}
           </tbody>
         </table>
-        {!list.length ? (
+        {!pendingSales.length ? (
           <p className="empty">
-            Nenhuma venda pendente nesta categoria.
+            {overdueOnly
+              ? "Nenhuma venda direta vencida."
+              : "Nenhuma venda direta pendente."}
           </p>
         ) : null}
       </div>
@@ -6754,13 +6888,15 @@ function StockReport({
 function BrandManager({
   d,
   set,
-  close,
+  close = () => {},
   notify,
+  embedded = false,
 }: {
   d: D;
   set: any;
-  close: () => void;
+  close?: () => void;
   notify: (message: string) => void;
+  embedded?: boolean;
 }) {
   const brands = Array.from(
     new Set([
@@ -6880,16 +7016,24 @@ function BrandManager({
   }
 
   return (
-    <div className="overlay">
-      <div className="systemDialog brandManagerDialog">
+    <div className={embedded ? "brandManagerPage" : "overlay"}>
+      <div
+        className={
+          embedded
+            ? "panel brandManagerDialog brandManagerPagePanel"
+            : "systemDialog brandManagerDialog"
+        }
+      >
         <header>
           <div>
             <small>GESTÃO DE CADASTROS</small>
             <h2>Marcas</h2>
           </div>
-          <button type="button" onClick={close} aria-label="Fechar marcas">
-            <X />
-          </button>
+          {!embedded ? (
+            <button type="button" onClick={close} aria-label="Fechar marcas">
+              <X />
+            </button>
+          ) : null}
         </header>
 
         <p className="brandManagerHint">
@@ -6987,11 +7131,13 @@ function BrandManager({
           ) : null}
         </div>
 
-        <footer>
-          <button type="button" onClick={close}>
-            Fechar
-          </button>
-        </footer>
+        {!embedded ? (
+          <footer>
+            <button type="button" onClick={close}>
+              Fechar
+            </button>
+          </footer>
+        ) : null}
       </div>
 
       {addingOpen ? (
@@ -7119,7 +7265,6 @@ function Stock({
   mode,
   add,
   addProduct,
-  manageBrands,
   editSupply,
   edit,
   set,
@@ -7129,7 +7274,6 @@ function Stock({
   mode: "perfumes" | "supplies";
   add: () => void;
   addProduct: () => void;
-  manageBrands: () => void;
   editSupply: (id: number) => void;
   edit: (id: number) => void;
   set: any;
@@ -7231,8 +7375,8 @@ function Stock({
         a.sale.date.localeCompare(b.sale.date) || a.sale.id - b.sale.id,
     );
     const lines = orderedRows.map(
-      ({ sale, ml }) =>
-        `${formatCopyMl(ml)} — ${saleCustomer(sale, d)}`,
+      ({ sale, ml, hasApc }) =>
+        `${hasApc ? "APC " : ""}${formatCopyMl(ml)} — ${saleCustomer(sale, d)}`,
     );
     lines.push(
       `📊 ESTOQUE: ${formatCopyMl(historyRemainingMl)} disponíveis`,
@@ -7292,15 +7436,6 @@ function Stock({
           </p>
         </div>
         <div className="stockHeadActions">
-          {view !== "supplies" ? (
-            <button
-              type="button"
-              className="brandManagerButton"
-              onClick={manageBrands}
-            >
-              Marcas
-            </button>
-          ) : null}
           <button
             className="primary stockAction"
             onClick={view !== "supplies" ? addProduct : add}
@@ -7571,7 +7706,7 @@ function Stock({
         </div>
       ) : null}
       {historyProduct ? (
-        <div className="overlay">
+        <div className="overlay productHistoryOverlay">
           <div className="systemDialog productSalesHistoryDialog">
             <header>
               <div>
@@ -7791,7 +7926,7 @@ function Purchases({
           [String(monthly.length), "Compras no mês"],
         ]}
       />
-      <div className="panel table">
+      <div className="panel table purchaseTablePanel">
         <h2>Histórico de compras</h2>
         <div className="salesToolbar purchaseMonthToolbar">
           <label className="salesSearch">
@@ -7853,6 +7988,7 @@ function Purchases({
           </div>
         ) : null}
 
+        <div className="recordsTableScroll">
         <table>
           <thead>
             <tr>
@@ -7899,6 +8035,7 @@ function Purchases({
             Nenhuma compra encontrada para o mês selecionado.
           </p>
         ) : null}
+        </div>
       </div>
     </>
   );
@@ -8657,7 +8794,7 @@ function pricingApcVolume(bottleMl: number) {
 
 function pricingCommercialNearest(value: number) {
   if (!Number.isFinite(value) || value <= 0) return 0;
-  return Math.max(0.9, Math.round(value - 0.9) + 0.9);
+  return Math.max(0.1, Math.round(value * 10) / 10);
 }
 
 function pricingCommercialCeil(value: number) {
@@ -8690,6 +8827,7 @@ function pricingFormatCurrency(value: number) {
 }
 
 function pricingApcChoice(value: number) {
+  if (!value) return "";
   return [20, 30, 40, 50, 60].includes(value) ? String(value) : "Outro valor";
 }
 
@@ -8701,21 +8839,21 @@ function PricingCalculator({
   notify: (message: string) => void;
 }) {
   const [category, setCategory] = useState("Designer");
-  const [bottleMl, setBottleMl] = useState(100);
+  const [bottleMl, setBottleMl] = useState(0);
   const [paidInput, setPaidInput] = useState("");
   const [paidEditing, setPaidEditing] = useState(false);
-  const initialApcMl = pricingApcVolume(100);
-  const [apcChoice, setApcChoice] = useState(pricingApcChoice(initialApcMl));
+  const initialApcMl = 0;
+  const [apcChoice, setApcChoice] = useState("");
   const [apcMenuOpen, setApcMenuOpen] = useState(false);
   const apcSelectRef = useRef<HTMLDivElement | null>(null);
-  const [customApcMl, setCustomApcMl] = useState(
-    pricingApcChoice(initialApcMl) === "Outro valor" ? initialApcMl : 0,
-  );
+  const [customApcMl, setCustomApcMl] = useState(0);
   const paid = pricingParseCurrency(paidInput);
   const apcMl =
     apcChoice === "Outro valor"
       ? Math.max(0, Number(customApcMl) || 0)
-      : Math.max(0, Number(apcChoice) || 0);
+      : apcChoice
+        ? Math.max(0, Number(apcChoice) || 0)
+        : 0;
   const [marginStep, setMarginStep] = useState(0);
   const [rowMarginOffsets, setRowMarginOffsets] =
     useState<PricingMarginOffsets>({});
@@ -8800,6 +8938,11 @@ function PricingCalculator({
     });
   }
 
+  function resetPricingMargins() {
+    setMarginStep(0);
+    setRowMarginOffsets({});
+  }
+
   function marginBand(simulation: PricingSimulation) {
     return simulation.isApc
       ? PRICING_APC_MARGIN_BAND
@@ -8814,25 +8957,20 @@ function PricingCalculator({
     const band = marginBand(simulation);
     return pricingClamp(
       band.base + marginStep + (rowMarginOffsets[simulation.key] || 0),
-      band.min,
-      band.max,
+      10,
+      75,
     );
   }
 
   function adjustRowMargin(simulation: PricingSimulation, delta: number) {
-    const band = marginBand(simulation);
-    const currentTarget = targetMargin(simulation);
-    const nextTarget = pricingClamp(
-      currentTarget + delta,
-      band.min,
-      band.max,
-    );
-    const currentOffset = rowMarginOffsets[simulation.key] || 0;
-    setRowMarginOffsets((current) => ({
-      ...current,
-      [simulation.key]:
-        currentOffset + (nextTarget - currentTarget),
-    }));
+    setRowMarginOffsets((current) => {
+      const currentOffset = current[simulation.key] || 0;
+      const nextOffset = pricingClamp(currentOffset + delta, -7, 7);
+      return {
+        ...current,
+        [simulation.key]: nextOffset,
+      };
+    });
   }
 
   const supplyNames = Array.from(
@@ -8851,17 +8989,20 @@ function PricingCalculator({
     ).values(),
   );
 
-  const perfumeUnitCost = bottleMl > 0 ? paid / bottleMl : 0;
+  const pricingReady = bottleMl > 0 && paid > 0;
+  const perfumeUnitCost = pricingReady ? paid / bottleMl : 0;
   const decantRows = simulations
     .filter((simulation) => !simulation.isApc)
     .map((simulation) => {
-      const supply = packaging(simulationSale(simulation), d.supplies);
-      const perfumeCost = perfumeUnitCost * simulation.ml;
-      const totalCost = perfumeCost + supply.total;
+      const supply = pricingReady
+        ? packaging(simulationSale(simulation), d.supplies)
+        : { total: 0, missing: [] as string[] };
+      const perfumeCost = pricingReady ? perfumeUnitCost * simulation.ml : 0;
+      const totalCost = pricingReady ? perfumeCost + supply.total : 0;
       const band = marginBand(simulation);
       const desiredMargin = targetMargin(simulation);
       const rawPrice =
-        totalCost > 0
+        pricingReady && totalCost > 0
           ? totalCost / Math.max(0.01, 1 - desiredMargin / 100)
           : 0;
       return {
@@ -8876,52 +9017,18 @@ function PricingCalculator({
       };
     });
 
-  for (let index = decantRows.length - 2; index >= 0; index -= 1) {
-    const current = decantRows[index];
-    const next = decantRows[index + 1];
-    if (!current.price || !next.price) continue;
-    const minimumUnitPrice = (next.price / next.ml) * 1.015;
-    const minimumPrice = minimumUnitPrice * current.ml;
-    const maximumPriceInsideBand =
-      current.totalCost > 0
-        ? current.totalCost / Math.max(0.01, 1 - current.band.max / 100)
-        : 0;
-    const candidate = pricingCommercialCeil(minimumPrice);
-    if (current.price < candidate) {
-      current.price =
-        maximumPriceInsideBand > 0
-          ? Math.min(candidate, pricingCommercialNearest(maximumPriceInsideBand))
-          : candidate;
-    }
-  }
-
-  const row2 = decantRows.find((row) => row.ml === 2);
-  const row3 = decantRows.find((row) => row.ml === 3);
-  if (row2 && row3 && row3.price > 0) {
-    const upgradeFloor = row3.price * 0.82;
-    const row2MaxPrice =
-      row2.totalCost > 0
-        ? row2.totalCost / Math.max(0.01, 1 - row2.band.max / 100)
-        : 0;
-    if (row2.price < upgradeFloor) {
-      const upgraded = pricingCommercialCeil(upgradeFloor);
-      row2.price =
-        row2MaxPrice > 0
-          ? Math.min(upgraded, pricingCommercialNearest(row2MaxPrice))
-          : upgraded;
-    }
-  }
-
   const apcSimulation = simulations.find((simulation) => simulation.isApc);
   const apcRow = apcSimulation
     ? (() => {
-        const supply = packaging(simulationSale(apcSimulation), d.supplies);
-        const perfumeCost = perfumeUnitCost * apcSimulation.ml;
-        const totalCost = perfumeCost + supply.total;
+        const supply = pricingReady
+          ? packaging(simulationSale(apcSimulation), d.supplies)
+          : { total: 0, missing: [] as string[] };
+        const perfumeCost = pricingReady ? perfumeUnitCost * apcSimulation.ml : 0;
+        const totalCost = pricingReady ? perfumeCost + supply.total : 0;
         const band = marginBand(apcSimulation);
         const desiredMargin = targetMargin(apcSimulation);
         const rawPrice =
-          totalCost > 0
+          pricingReady && totalCost > 0
             ? totalCost / Math.max(0.01, 1 - desiredMargin / 100)
             : 0;
         return {
@@ -8993,17 +9100,6 @@ function PricingCalculator({
 
   return (
     <div className="pricingWorkspace">
-      <div className="pricingHero panel">
-        <div>
-          <span className="eyebrow">Financeiro · Precificação</span>
-          <h2>Calculadora de preços</h2>
-          <p>
-            Sugestões calculadas pelo custo do perfume, insumos cadastrados no
-            sistema e faixa de margem comercial da DAF Splits.
-          </p>
-        </div>
-      </div>
-
       <div className="pricingSetupGrid">
         <div className="panel pricingInputsPanel">
           <div className="panelHeading">
@@ -9023,7 +9119,7 @@ function PricingCalculator({
                 v={category}
                 set={(value) => {
                   setCategory(value);
-                  setRowMarginOffsets({});
+                  resetPricingMargins();
                   setSupplyOverrides({});
                 }}
               />
@@ -9039,17 +9135,9 @@ function PricingCalculator({
                 onChange={(event) => {
                   const value = Math.max(0, Number(event.target.value) || 0);
                   setBottleMl(value);
-                  const suggestedApc = pricingApcVolume(value);
-                  const suggestedChoice = pricingApcChoice(suggestedApc);
-                  setApcChoice(suggestedChoice);
-                  setCustomApcMl(
-                    suggestedChoice === "Outro valor" ? suggestedApc : 0,
-                  );
-                  setRowMarginOffsets((current) => {
-                    const next = { ...current };
-                    delete next.apc;
-                    return next;
-                  });
+                  resetPricingMargins();
+                  setApcChoice("");
+                  setCustomApcMl(0);
                   setSupplyOverrides({});
                 }}
               />
@@ -9080,7 +9168,10 @@ function PricingCalculator({
                     );
                   }
                 }}
-                onChange={(event) => setPaidInput(event.target.value)}
+                onChange={(event) => {
+                  setPaidInput(event.target.value);
+                  resetPricingMargins();
+                }}
                 onBlur={() => {
                   const value = pricingParseCurrency(paidInput);
                   setPaidInput(value > 0 ? pricingFormatCurrency(value) : "");
@@ -9102,7 +9193,9 @@ function PricingCalculator({
                   <span>
                     {apcChoice === "Outro valor"
                       ? "Outro valor"
-                      : apcChoice + " ml"}
+                      : apcChoice
+                        ? apcChoice + " ml"
+                        : "Selecione..."}
                   </span>
                   <ChevronDown className={apcMenuOpen ? "open" : ""} />
                 </button>
@@ -9127,11 +9220,7 @@ function PricingCalculator({
                               }
                               setApcChoice(option);
                               setApcMenuOpen(false);
-                              setRowMarginOffsets((current) => {
-                                const next = { ...current };
-                                delete next.apc;
-                                return next;
-                              });
+                              resetPricingMargins();
                               setSupplyOverrides((current) => {
                                 const next = { ...current };
                                 delete next.apc;
@@ -9165,11 +9254,7 @@ function PricingCalculator({
                       setCustomApcMl(
                         Math.max(0, Number(event.target.value) || 0),
                       );
-                      setRowMarginOffsets((current) => {
-                        const next = { ...current };
-                        delete next.apc;
-                        return next;
-                      });
+                      resetPricingMargins();
                       setSupplyOverrides((current) => {
                         const next = { ...current };
                         delete next.apc;
@@ -9200,8 +9285,8 @@ function PricingCalculator({
             <button
               type="button"
               aria-label="Reduzir margem geral"
-              disabled={marginStep <= -4}
-              onClick={() => setMarginStep((value) => Math.max(-4, value - 1))}
+              disabled={marginStep <= -7}
+              onClick={() => setMarginStep((value) => Math.max(-7, value - 1))}
             >
               <Minus />
             </button>
@@ -9215,8 +9300,8 @@ function PricingCalculator({
             <button
               type="button"
               aria-label="Aumentar margem geral"
-              disabled={marginStep >= 4}
-              onClick={() => setMarginStep((value) => Math.min(4, value + 1))}
+              disabled={marginStep >= 7}
+              onClick={() => setMarginStep((value) => Math.min(7, value + 1))}
             >
               <Plus />
             </button>
@@ -9271,6 +9356,17 @@ function PricingCalculator({
           <div className="pricingPanelActions">
             <button
               type="button"
+              className="secondary pricingResetButton"
+              onClick={resetPricingMargins}
+              disabled={
+                marginStep === 0 && !Object.values(rowMarginOffsets).some(Boolean)
+              }
+            >
+              <RotateCcw />
+              Resetar
+            </button>
+            <button
+              type="button"
               className="secondary pricingCopyButton"
               onClick={copyPricingTable}
             >
@@ -9305,27 +9401,25 @@ function PricingCalculator({
                     {row.isApc ? <small>Frasco + caixa originais</small> : null}
                   </td>
                   <td className="pricingSuggestedPrice">
-                    {row.price ? brl(row.price) : "—"}
+                    {brl(row.price || 0)}
                   </td>
-                  <td>{row.unitPrice ? brl(row.unitPrice) : "—"}</td>
+                  <td>{brl(row.unitPrice || 0)}</td>
                   <td>{brl(row.perfumeCost)}</td>
                   <td>{brl(row.supplyCost)}</td>
                   <td>{brl(row.totalCost)}</td>
                   <td className="pricingProfit">
-                    {row.price ? brl(row.profit) : "—"}
+                    {brl(row.profit || 0)}
                   </td>
                   <td className="pricingMarginColumn">
                     <div className="pricingMarginCell">
                       <b className="pricingMarginValue">
-                        {row.price
-                          ? row.margin.toFixed(1).replace(".", ",") + "%"
-                          : "—"}
+                        {(row.margin || 0).toFixed(1).replace(".", ",") + "%"}
                       </b>
                       <div className="pricingRowMarginButtons">
                         <button
                           type="button"
                           aria-label={"Aumentar margem de " + row.label}
-                          disabled={row.targetMargin >= row.band.max}
+                          disabled={!pricingReady || (rowMarginOffsets[row.key] || 0) >= 7}
                           onClick={() => adjustRowMargin(row, 1)}
                         >
                           <Plus />
@@ -9333,7 +9427,7 @@ function PricingCalculator({
                         <button
                           type="button"
                           aria-label={"Reduzir margem de " + row.label}
-                          disabled={row.targetMargin <= row.band.min}
+                          disabled={!pricingReady || (rowMarginOffsets[row.key] || 0) <= -7}
                           onClick={() => adjustRowMargin(row, -1)}
                         >
                           <Minus />
@@ -9792,7 +9886,16 @@ function ProfitControl({
     const expenseBreakdown = saleExpenseBreakdown(sale, d);
     const expenses = expenseBreakdown.total;
     const profit = (isNoCost(sale) ? 0 : sale.total) - perfumeCost - expenses;
-    return { sale, perfumeCost, expenses, expenseBreakdown, profit };
+    const orderMargin =
+      !isNoCost(sale) && sale.total > 0 ? (profit / sale.total) * 100 : null;
+    return {
+      sale,
+      perfumeCost,
+      expenses,
+      expenseBreakdown,
+      profit,
+      orderMargin,
+    };
   });
   const revenue = rows.reduce(
     (sum, row) => sum + (isNoCost(row.sale) ? 0 : row.sale.total),
@@ -9832,8 +9935,8 @@ function ProfitControl({
       >
         {showOrders ? "Ocultar pedidos" : "Ver pedidos"}
       </button>
-      {showOrders ? <div className="table">
-        <table>
+      {showOrders ? <div className="table profitOrdersTableWrap">
+        <table className="profitOrdersTable">
           <thead>
             <tr>
               <th>Pedido</th>
@@ -9841,6 +9944,7 @@ function ProfitControl({
               <th>Custo perfume</th>
               <th>Despesas</th>
               <th>Lucro</th>
+              <th>Margem de lucro</th>
               <th>Ação</th>
             </tr>
           </thead>
@@ -9852,6 +9956,7 @@ function ProfitControl({
                 expenses: expense,
                 expenseBreakdown,
                 profit: rowProfit,
+                orderMargin,
               }) => (
                 <tr key={sale.id}>
                   <td>#{orderNo(sale.id)}</td>
@@ -9900,6 +10005,11 @@ function ProfitControl({
                     </details>
                   </td>
                   <td>{brl(rowProfit)}</td>
+                  <td className={orderMargin !== null && orderMargin < 0 ? "profitMargin negative" : "profitMargin"}>
+                    {orderMargin === null
+                      ? "—"
+                      : `${orderMargin.toFixed(1).replace(".", ",")}%`}
+                  </td>
                   <td>
                     <button
                       className="iconButton"
@@ -10193,8 +10303,8 @@ function InventoryEdit({
     close();
   }
   return (
-    <div className="overlay">
-      <form onSubmit={save}>
+    <div className="overlay inventoryEditOverlay">
+      <form className="inventoryEditForm" onSubmit={save}>
         <header>
           <h2>{supply ? "Editar suprimento" : "Editar compra"}</h2>
           <button type="button" onClick={close}>
@@ -10210,7 +10320,7 @@ function InventoryEdit({
               n="cost"
               l="Preço por unidade (R$)"
               t="number"
-              v={supply.cost || 0}
+              v={Number((Number(supply.cost) || 0).toFixed(6))}
             />
             <Choices
               name="attachCost"
@@ -11236,7 +11346,7 @@ function Form({
           ? "Cadastrar suprimento/insumo"
           : "Registrar compra/despesa";
   return (
-    <div className="overlay">
+    <div className={isSale ? "overlay saleRecordOverlay" : "overlay"}>
       <form
         onSubmit={submit}
         className={isSale ? "recordForm saleRecordForm" : "recordForm"}
@@ -11366,16 +11476,16 @@ function Form({
                 </label>
                 {newClient ? (
                   <>
-                    <div className="row three">
+                    <div className="row three clientSaleIdentityRow">
                       <label><span>Nome</span><input name="newName" value={clientDraft.name} onChange={(e) => setClientDraft((c) => ({ ...c, name: e.target.value }))} required /></label>
-                      <label><span>WhatsApp (opcional)</span><input name="newPhone" inputMode="tel" value={clientDraft.phone} onChange={(e) => setClientDraft((c) => ({ ...c, phone: formatClientPhone(e.target.value) }))} /></label>
                       <label><span>CPF (opcional)</span><input name="newCpf" inputMode="numeric" maxLength={14} value={clientDraft.cpf} onChange={(e) => setClientDraft((c) => ({ ...c, cpf: formatCpf(e.target.value) }))} onBlur={(e) => findClientByCpf(e.target.value)} /></label>
+                      <label><span>WhatsApp (opcional)</span><input name="newPhone" inputMode="tel" value={clientDraft.phone} onChange={(e) => setClientDraft((c) => ({ ...c, phone: formatClientPhone(e.target.value) }))} /></label>
                     </div>
                     <div className="clientSaleAddressRow">
                       <label><span>Endereço (opcional)</span><input name="newAddress" value={clientDraft.address} onChange={(e) => setClientDraft((c) => ({ ...c, address: e.target.value }))} /></label>
-                      <label><span>CEP (opcional)</span><input name="newCep" value={clientDraft.cep} onChange={(e) => setClientDraft((c) => ({ ...c, cep: e.target.value }))} onBlur={(e) => fillAddressFromCep(e.target.value)} /></label>
                       <label><span>Número (opcional)</span><input name="newNumber" value={clientDraft.number} onChange={(e) => setClientDraft((c) => ({ ...c, number: e.target.value }))} /></label>
                       <label><span>Complemento (opcional)</span><input name="newComplement" value={clientDraft.complement} onChange={(e) => setClientDraft((c) => ({ ...c, complement: e.target.value }))} placeholder="Apto, bloco, sala..." /></label>
+                      <label><span>CEP (opcional)</span><input name="newCep" value={clientDraft.cep} onChange={(e) => setClientDraft((c) => ({ ...c, cep: e.target.value }))} onBlur={(e) => fillAddressFromCep(e.target.value)} /></label>
                     </div>
                     <div className="row three">
                       <label><span>Bairro (opcional)</span><input name="newDistrict" value={clientDraft.district} onChange={(e) => setClientDraft((c) => ({ ...c, district: e.target.value }))} /></label>

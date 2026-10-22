@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   ArrowDown,
+  ArrowUp,
   Image as ImageIcon,
   MessageCircle,
   PackageOpen,
   Upload,
   Trash2,
   Palette,
+  Pencil,
   RefreshCw,
   RotateCcw,
   Save,
@@ -28,6 +30,8 @@ export type CatalogItem = {
   bottle?: number;
   imageUrl?: string;
   fragranticaId?: number;
+  fragranticaRating?: number;
+  fragranticaRatingCount?: number;
   manualImage?: boolean;
 };
 
@@ -50,6 +54,8 @@ export type CatalogSettings = {
   groupBorder: string;
   groupButton: string;
   groupButtonText: string;
+  categoryOrder: string[];
+  productOrder: "alphabetical" | "category" | "mostRated";
   manualImages: Record<string, string>;
 };
 
@@ -72,6 +78,8 @@ const LEGACY_CATALOG_SETTINGS: CatalogSettings = {
   groupBorder: "#d7aa36",
   groupButton: "#d7aa36",
   groupButtonText: "#100d06",
+  categoryOrder: ["Nicho", "Árabe", "Designer"],
+  productOrder: "alphabetical",
   manualImages: {},
 };
 
@@ -94,6 +102,8 @@ export const DEFAULT_CATALOG_SETTINGS: CatalogSettings = {
   groupBorder: "#c1893b",
   groupButton: "#c1893b",
   groupButtonText: "#010101",
+  categoryOrder: ["Nicho", "Árabe", "Designer"],
+  productOrder: "alphabetical",
   manualImages: {},
 };
 
@@ -135,6 +145,30 @@ const CATALOG_COLOR_KEYS = [
 
 type CatalogColorKey = (typeof CATALOG_COLOR_KEYS)[number];
 
+const CATALOG_CATEGORIES = ["Nicho", "Árabe", "Designer"] as const;
+
+function normalizeCategoryOrder(value: unknown): string[] {
+  const incoming = Array.isArray(value)
+    ? value
+        .map((item) => String(item || "").trim())
+        .filter((item) =>
+          CATALOG_CATEGORIES.includes(item as (typeof CATALOG_CATEGORIES)[number]),
+        )
+    : [];
+  return [
+    ...Array.from(new Set(incoming)),
+    ...CATALOG_CATEGORIES.filter((category) => !incoming.includes(category)),
+  ];
+}
+
+function normalizeProductOrder(
+  value: unknown,
+): CatalogSettings["productOrder"] {
+  return value === "category" || value === "mostRated"
+    ? value
+    : "alphabetical";
+}
+
 function normalizeManualImages(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object") return {};
   return Object.fromEntries(
@@ -158,6 +192,8 @@ export function normalizeCatalogSettings(value: unknown): CatalogSettings {
       : {};
   const settings: CatalogSettings = {
     ...DEFAULT_CATALOG_SETTINGS,
+    categoryOrder: normalizeCategoryOrder(source.categoryOrder),
+    productOrder: normalizeProductOrder(source.productOrder),
     manualImages: normalizeManualImages(source.manualImages),
   };
 
@@ -369,12 +405,13 @@ function validFragranticaImageUrl(value: unknown): value is string {
 export async function enrichCatalogItemsWithImages(
   items: CatalogItem[],
   signal?: AbortSignal,
+  includeMetrics = false,
 ): Promise<CatalogItem[]> {
-  const known = items.map((item) => applyKnownFragranticaImage(item));
-
   return Promise.all(
-    known.map(async (item) => {
-      if (item.imageUrl) return item;
+    items.map(async (item) => {
+      // Imagens manuais têm prioridade. Para as automáticas, a resolução remota
+      // usa sempre marca + nome antes de recorrer ao mapa local de contingência.
+      if (item.manualImage && item.imageUrl && !includeMetrics) return item;
 
       const cacheKey =
         "daf-fragrantica:" +
@@ -385,7 +422,7 @@ export async function enrichCatalogItemsWithImages(
           typeof window !== "undefined"
             ? window.localStorage.getItem(cacheKey)
             : null;
-        if (validFragranticaImageUrl(cached)) {
+        if (!includeMetrics && validFragranticaImageUrl(cached)) {
           const match = cached.match(/pt-p_c_(\d+)\.jpeg$/);
           return {
             ...item,
@@ -402,17 +439,31 @@ export async function enrichCatalogItemsWithImages(
           brand: item.brand,
           name: item.name,
         });
+        if (item.fragranticaId) {
+          params.set("fragranticaId", String(item.fragranticaId));
+        }
         const deadline = AbortSignal.timeout(4000);
         const response = await fetch("/api/fragrantica-image?" + params.toString(), {
           signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
         });
-        if (!response.ok) return item;
+        if (!response.ok) return applyKnownFragranticaImage(item, item.bottle);
         const data = await response.json();
-        if (!validFragranticaImageUrl(data?.imageUrl)) return item;
+        const resolvedImage = validFragranticaImageUrl(data?.imageUrl)
+          ? data.imageUrl
+          : undefined;
+        const rating = Number(data?.fragranticaRating);
+        const ratingCount = Number(data?.fragranticaRatingCount);
+        if (!resolvedImage && !Number.isFinite(ratingCount)) {
+          return applyKnownFragranticaImage(item, item.bottle);
+        }
 
         try {
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem(cacheKey, data.imageUrl);
+          if (
+            typeof window !== "undefined" &&
+            resolvedImage &&
+            !includeMetrics
+          ) {
+            window.localStorage.setItem(cacheKey, resolvedImage);
           }
         } catch {
           // Falha de cache não impede o catálogo.
@@ -420,11 +471,23 @@ export async function enrichCatalogItemsWithImages(
 
         return {
           ...item,
-          imageUrl: data.imageUrl,
-          fragranticaId: Number(data.fragranticaId) || undefined,
+          imageUrl:
+            item.manualImage && item.imageUrl
+              ? item.imageUrl
+              : resolvedImage || item.imageUrl,
+          fragranticaId:
+            Number(data.fragranticaId) || item.fragranticaId || undefined,
+          fragranticaRating:
+            Number.isFinite(rating) && rating > 0
+              ? rating
+              : item.fragranticaRating,
+          fragranticaRatingCount:
+            Number.isFinite(ratingCount) && ratingCount >= 0
+              ? ratingCount
+              : item.fragranticaRatingCount,
         };
       } catch {
-        return item;
+        return applyKnownFragranticaImage(item, item.bottle);
       }
     }),
   );
@@ -454,7 +517,7 @@ export function catalogItemsFromProducts(
           manualImage: true,
         };
       }
-      return applyKnownFragranticaImage(item, product.bottle);
+      return item;
     })
     .filter((item) => item.stock > 0)
     .sort((a, b) =>
@@ -487,19 +550,58 @@ function CatalogViewer({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  const categoryOrder = useMemo(() => {
+    const configured = normalizeCategoryOrder(settings.categoryOrder);
+    const extras = Array.from(
+      new Set(items.map((item) => item.category).filter(Boolean)),
+    ).filter((item) => !configured.includes(item));
+    return [...configured, ...extras];
+  }, [items, settings.categoryOrder]);
+
   const filtered = useMemo(() => {
     const normalizedQuery = normalizePerfumeName(query);
-    return items.filter((item) => {
-      const matchesCategory =
-        category === "Todos" || item.category === category;
-      const matchesQuery =
-        !normalizedQuery ||
-        normalizePerfumeName(`${item.brand} ${item.name}`).includes(
-          normalizedQuery,
-        );
-      return matchesCategory && matchesQuery;
-    });
-  }, [items, category, query]);
+    const alpha = (a: CatalogItem, b: CatalogItem) =>
+      `${a.brand} ${a.name}`.localeCompare(
+        `${b.brand} ${b.name}`,
+        "pt-BR",
+        { sensitivity: "base" },
+      );
+    const categoryRank = (value: string) => {
+      const index = categoryOrder.indexOf(value);
+      return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+    };
+
+    return items
+      .filter((item) => {
+        const matchesCategory =
+          category === "Todos" || item.category === category;
+        const matchesQuery =
+          !normalizedQuery ||
+          normalizePerfumeName(`${item.brand} ${item.name}`).includes(
+            normalizedQuery,
+          );
+        return matchesCategory && matchesQuery;
+      })
+      .sort((a, b) => {
+        if (settings.productOrder === "mostRated") {
+          const ratingCountDelta =
+            Math.max(0, Number(b.fragranticaRatingCount) || 0) -
+            Math.max(0, Number(a.fragranticaRatingCount) || 0);
+          if (ratingCountDelta) return ratingCountDelta;
+          const ratingDelta =
+            Math.max(0, Number(b.fragranticaRating) || 0) -
+            Math.max(0, Number(a.fragranticaRating) || 0);
+          if (ratingDelta) return ratingDelta;
+          return alpha(a, b);
+        }
+        if (settings.productOrder === "category") {
+          const categoryDelta =
+            categoryRank(a.category) - categoryRank(b.category);
+          if (categoryDelta) return categoryDelta;
+        }
+        return alpha(a, b);
+      });
+  }, [items, category, query, categoryOrder, settings.productOrder]);
 
   return (
     <div
@@ -560,7 +662,7 @@ function CatalogViewer({
               ) : null}
             </div>
 
-            {["Todos", "Nicho", "Árabe", "Designer"].map((option) => (
+            {["Todos", ...categoryOrder].map((option) => (
               <button
                 type="button"
                 key={option}
@@ -785,13 +887,18 @@ export function CatalogAdminPreview({
   );
   const [previewItems, setPreviewItems] = useState(baseItems);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [imageManagerOpen, setImageManagerOpen] = useState(false);
   const [draft, setDraft] = useState<CatalogSettings>(normalizedSettings);
   const [imageEditorError, setImageEditorError] = useState("");
 
   useEffect(() => {
     let active = true;
     setPreviewItems(baseItems);
-    enrichCatalogItemsWithImages(baseItems).then((resolved) => {
+    enrichCatalogItemsWithImages(
+      baseItems,
+      undefined,
+      normalizedSettings.productOrder === "mostRated",
+    ).then((resolved) => {
       if (active) setPreviewItems(resolved);
     });
     return () => {
@@ -800,8 +907,29 @@ export function CatalogAdminPreview({
   }, [baseItems]);
 
   useEffect(() => {
-    if (!editorOpen) setDraft(normalizedSettings);
-  }, [normalizedSettings, editorOpen]);
+    if (!editorOpen && !imageManagerOpen) setDraft(normalizedSettings);
+  }, [normalizedSettings, editorOpen, imageManagerOpen]);
+
+  useEffect(() => {
+    const openCatalogEditor = () => {
+      setDraft(normalizedSettings);
+      setImageManagerOpen(false);
+      setImageEditorError("");
+      setEditorOpen(true);
+    };
+    const openCatalogImages = () => {
+      setDraft(normalizedSettings);
+      setEditorOpen(false);
+      setImageEditorError("");
+      setImageManagerOpen(true);
+    };
+    window.addEventListener("daf:catalog-edit", openCatalogEditor);
+    window.addEventListener("daf:catalog-images", openCatalogImages);
+    return () => {
+      window.removeEventListener("daf:catalog-edit", openCatalogEditor);
+      window.removeEventListener("daf:catalog-images", openCatalogImages);
+    };
+  }, [normalizedSettings]);
 
   const updateDraft = (key: CatalogColorKey, value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -825,10 +953,16 @@ export function CatalogAdminPreview({
     });
   }
 
-  const manualImageEditorItems = baseItems.filter((item) => {
-    const savedItem = previewItems.find((preview) => preview.id === item.id);
-    return !savedItem?.imageUrl || Boolean(draft.manualImages[String(item.id)]);
-  });
+
+  function moveCategory(index: number, direction: -1 | 1) {
+    setDraft((current) => {
+      const next = [...normalizeCategoryOrder(current.categoryOrder)];
+      const target = index + direction;
+      if (target < 0 || target >= next.length) return current;
+      [next[index], next[target]] = [next[target], next[index]];
+      return { ...current, categoryOrder: next };
+    });
+  }
 
   const editorSections: Array<{
     title: string;
@@ -883,26 +1017,157 @@ export function CatalogAdminPreview({
     },
   ];
 
+  if (imageManagerOpen) {
+    return (
+      <div className="catalogImageManagerPage">
+        <section className="panel catalogImageManagerPanel">
+          <header className="catalogImageManagerHeader">
+            <div>
+              <span className="eyebrow">Catálogo · Imagens</span>
+              <h2>Gerenciar imagens dos perfumes</h2>
+              <p>
+                Edite as imagens diretamente nesta página. Você pode colar um
+                link ou enviar um arquivo para cada perfume.
+              </p>
+            </div>
+            <div className="catalogImageManagerActions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={async () => {
+                  const resolved = await enrichCatalogItemsWithImages(
+                    baseItems,
+                    undefined,
+                    draft.productOrder === "mostRated",
+                  );
+                  setPreviewItems(resolved);
+                }}
+              >
+                <RefreshCw />
+                Atualizar automáticas
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setDraft(normalizedSettings);
+                  setImageEditorError("");
+                  setImageManagerOpen(false);
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  onSettingsChange(normalizeCatalogSettings(draft));
+                  setImageManagerOpen(false);
+                }}
+              >
+                <Save />
+                Salvar imagens
+              </button>
+            </div>
+          </header>
+
+          {imageEditorError ? (
+            <p className="catalogImageEditorError">{imageEditorError}</p>
+          ) : null}
+
+          <div className="catalogImageManagerList">
+            {baseItems.map((item) => {
+              const manualValue = draft.manualImages[String(item.id)] || "";
+              const resolvedItem = previewItems.find(
+                (preview) => preview.id === item.id,
+              );
+              const previewUrl =
+                manualValue || resolvedItem?.imageUrl || item.imageUrl || "";
+              return (
+                <article className="catalogImageManagerRow" key={item.id}>
+                  <div className="catalogImageManagerIdentity">
+                    <div className="catalogImageManagerPreview">
+                      {previewUrl ? (
+                        <img
+                          src={previewUrl}
+                          alt={`${item.brand} ${item.name}`}
+                          onError={(event) => {
+                            event.currentTarget.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <ImageIcon />
+                      )}
+                    </div>
+                    <div>
+                      <strong>{item.name}</strong>
+                      <span>{item.brand}</span>
+                    </div>
+                  </div>
+
+                  <label className="catalogImageManagerUrl">
+                    <span>Link da imagem</span>
+                    <input
+                      type="url"
+                      value={manualValue.startsWith("data:") ? "" : manualValue}
+                      placeholder="https://..."
+                      onChange={(event) => {
+                        setImageEditorError("");
+                        setManualImage(item.id, event.target.value);
+                      }}
+                    />
+                  </label>
+
+                  <label className="catalogImageManagerUpload">
+                    <Upload />
+                    <span>Enviar arquivo</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (event) => {
+                        const input = event.currentTarget;
+                        const selected = input.files?.[0];
+                        if (!selected) return;
+                        try {
+                          setImageEditorError("");
+                          const dataUrl = await catalogFileToDataUrl(selected);
+                          setManualImage(item.id, dataUrl);
+                        } catch (error) {
+                          setImageEditorError(
+                            error instanceof Error
+                              ? error.message
+                              : "Não foi possível processar a imagem.",
+                          );
+                        } finally {
+                          input.value = "";
+                        }
+                      }}
+                    />
+                  </label>
+
+                  {manualValue ? (
+                    <button
+                      type="button"
+                      className="catalogImageManagerRemove"
+                      onClick={() => removeManualImage(item.id)}
+                    >
+                      <Trash2 />
+                      Remover manual
+                    </button>
+                  ) : (
+                    <span className="catalogImageManagerAuto">Automática</span>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="catalogAdminArea">
-      <div className="catalogAdminToolbar">
-        <div>
-          <span>Personalização</span>
-          <strong>Visual do catálogo público</strong>
-        </div>
-        <button
-          type="button"
-          className="catalogEditButton"
-          onClick={() => {
-            setDraft(normalizedSettings);
-            setEditorOpen(true);
-          }}
-        >
-          <Palette />
-          Editar
-        </button>
-      </div>
-
       <CatalogViewer
         items={previewItems}
         settings={normalizedSettings}
@@ -943,9 +1208,14 @@ export function CatalogAdminPreview({
               <div className="catalogEditorMiniFilter">
                 <Search />
                 <span>Todos</span>
-                <span>Nicho</span>
-                <span>Árabe</span>
-                <strong>Designer</strong>
+                {normalizeCategoryOrder(draft.categoryOrder).map(
+                  (categoryName, index) =>
+                    index === normalizeCategoryOrder(draft.categoryOrder).length - 1 ? (
+                      <strong key={categoryName}>{categoryName}</strong>
+                    ) : (
+                      <span key={categoryName}>{categoryName}</span>
+                    ),
+                )}
               </div>
 
               <div className="catalogEditorPreviewCard current">
@@ -975,6 +1245,71 @@ export function CatalogAdminPreview({
               </div>
             </div>
 
+            <section className="catalogEditorOrdering">
+              <header>
+                <div>
+                  <strong>Organização do catálogo</strong>
+                  <span>
+                    Defina a ordem dos filtros e como os perfumes serão exibidos.
+                  </span>
+                </div>
+              </header>
+
+              <div className="catalogOrderingGrid">
+                <div className="catalogCategoryOrder">
+                  <span>Ordem das categorias</span>
+                  {normalizeCategoryOrder(draft.categoryOrder).map(
+                    (categoryName, index, list) => (
+                      <div key={categoryName}>
+                        <b>{categoryName}</b>
+                        <div>
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={() => moveCategory(index, -1)}
+                            aria-label={`Mover ${categoryName} para cima`}
+                          >
+                            <ArrowUp />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={index === list.length - 1}
+                            onClick={() => moveCategory(index, 1)}
+                            aria-label={`Mover ${categoryName} para baixo`}
+                          >
+                            <ArrowDown />
+                          </button>
+                        </div>
+                      </div>
+                    ),
+                  )}
+                </div>
+
+                <div className="catalogProductOrder">
+                  <span>Ordem dos perfumes</span>
+                  {[
+                    ["alphabetical", "Ordem alfabética"],
+                    ["category", "Por categoria"],
+                    ["mostRated", "Mais avaliados · Fragrantica"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={draft.productOrder === value ? "active" : ""}
+                      onClick={() =>
+                        setDraft((current) => ({
+                          ...current,
+                          productOrder: value as CatalogSettings["productOrder"],
+                        }))
+                      }
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
             <div className="catalogEditorCoverage">
               <div>
                 <ImageIcon />
@@ -983,112 +1318,34 @@ export function CatalogAdminPreview({
                   imagens identificadas
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  const resolved = await enrichCatalogItemsWithImages(baseItems);
-                  setPreviewItems(resolved);
-                }}
-              >
-                <RefreshCw />
-                Atualizar imagens
-              </button>
-            </div>
-
-            <section className="catalogManualImages">
-              <header>
-                <div>
-                  <strong>Imagens manuais</strong>
-                  <span>
-                    Use apenas quando o sistema não identificar a imagem correta automaticamente.
-                  </span>
-                </div>
-                <span>
-                  {manualImageEditorItems.length
-                    ? `${manualImageEditorItems.length} para revisar`
-                    : "Todas identificadas"}
-                </span>
-              </header>
-
-              {imageEditorError ? (
-                <p className="catalogImageEditorError">{imageEditorError}</p>
-              ) : null}
-
-              {manualImageEditorItems.length ? (
-                <div className="catalogManualImageList">
-                  {manualImageEditorItems.map((item) => {
-                    const manualValue =
-                      draft.manualImages[String(item.id)] || "";
-                    return (
-                      <div className="catalogManualImageRow" key={item.id}>
-                        <div className="catalogManualImageIdentity">
-                          <strong>{item.name}</strong>
-                          <span>{item.brand}</span>
-                        </div>
-                        <div className="catalogManualImagePreview">
-                          {manualValue ? (
-                            <img src={manualValue} alt="" />
-                          ) : (
-                            <ImageIcon />
-                          )}
-                        </div>
-                        <label>
-                          <span>Link da imagem</span>
-                          <input
-                            type="url"
-                            value={manualValue.startsWith("data:") ? "" : manualValue}
-                            placeholder="https://..."
-                            onChange={(event) => {
-                              setImageEditorError("");
-                              setManualImage(item.id, event.target.value);
-                            }}
-                          />
-                        </label>
-                        <label className="catalogUploadImageButton">
-                          <Upload />
-                          <span>Enviar arquivo</span>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={async (event) => {
-                              const selected = event.target.files?.[0];
-                              if (!selected) return;
-                              try {
-                                setImageEditorError("");
-                                const dataUrl = await catalogFileToDataUrl(selected);
-                                setManualImage(item.id, dataUrl);
-                              } catch (error) {
-                                setImageEditorError(
-                                  error instanceof Error
-                                    ? error.message
-                                    : "Não foi possível processar a imagem.",
-                                );
-                              } finally {
-                                event.currentTarget.value = "";
-                              }
-                            }}
-                          />
-                        </label>
-                        {manualValue ? (
-                          <button
-                            type="button"
-                            className="catalogRemoveManualImage"
-                            onClick={() => removeManualImage(item.id)}
-                          >
-                            <Trash2 />
-                            Remover manual
-                          </button>
-                        ) : null}
-                      </div>
+              <div className="catalogCoverageActions">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const resolved = await enrichCatalogItemsWithImages(
+                      baseItems,
+                      undefined,
+                      draft.productOrder === "mostRated",
                     );
-                  })}
-                </div>
-              ) : (
-                <p className="catalogManualImagesEmpty">
-                  Nenhum perfume precisa de imagem manual neste momento.
-                </p>
-              )}
-            </section>
+                    setPreviewItems(resolved);
+                  }}
+                >
+                  <RefreshCw />
+                  Atualizar imagens
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setImageEditorError("");
+                    setEditorOpen(false);
+                    setImageManagerOpen(true);
+                  }}
+                >
+                  <Pencil />
+                  Gerenciar imagens
+                </button>
+              </div>
+            </div>
 
             <div className="catalogEditorSections">
               {editorSections.map((section) => (
@@ -1111,6 +1368,7 @@ export function CatalogAdminPreview({
               ))}
             </div>
 
+
             <footer>
               <button
                 type="button"
@@ -1118,6 +1376,8 @@ export function CatalogAdminPreview({
                 onClick={() =>
                   setDraft({
                     ...DEFAULT_CATALOG_SETTINGS,
+                    categoryOrder: [...draft.categoryOrder],
+                    productOrder: draft.productOrder,
                     manualImages: { ...draft.manualImages },
                   })
                 }
@@ -1145,6 +1405,7 @@ export function CatalogAdminPreview({
           </div>
         </div>
       ) : null}
+
     </div>
   );
 }
@@ -1203,7 +1464,11 @@ export function PublicCatalog() {
         );
 
         if (catalogItems.length) {
-          const resolved = await enrichCatalogItemsWithImages(catalogItems);
+          const resolved = await enrichCatalogItemsWithImages(
+            catalogItems,
+            undefined,
+            snapshot.settings.productOrder === "mostRated",
+          );
           if (!active) return;
           setItems(resolved);
           setSettings(snapshot.settings);
