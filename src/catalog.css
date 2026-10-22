@@ -4693,3 +4693,52 @@ vercel-toolbar {
     grid-row: auto !important;
   }
 }
+
+
+/* DAF — APC em texto entre o nome e o estoque */
+.catalogCardContent {
+  grid-template-rows: auto auto auto auto !important;
+}
+
+.catalogApcStatus {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 850;
+  letter-spacing: -.01em;
+}
+
+.catalogApcStatus.available {
+  color: var(--catalog-apc-available);
+}
+
+.catalogApcStatus.unavailable {
+  color: var(--catalog-apc-unavailable);
+}
+
+.catalogApcStatus + .catalogScarcity {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+@media (max-width: 640px) {
+  .catalogApcStatus {
+    font-size: 14px;
+  }
+}
+
+.catalogEditorApcStatus {
+  display: block;
+  margin-top: 8px;
+  font-size: 9px;
+  line-height: 1.25;
+  font-weight: 900;
+}
+
+.catalogEditorApcStatus.available {
+  color: var(--catalog-apc-available);
+}
+
+.catalogEditorApcStatus.unavailable {
+  color: var(--catalog-apc-unavailable);
+}
