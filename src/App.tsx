@@ -976,9 +976,12 @@ function System({ session }: { session: Session }) {
         });
       }
       lastSynced.current = JSON.stringify(normalized);
-      // Clear only this tab's record. Other tabs' drafts are retained for recovery.
+      // The user explicitly chose the confirmed server state, so discard the
+      // pending recovery records that caused this warning instead of leaving
+      // orphan records to trigger the same banner on the next visit.
       recovery.current ||= new LocalRecovery(session.user.id);
-      recovery.current.clear();
+      recovery.current.clearAll();
+      recoveredDrafts.current = [];
       blocked.current = !current.snapshot.identitiesReady;
       setEditingBlocked(blocked.current);
       setSaveNotice(blocked.current ? "A adoção de UUIDs precisa ser concluída antes de salvar." : "");
@@ -1090,9 +1093,20 @@ function System({ session }: { session: Session }) {
         if (!active) { current.dispose(); return; }
         writer.current = current;
         recovery.current = new LocalRecovery(session.user.id);
-        const pending = recovery.current.list();
-        recoveredDrafts.current = pending;
         let normalized = normalizeData(current.snapshot.data);
+        const allPending = recovery.current.list();
+        const normalizedServer = JSON.stringify(normalized);
+        const pending = allPending.filter((record) => {
+          try {
+            const isAlreadyConfirmed =
+              JSON.stringify(normalizeData(record.draft)) === normalizedServer;
+            if (isAlreadyConfirmed) recovery.current?.remove(record);
+            return !isAlreadyConfirmed;
+          } catch {
+            return true;
+          }
+        });
+        recoveredDrafts.current = pending;
         if (
           !pending.length &&
           Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
