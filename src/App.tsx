@@ -60,6 +60,7 @@ import {
   catalogItemsFromProducts,
   enrichCatalogItemsWithImages,
   catalogSnapshotPayload,
+  catalogSettingsForPersistence,
   DEFAULT_CATALOG_SETTINGS,
   normalizeCatalogSettings,
   type CatalogSettings,
@@ -955,10 +956,18 @@ function System({ session }: { session: Session }) {
       if (!mounted.current || version !== saveVersion.current) { current.dispose(); return; }
       writer.current?.dispose(); writer.current = current;
       let normalized = normalizeData(current.snapshot.data);
+      const catalogSettingsNeedTransportMigration =
+        JSON.stringify(current.snapshot.data?.catalogSettings || {}) !==
+        JSON.stringify(normalized.catalogSettings);
       if (
-        Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
-        normalized.hacivatBottleCorrectionVersion === 1 &&
-        current.snapshot.identitiesReady
+        current.snapshot.identitiesReady &&
+        (
+          (
+            Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
+            normalized.hacivatBottleCorrectionVersion === 1
+          ) ||
+          catalogSettingsNeedTransportMigration
+        )
       ) {
         const migrated = await current.save(normalized);
         normalized = normalizeData(migrated.saved.data);
@@ -1704,7 +1713,7 @@ const action =
               onSettingsChange={(catalogSettings) =>
                 setData((current) => ({
                   ...current,
-                  catalogSettings: normalizeCatalogSettings(catalogSettings),
+                  catalogSettings: catalogSettingsForPersistence(catalogSettings),
                 }))
               }
             />
@@ -2314,7 +2323,7 @@ function normalizeData(stored: any): D {
       "TikTok Shop": Number(merged.marketplacePayoutDays?.["TikTok Shop"] || 9),
       Shopee: Number(merged.marketplacePayoutDays?.Shopee || 7),
     },
-    catalogSettings: normalizeCatalogSettings(merged.catalogSettings),
+    catalogSettings: catalogSettingsForPersistence(merged.catalogSettings),
     dashboardSupplyReportIds: Array.isArray(stored?.dashboardSupplyReportIds)
       ? stored.dashboardSupplyReportIds
           .map((id: unknown) => Number(id))

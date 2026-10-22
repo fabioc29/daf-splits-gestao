@@ -146,6 +146,29 @@ const CATALOG_COLOR_KEYS = [
 type CatalogColorKey = (typeof CATALOG_COLOR_KEYS)[number];
 
 const CATALOG_CATEGORIES = ["Nicho", "Árabe", "Designer"] as const;
+const CATALOG_PRESENTATION_META_KEY = "999999999999999";
+const CATALOG_PRESENTATION_META_PREFIX = "__daf_catalog_presentation_v1__:";
+
+type CatalogPresentationMeta = {
+  categoryOrder?: string[];
+  productOrder?: CatalogSettings["productOrder"];
+};
+
+function readCatalogPresentationMeta(value: unknown): CatalogPresentationMeta {
+  if (!value || typeof value !== "object") return {};
+  const raw = (value as Record<string, unknown>)[CATALOG_PRESENTATION_META_KEY];
+  if (typeof raw !== "string" || !raw.startsWith(CATALOG_PRESENTATION_META_PREFIX)) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw.slice(CATALOG_PRESENTATION_META_PREFIX.length));
+    return parsed && typeof parsed === "object"
+      ? (parsed as CatalogPresentationMeta)
+      : {};
+  } catch {
+    return {};
+  }
+}
 
 function normalizeCategoryOrder(value: unknown): string[] {
   const incoming = Array.isArray(value)
@@ -190,11 +213,17 @@ export function normalizeCatalogSettings(value: unknown): CatalogSettings {
     value && typeof value === "object"
       ? (value as Partial<CatalogSettings>)
       : {};
+  const manualImages = normalizeManualImages(source.manualImages);
+  const presentationMeta = readCatalogPresentationMeta(manualImages);
   const settings: CatalogSettings = {
     ...DEFAULT_CATALOG_SETTINGS,
-    categoryOrder: normalizeCategoryOrder(source.categoryOrder),
-    productOrder: normalizeProductOrder(source.productOrder),
-    manualImages: normalizeManualImages(source.manualImages),
+    categoryOrder: normalizeCategoryOrder(
+      source.categoryOrder ?? presentationMeta.categoryOrder,
+    ),
+    productOrder: normalizeProductOrder(
+      source.productOrder ?? presentationMeta.productOrder,
+    ),
+    manualImages,
   };
 
   CATALOG_COLOR_KEYS.forEach((key: CatalogColorKey) => {
@@ -211,12 +240,34 @@ export function normalizeCatalogSettings(value: unknown): CatalogSettings {
   return settings;
 }
 
+export function catalogSettingsForPersistence(
+  value: unknown,
+): CatalogSettings {
+  const normalized = normalizeCatalogSettings(value);
+  const presentationMeta = CATALOG_PRESENTATION_META_PREFIX + JSON.stringify({
+    categoryOrder: normalized.categoryOrder,
+    productOrder: normalized.productOrder,
+  });
+  const {
+    categoryOrder: _categoryOrder,
+    productOrder: _productOrder,
+    ...databaseSafeSettings
+  } = normalized;
+  return {
+    ...databaseSafeSettings,
+    manualImages: {
+      ...databaseSafeSettings.manualImages,
+      [CATALOG_PRESENTATION_META_KEY]: presentationMeta,
+    },
+  } as CatalogSettings;
+}
+
 export function catalogSnapshotPayload(
   items: CatalogItem[],
   settings: CatalogSettings,
 ) {
   return [
-    { __catalogSettings: normalizeCatalogSettings(settings) },
+    { __catalogSettings: catalogSettingsForPersistence(settings) },
     ...items,
   ];
 }
