@@ -731,15 +731,6 @@ function CatalogViewer({
             {filtered.map((item) => (
               <article className="catalogCard" key={item.id}>
                 <div className="catalogMediaBlock">
-                  <div className={item.apc ? "catalogApcBanner yes" : "catalogApcBanner no"}>
-                    <span />
-                    <strong>
-                      {item.apc
-                        ? "APC Disponível"
-                        : "Sem APC no momento, mas ainda temos decantes disponíveis"}
-                    </strong>
-                  </div>
-
                   <div className="catalogBottleVisual">
                     {item.imageUrl ? (
                       <img
@@ -773,6 +764,10 @@ function CatalogViewer({
                   <div className="catalogCardIdentity">
                     <span className="catalogCardBrand">{item.brand}</span>
                     <h3>{item.name}</h3>
+                  </div>
+
+                  <div className={item.apc ? "catalogApcStatus available" : "catalogApcStatus unavailable"}>
+                    APC: {item.apc ? "Disponível" : "Indisponível"}
                   </div>
 
                   <div className="catalogScarcity">
@@ -1270,22 +1265,24 @@ export function CatalogAdminPreview({
               </div>
 
               <div className="catalogEditorPreviewCard current">
-                <div className="catalogEditorApc available">APC Disponível</div>
                 <div className="catalogEditorImagePlaceholder">
                   <ImageIcon />
                 </div>
                 <span className="catalogEditorBrand">Bidaya</span>
                 <strong>Maktub Gold</strong>
+                <span className="catalogEditorApcStatus available">
+                  APC: Disponível
+                </span>
                 <i><em /></i>
                 <button type="button">Solicitar via WhatsApp</button>
               </div>
 
               <div className="catalogEditorPreviewCard current unavailableCard">
-                <div className="catalogEditorApc unavailable">
-                  Sem APC no momento, mas ainda temos decantes disponíveis
-                </div>
                 <span className="catalogEditorBrand">DAF Splits</span>
                 <strong>Prévia do aviso sem APC</strong>
+                <span className="catalogEditorApcStatus unavailable">
+                  APC: Indisponível
+                </span>
               </div>
 
               <div className="catalogEditorMiniGroup">

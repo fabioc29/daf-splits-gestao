@@ -4693,3 +4693,117 @@ vercel-toolbar {
     grid-row: auto !important;
   }
 }
+
+
+/* DAF — APC em texto entre o nome e o estoque */
+.catalogCardContent {
+  grid-template-rows: auto auto auto auto !important;
+}
+
+.catalogApcStatus {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 850;
+  letter-spacing: -.01em;
+}
+
+.catalogApcStatus.available {
+  color: var(--catalog-apc-available);
+}
+
+.catalogApcStatus.unavailable {
+  color: var(--catalog-apc-unavailable);
+}
+
+.catalogApcStatus + .catalogScarcity {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+@media (max-width: 640px) {
+  .catalogApcStatus {
+    font-size: 14px;
+  }
+}
+
+.catalogEditorApcStatus {
+  display: block;
+  margin-top: 8px;
+  font-size: 9px;
+  line-height: 1.25;
+  font-weight: 900;
+}
+
+.catalogEditorApcStatus.available {
+  color: var(--catalog-apc-available);
+}
+
+.catalogEditorApcStatus.unavailable {
+  color: var(--catalog-apc-unavailable);
+}
+
+
+/* DAF — imagem Fragrantica inteira, sem corte e sem barras pretas */
+.catalogBottleVisual {
+  background: #f7f5f2 !important;
+}
+
+.catalogPerfumeImage {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  object-position: center center !important;
+  background: #f7f5f2 !important;
+  border: 0 !important;
+  transform: none !important;
+}
+
+.catalogCard:hover .catalogPerfumeImage {
+  transform: none !important;
+}
+
+
+/* DAF — imagem Fragrantica em proporção natural, sem corte nem preenchimento */
+.catalogMediaBlock {
+  background: transparent !important;
+}
+
+.catalogBottleVisual {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  aspect-ratio: auto !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  background: transparent !important;
+}
+
+.catalogPerfumeImage {
+  width: 100% !important;
+  height: auto !important;
+  max-width: 100% !important;
+  display: block !important;
+  object-fit: unset !important;
+  object-position: initial !important;
+  background: transparent !important;
+  border: 0 !important;
+  transform: none !important;
+}
+
+.catalogCard:hover .catalogPerfumeImage {
+  transform: none !important;
+}
+
+/* Mantém um espaço visual apenas quando não existe imagem válida. */
+.catalogBottleFallback {
+  width: 100% !important;
+  min-height: 280px !important;
+  background: #f7f5f2 !important;
+}
+
+@media (max-width: 640px) {
+  .catalogBottleFallback {
+    min-height: 230px !important;
+  }
+}
