@@ -12567,3 +12567,69 @@ main > header {
     padding: 12px 16px 16px;
   }
 }
+
+
+/* DAF — parcelas removíveis e compras a pagar */
+.installmentActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.removeInstallmentButton {
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--line));
+  border-radius: 10px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.removeInstallmentButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.purchasePaymentBlock {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
+}
+
+.payablesPanel td > small,
+.payablesPanel td > b {
+  display: block;
+}
+
+.payablesPanel td > small + small {
+  margin-top: 4px;
+}
+
+.payablesPanel td:nth-child(2) small,
+.payablesPanel td:nth-child(5) small {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+@media (max-width: 720px) {
+  .installmentActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .installmentActions > button {
+    width: 100%;
+  }
+}
