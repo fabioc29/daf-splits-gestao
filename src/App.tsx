@@ -6819,6 +6819,324 @@ function Receivables({
   );
 }
 
+
+function Payables({
+  d,
+  set,
+  edit,
+  notify,
+}: {
+  d: D;
+  set: any;
+  edit: (id: number) => void;
+  notify: (message: string) => void;
+}) {
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [paymentPurchase, setPaymentPurchase] = useState<B | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentError, setPaymentError] = useState("");
+
+  const allPendingPurchases = d.purchases
+    .filter(
+      (purchase) =>
+        purchase.payment === "À prazo" &&
+        Math.max(0, Number(purchase.paid) || 0) <
+          Math.max(0, Number(purchase.total) || 0),
+    )
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
+
+  const purchaseIsOverdue = (purchase: B) =>
+    (purchase.installments || []).length
+      ? (purchase.installments || []).some(
+          (installment) =>
+            !installment.paid &&
+            Boolean(installment.date) &&
+            installment.date < today(),
+        )
+      : Boolean(purchase.dueDate) && purchase.dueDate! < today();
+
+  const pendingPurchases = allPendingPurchases.filter(
+    (purchase) => !overdueOnly || purchaseIsOverdue(purchase),
+  );
+
+  const totalDue = allPendingPurchases.reduce(
+    (sum, purchase) =>
+      sum +
+      Math.max(
+        0,
+        Number(purchase.total) - Math.max(0, Number(purchase.paid) || 0),
+      ),
+    0,
+  );
+
+  const overdueCount = allPendingPurchases.filter(purchaseIsOverdue).length;
+
+  function recordPayment(purchase: B) {
+    setPaymentPurchase(purchase);
+    setPaymentAmount("");
+    setPaymentError("");
+  }
+
+  function confirmPayment() {
+    if (!paymentPurchase) return;
+    const amount = parseDecimal(paymentAmount);
+    const currentPaid = Math.max(0, Number(paymentPurchase.paid) || 0);
+    const remaining = Math.max(0, paymentPurchase.total - currentPaid);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setPaymentError("Informe um valor de pagamento válido.");
+      return;
+    }
+    if (amount > remaining + 0.01) {
+      setPaymentError(
+        `O valor não pode ultrapassar o saldo de ${brl(remaining)}.`,
+      );
+      return;
+    }
+
+    set((state: D) => ({
+      ...state,
+      purchases: state.purchases.map((purchase) => {
+        if (purchase.id !== paymentPurchase.id) return purchase;
+
+        const paid = Math.min(
+          purchase.total,
+          Math.max(0, Number(purchase.paid) || 0) + amount,
+        );
+        const scheduleTotal = (purchase.installments || []).reduce(
+          (sum, installment) =>
+            sum + Math.max(0, Number(installment.amount) || 0),
+          0,
+        );
+        const paidTowardSchedule = Math.max(
+          0,
+          paid - Math.max(0, purchase.total - scheduleTotal),
+        );
+        let accumulated = 0;
+        const installments = (purchase.installments || []).map(
+          (installment) => {
+            accumulated += Math.max(0, Number(installment.amount) || 0);
+            return {
+              ...installment,
+              paid: accumulated <= paidTowardSchedule + 0.01,
+            };
+          },
+        );
+
+        return {
+          ...purchase,
+          paid,
+          installments,
+        };
+      }),
+    }));
+
+    notify(
+      amount >= remaining
+        ? `Compra com ${paymentPurchase.supplier} quitada.`
+        : `Pagamento de ${brl(amount)} lançado para ${paymentPurchase.supplier}.`,
+    );
+    setPaymentPurchase(null);
+    setPaymentAmount("");
+    setPaymentError("");
+  }
+
+  return (
+    <>
+      <Cards
+        v={[
+          [brl(totalDue), "Total a pagar"],
+          [String(allPendingPurchases.length), "Compras pendentes"],
+          [String(overdueCount), "Compras vencidas"],
+        ]}
+      />
+
+      <div className="panel table payablesPanel">
+        <div className="receivableHeader">
+          <div>
+            <h2>Compras a pagar</h2>
+            <p>
+              Compras de mercadorias registradas a prazo e ainda não quitadas.
+            </p>
+          </div>
+          <button
+            type="button"
+            className={overdueOnly ? "overdueFilter active" : "overdueFilter"}
+            onClick={() => setOverdueOnly((current) => !current)}
+          >
+            <SlidersHorizontal />{" "}
+            {overdueOnly ? "Mostrando vencidas" : "Filtrar vencidas"}
+          </button>
+        </div>
+
+        <div className="recordsTableScroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Fornecedor</th>
+                <th>Compra</th>
+                <th>Data da compra</th>
+                <th>Falta pagar</th>
+                <th>Próximos pagamentos</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingPurchases.map((purchase) => {
+                const remaining = Math.max(
+                  0,
+                  purchase.total - Math.max(0, Number(purchase.paid) || 0),
+                );
+                return (
+                  <tr key={purchase.id}>
+                    <td>{purchase.supplier}</td>
+                    <td>
+                      <b>{purchase.description}</b>
+                      <small>{purchase.type}</small>
+                    </td>
+                    <td>{dateBR(purchase.date)}</td>
+                    <td>
+                      <b>{brl(remaining)}</b>
+                    </td>
+                    <td>
+                      {purchase.installments?.length ? (
+                        purchase.installments
+                          .filter((installment) => !installment.paid)
+                          .map((installment, index) => (
+                            <small key={index}>
+                              {installment.date
+                                ? dateBR(installment.date)
+                                : "Sem data"}{" "}
+                              — {brl(installment.amount)}
+                            </small>
+                          ))
+                      ) : purchase.dueDate ? (
+                        <small>
+                          {dateBR(purchase.dueDate)} — {brl(remaining)}
+                        </small>
+                      ) : (
+                        <small>Não informado</small>
+                      )}
+                    </td>
+                    <td>
+                      <div className="tableActions">
+                        <button
+                          className="iconButton payButton"
+                          onClick={() => recordPayment(purchase)}
+                        >
+                          <Wallet /> Dar baixa
+                        </button>
+                        <button
+                          className="iconButton"
+                          onClick={() => edit(purchase.id)}
+                        >
+                          <Pencil /> Editar compra
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {!pendingPurchases.length ? (
+            <p className="empty">
+              {overdueOnly
+                ? "Nenhuma compra a prazo vencida."
+                : "Nenhuma compra a prazo pendente."}
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      {paymentPurchase ? (
+        <div className="overlay">
+          <form
+            className="systemDialog paymentEntryDialog"
+            onSubmit={(event) => {
+              event.preventDefault();
+              confirmPayment();
+            }}
+          >
+            <header>
+              <div>
+                <small>BAIXA DE PAGAMENTO</small>
+                <h2>Registrar pagamento da compra</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentPurchase(null);
+                  setPaymentError("");
+                }}
+                aria-label="Fechar"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="paymentEntrySummary">
+              <span>
+                Fornecedor <b>{paymentPurchase.supplier}</b>
+              </span>
+              <span>
+                Compra <b>{paymentPurchase.description}</b>
+              </span>
+              <span>
+                Saldo atual{" "}
+                <b>
+                  {brl(
+                    Math.max(
+                      0,
+                      paymentPurchase.total -
+                        Math.max(0, Number(paymentPurchase.paid) || 0),
+                    ),
+                  )}
+                </b>
+              </span>
+            </div>
+
+            <label>
+              <span>Quanto foi pago agora?</span>
+              <input
+                autoFocus
+                type="text"
+                inputMode="decimal"
+                value={paymentAmount}
+                onChange={(event) => {
+                  setPaymentAmount(event.target.value);
+                  setPaymentError("");
+                }}
+                placeholder="0,00"
+              />
+            </label>
+
+            {paymentError ? (
+              <p className="paymentEntryError">{paymentError}</p>
+            ) : null}
+
+            <footer>
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentPurchase(null);
+                  setPaymentError("");
+                }}
+              >
+                Cancelar
+              </button>
+              <button type="submit" className="primary">
+                Confirmar pagamento
+              </button>
+            </footer>
+          </form>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function StockReport({
   d,
   close,
