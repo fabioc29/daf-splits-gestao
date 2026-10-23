@@ -197,6 +197,11 @@ type B = {
   mlPerBottle?: number;
   attachCost?: boolean;
   bottleNumbers?: number[];
+  payment?: "À vista" | "À prazo";
+  paid?: number;
+  dueDate?: string;
+  installment?: number;
+  installments?: Installment[];
 };
 type SupplierType =
   | "Fornecedor de perfumes"
@@ -1196,6 +1201,11 @@ function System({ session }: { session: Session }) {
         !isMarketplaceSale(s) &&
         s.paid < s.total,
     ).length,
+    payables: data.purchases.filter(
+      (purchase) =>
+        purchase.payment === "À prazo" &&
+        Math.max(0, Number(purchase.paid) || 0) < Math.max(0, Number(purchase.total) || 0),
+    ).length,
     prepare: data.sales.filter(
       (sale) =>
         sale.status !== "cancelled" &&
@@ -1269,7 +1279,10 @@ const action =
   const registrationsSectionActive =
     page === "clients" || page === "suppliers" || page === "brands";
   const financeSectionActive =
-    page === "finance" || page === "receivables" || page === "finance-pricing";
+    page === "finance" ||
+    page === "receivables" ||
+    page === "payables" ||
+    page === "finance-pricing";
   const shippingSectionActive =
     page === "shipping" || page === "shipping-mandabem";
   const orderedNav = [...nav].sort((a, b) => {
@@ -1295,6 +1308,8 @@ const action =
                 ? "Marcas"
                 : page === "receivables"
             ? "Vendas a receber"
+            : page === "payables"
+              ? "Compras a pagar"
             : page === "finance-pricing"
               ? "Precificação"
               : page === "shipping-mandabem"
@@ -1484,7 +1499,7 @@ const action =
                   >
                     <Icon />
                     {label}
-                    {navAlerts.receivables || receivableDueAlert ? (
+                    {navAlerts.receivables || navAlerts.payables || receivableDueAlert ? (
                       <span className="navAlertGroup">
                         {receivableDueAlert ? (
                           <span
@@ -1496,8 +1511,10 @@ const action =
                             }
                           />
                         ) : null}
-                        {navAlerts.receivables ? (
-                          <span className="navAlert">{navAlerts.receivables}</span>
+                        {navAlerts.receivables || navAlerts.payables ? (
+                          <span className="navAlert">
+                            {navAlerts.receivables + navAlerts.payables}
+                          </span>
                         ) : null}
                       </span>
                     ) : null}
@@ -1520,6 +1537,15 @@ const action =
                         Vendas a receber
                         {navAlerts.receivables ? (
                           <span className="subnavCount">{navAlerts.receivables}</span>
+                        ) : null}
+                      </button>
+                      <button
+                        className={page === "payables" ? "on" : ""}
+                        onClick={() => setPage("payables")}
+                      >
+                        Compras a pagar
+                        {navAlerts.payables ? (
+                          <span className="subnavCount">{navAlerts.payables}</span>
                         ) : null}
                       </button>
                       <button
@@ -1707,6 +1733,13 @@ const action =
               d={data}
               set={setData}
               edit={(id) => setModal({ type: "sale", id })}
+              notify={notify}
+            />
+          ) : page === "payables" ? (
+            <Payables
+              d={data}
+              set={setData}
+              edit={(id) => setModal({ type: "purchaseEdit", id })}
               notify={notify}
             />
           ) : page === "stock" || page === "stock-supplies" ? (
@@ -2144,10 +2177,35 @@ function normalizeData(stored: any): D {
             .replace(/\s*\(\s*frasco\s*\d+\s*\)\s*$/i, "")
             .trim()
         : purchase.description;
+    const payment = purchase.payment === "À prazo" ? "À prazo" : "À vista";
+    const paid =
+      payment === "À prazo"
+        ? Math.max(0, Math.min(Number(purchase.total) || 0, Number(purchase.paid) || 0))
+        : Math.max(0, Number(purchase.total) || 0);
+    const installments = purchase.installments?.length
+      ? purchase.installments.map((installment) => ({
+          date: String(installment.date || ""),
+          amount: Math.max(0, Number(installment.amount) || 0),
+          paid: Boolean(installment.paid),
+        }))
+      : payment === "À prazo" && purchase.dueDate
+        ? [{
+            date: String(purchase.dueDate),
+            amount:
+              Number(purchase.installment) ||
+              Math.max(0, Number(purchase.total) - paid),
+            paid: false,
+          }]
+        : [];
     return {
       ...purchase,
       description: cleanedDescription,
       supplier: supplierByKey.get(supplierKey(cleaned)) || cleaned,
+      payment,
+      paid,
+      dueDate: installments[0]?.date,
+      installment: installments[0]?.amount,
+      installments,
     };
   });
   const normalizedClients = (merged.clients || []).map((client: C) => ({
@@ -10438,6 +10496,9 @@ function Form({
       existingClient?.addresses.length || 1,
     ),
     [purchaseCalc, setPurchaseCalc] = useState({ qty: 0, ml: 0, total: 0 }),
+    [purchasePayment, setPurchasePayment] = useState<"À vista" | "À prazo">("À vista"),
+    [purchaseInstallmentLines, setPurchaseInstallmentLines] = useState(1),
+    [purchaseTotal, setPurchaseTotal] = useState(0),
     [supplyCalc, setSupplyCalc] = useState({ qty: 0, total: 0 }),
     [installmentLines, setInstallmentLines] = useState(
       existingInstallments.length || 1,
@@ -10981,6 +11042,13 @@ function Form({
                 (_, index) => startingBottleNumber + index + 1,
               )
             : undefined;
+        const purchaseInstallments =
+          purchasePayment === "À prazo"
+            ? Array.from({ length: purchaseInstallmentLines }, (_, index) => ({
+                date: String(f["purchaseDue" + index] || ""),
+                amount: Number(f["purchaseInstallment" + index] || 0),
+              })).filter((installment) => installment.date || installment.amount)
+            : [];
         const purchase: B = {
           id: purchaseId,
           date: String(f.date),
@@ -10995,6 +11063,11 @@ function Form({
             kind === "Suprimento / insumo"
               ? String(f.attachCost) === "Sim"
               : false,
+          payment: purchasePayment,
+          paid: purchasePayment === "À prazo" ? 0 : total,
+          dueDate: purchaseInstallments[0]?.date,
+          installment: purchaseInstallments[0]?.amount,
+          installments: purchaseInstallments,
         };
         let products = x.products,
           supplies = x.supplies,
@@ -11459,9 +11532,22 @@ function Form({
                 />
               </div>
             ))}
-            <button type="button" className="add" onClick={() => setInstallmentLines((count) => count + 1)}>
-              <Plus /> Adicionar nova parcela
-            </button>
+            <div className="installmentActions">
+              <button type="button" className="add" onClick={() => setInstallmentLines((count) => count + 1)}>
+                <Plus /> Adicionar nova parcela
+              </button>
+              {installmentLines > 1 ? (
+                <button
+                  type="button"
+                  className="removeInstallmentButton"
+                  onClick={() =>
+                    setInstallmentLines((count) => Math.max(1, count - 1))
+                  }
+                >
+                  <Trash2 /> Remover última parcela
+                </button>
+              ) : null}
+            </div>
           </>
         ) : isSale ? (
           <>
@@ -11705,14 +11791,28 @@ function Form({
                     </label>
                   </div>
                 ))}
-                <button
-                  type="button"
-                  className="add"
-                  onClick={() => setInstallmentLines((n) => n + 1)}
-                >
-                  <Plus />
-                  Adicionar nova parcela
-                </button>
+                <div className="installmentActions">
+                  <button
+                    type="button"
+                    className="add"
+                    onClick={() => setInstallmentLines((n) => n + 1)}
+                  >
+                    <Plus />
+                    Adicionar nova parcela
+                  </button>
+                  {installmentLines > 1 ? (
+                    <button
+                      type="button"
+                      className="removeInstallmentButton"
+                      onClick={() =>
+                        setInstallmentLines((count) => Math.max(1, count - 1))
+                      }
+                    >
+                      <Trash2 />
+                      Remover última parcela
+                    </button>
+                  ) : null}
+                </div>
               </>
             ) : null}
             {pay === "Outro" ? (
@@ -11919,12 +12019,14 @@ function Form({
                     n="total"
                     l="Valor total"
                     t="number"
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const total = Number(e.target.value);
                       setPurchaseCalc((v) => ({
                         ...v,
-                        total: Number(e.target.value),
-                      }))
-                    }
+                        total,
+                      }));
+                      setPurchaseTotal(total);
+                    }}
                   />
                 </div>
                 <div className="calculated">
@@ -11956,7 +12058,12 @@ function Form({
                 <div className="row three">
                   <Field n="qty" l="Quantidade" t="number" />
                   <Field n="unit" l="Unidade" p="un., caixas..." />
-                  <Field n="total" l="Valor total" t="number" />
+                  <Field
+                    n="total"
+                    l="Valor total"
+                    t="number"
+                    onChange={(event) => setPurchaseTotal(Number(event.target.value))}
+                  />
                 </div>
                 <Choices
                   name="attachCost"
@@ -11968,10 +12075,92 @@ function Form({
             ) : (
               <>
                 <Field n="description" l="Especifique a compra/despesa" />
-                <Field n="total" l="Valor total" t="number" />
+                <Field
+                  n="total"
+                  l="Valor total"
+                  t="number"
+                  onChange={(event) => setPurchaseTotal(Number(event.target.value))}
+                />
                 <input type="hidden" name="qty" value="1" />
               </>
             )}
+            <div className="purchasePaymentBlock">
+              <Choices
+                label="Forma de pagamento"
+                a={["À vista", "À prazo"]}
+                v={purchasePayment}
+                set={(value) =>
+                  setPurchasePayment(value as "À vista" | "À prazo")
+                }
+              />
+              {purchasePayment === "À prazo" ? (
+                <>
+                  <div className="installmentSummary">
+                    <span>
+                      Total a pagar <b>{brl(Math.max(0, purchaseTotal))}</b>
+                    </span>
+                    <span>
+                      {purchaseInstallmentLines} parcela(s) de{" "}
+                      <b>
+                        {brl(
+                          Math.max(0, purchaseTotal) /
+                            Math.max(1, purchaseInstallmentLines),
+                        )}
+                      </b>
+                    </span>
+                  </div>
+                  {Array.from(
+                    { length: purchaseInstallmentLines },
+                    (_, index) => (
+                      <div className="row installmentRow" key={index}>
+                        <Field
+                          n={"purchaseDue" + index}
+                          l={`Data da parcela ${index + 1}`}
+                          t="date"
+                        />
+                        <label>
+                          <span>{`Valor da parcela ${index + 1}`}</span>
+                          <input
+                            name={"purchaseInstallment" + index}
+                            type="number"
+                            step="0.01"
+                            readOnly
+                            value={(
+                              Math.max(0, purchaseTotal) /
+                              Math.max(1, purchaseInstallmentLines)
+                            ).toFixed(2)}
+                          />
+                        </label>
+                      </div>
+                    ),
+                  )}
+                  <div className="installmentActions">
+                    <button
+                      type="button"
+                      className="add"
+                      onClick={() =>
+                        setPurchaseInstallmentLines((count) => count + 1)
+                      }
+                    >
+                      <Plus /> Adicionar nova parcela
+                    </button>
+                    {purchaseInstallmentLines > 1 ? (
+                      <button
+                        type="button"
+                        className="removeInstallmentButton"
+                        onClick={() =>
+                          setPurchaseInstallmentLines((count) =>
+                            Math.max(1, count - 1),
+                          )
+                        }
+                      >
+                        <Trash2 /> Remover última parcela
+                      </button>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+            </div>
           </>
         ) : null}
         {type === "client" ? (
