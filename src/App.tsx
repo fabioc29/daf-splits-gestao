@@ -7849,7 +7849,7 @@ function Stock({
           <div className="stockSummaryRow">
             <Cards
               v={[
-                [String(d.products.length), "Perfumes"],
+                [String(d.products.filter((product) => product.stock > 0).length), "Perfumes disponíveis"],
                 [
                   d.products.reduce((n, p) => n + p.stock, 0) + " ml",
                   "Volume disponível",
