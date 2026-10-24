@@ -911,11 +911,59 @@ function System({ session }: { session: Session }) {
   const mounted = useRef(true);
   const [saveNotice, setSaveNotice] = useState("");
   const [catalogNotice, setCatalogNotice] = useState("");
+  const [recoveringState, setRecoveringState] = useState(false);
   const recovery = useRef<LocalRecovery | null>(null);
   const recoveredDrafts = useRef<unknown[]>([]);
   const [editingBlocked, setEditingBlocked] = useState(true);
   function blockEditing(message: string) {
-    blocked.current = true; setEditingBlocked(true); setSaveNotice(message);
+    blocked.current = true;
+    setEditingBlocked(true);
+    setSaveNotice(message);
+  }
+
+  function stateRecoveryMessage(error: unknown) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "Não foi possível carregar o estado salvo.";
+
+    if (/jwt|session|refresh token|authentication required|not authenticated/i.test(message)) {
+      return "Sua sessão expirou ou não pôde ser renovada. Saia do sistema e entre novamente.";
+    }
+    if (/management admin required|permission denied|42501|not authorized/i.test(message)) {
+      return "Sua sessão foi reconhecida, mas o Supabase não confirmou a permissão de administrador. Saia e entre novamente; se continuar, a permissão do usuário precisa ser revisada.";
+    }
+    if (/failed to fetch|network|fetch|timeout|gateway|supabase/i.test(message)) {
+      return "Não foi possível se comunicar com o Supabase. Verifique sua conexão e tente novamente.";
+    }
+    if (/invalid_state_revision|invalid state revision/i.test(message)) {
+      return "O Supabase respondeu, mas o estado salvo veio em um formato inesperado. Nenhum dado foi alterado.";
+    }
+    return `Não foi possível carregar o estado salvo. Motivo: ${message}`;
+  }
+
+  async function openConfirmedState() {
+    try {
+      return await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
+    } catch (firstError) {
+      const message =
+        firstError instanceof Error ? firstError.message : String(firstError);
+      const authRelated =
+        /jwt|session|refresh token|authentication required|not authenticated|management admin required|permission denied|42501/i.test(
+          message,
+        );
+      if (!authRelated) throw firstError;
+
+      const { data: refreshed, error: refreshError } =
+        await supabase.auth.refreshSession();
+      if (refreshError || !refreshed.session) {
+        throw refreshError || new Error("SESSION_REFRESH_FAILED");
+      }
+
+      return FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
+    }
   }
   function setData(update: D | ((current: D) => D)) {
     if (blocked.current || !ready || !recovery.current || !writer.current) return;
@@ -953,22 +1001,43 @@ function System({ session }: { session: Session }) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   async function loadCurrent() {
-    if (!window.confirm("Carregar o estado salvo descarta este rascunho local. Exporte-o antes se precisar preservá-lo. Continuar?")) return;
+    if (recoveringState) return;
+    if (
+      !window.confirm(
+        "Carregar o estado salvo descarta este rascunho local. Exporte-o antes se precisar preservá-lo. Continuar?",
+      )
+    )
+      return;
+
     const version = saveVersion.current;
+    setRecoveringState(true);
+    setSaveNotice("Tentando confirmar o estado salvo no Supabase...");
+
     try {
-      if (writer.current?.pending) throw Error("Aguarde a gravação em andamento.");
-      const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
-      if (!mounted.current || version !== saveVersion.current) { current.dispose(); return; }
-      writer.current?.dispose(); writer.current = current;
+      if (writer.current?.pending) {
+        throw Error("Aguarde a gravação em andamento.");
+      }
+
+      const current = await openConfirmedState();
+      if (!mounted.current || version !== saveVersion.current) {
+        current.dispose();
+        return;
+      }
+
+      writer.current?.dispose();
+      writer.current = current;
       let normalized = normalizeData(current.snapshot.data);
       const catalogSettingsNeedTransportMigration =
         JSON.stringify(current.snapshot.data?.catalogSettings || {}) !==
         JSON.stringify(normalized.catalogSettings);
+
       if (
         current.snapshot.identitiesReady &&
         (
           (
-            Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
+            Number(
+              current.snapshot.data?.hacivatBottleCorrectionVersion || 0,
+            ) < 1 &&
             normalized.hacivatBottleCorrectionVersion === 1
           ) ||
           catalogSettingsNeedTransportMigration
@@ -980,18 +1049,27 @@ function System({ session }: { session: Session }) {
           if (mounted.current) recordPublication(publication);
         });
       }
+
       lastSynced.current = JSON.stringify(normalized);
-      // The user explicitly chose the confirmed server state, so discard the
-      // pending recovery records that caused this warning instead of leaving
-      // orphan records to trigger the same banner on the next visit.
       recovery.current ||= new LocalRecovery(session.user.id);
       recovery.current.clearAll();
       recoveredDrafts.current = [];
       blocked.current = !current.snapshot.identitiesReady;
       setEditingBlocked(blocked.current);
-      setSaveNotice(blocked.current ? "A adoção de UUIDs precisa ser concluída antes de salvar." : "");
-      setDataState(normalized); setReady(true); setSync(blocked.current ? "error" : "saved");
-    } catch(error) { blockEditing(error instanceof Error ? error.message : "Não foi possível carregar o estado salvo."); setSync("error"); }
+      setSaveNotice(
+        blocked.current
+          ? "A adoção de UUIDs precisa ser concluída antes de salvar."
+          : "",
+      );
+      setDataState(normalized);
+      setReady(true);
+      setSync(blocked.current ? "error" : "saved");
+    } catch (error) {
+      blockEditing(stateRecoveryMessage(error));
+      setSync("error");
+    } finally {
+      setRecoveringState(false);
+    }
   }
   const [page, setPage] = useState("dashboard"),
     [theme, setTheme] = useState<"dark" | "light">(() => {
@@ -1094,7 +1172,7 @@ function System({ session }: { session: Session }) {
     mounted.current = true;
     (async () => {
       try {
-        const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
+        const current = await openConfirmedState();
         if (!active) { current.dispose(); return; }
         writer.current = current;
         recovery.current = new LocalRecovery(session.user.id);
@@ -1132,8 +1210,15 @@ function System({ session }: { session: Session }) {
         setSaveNotice(pending.length ? "Há rascunhos locais pendentes deste usuário. Exporte-os e carregue o estado salvo antes de continuar."
           : blocked.current ? "A adoção de UUIDs precisa ser concluída antes de salvar." : "");
         setReady(true); setSync(blocked.current ? "error" : "saved");
-      } catch {
-        if (active) { blockEditing(writer.current ? "Estado confirmado no banco. A recuperação local está indisponível; a edição está bloqueada. Exporte os rascunhos e tente carregar o estado salvo." : "Não foi possível confirmar o estado salvo. A edição está bloqueada; tente carregar o estado salvo antes de continuar."); setSync("error"); }
+      } catch (error) {
+        if (active) {
+          blockEditing(
+            writer.current
+              ? "Estado confirmado no banco. A recuperação local está indisponível; a edição está bloqueada. Exporte os rascunhos e tente carregar o estado salvo."
+              : stateRecoveryMessage(error),
+          );
+          setSync("error");
+        }
       }
     })();
     const timer = window.setInterval(async () => {
@@ -1321,7 +1406,23 @@ const action =
         <div className="authCard">
           <Cloud />
           <h1>{sync === "error" ? "Edição bloqueada" : "Carregando seus dados..."}</h1>
-          {sync === "error" && <><p role="alert">{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button><button onClick={() => supabase.auth.signOut()}>Sair</button></>}
+          {sync === "error" && (
+            <>
+              <p role="alert">{saveNotice}</p>
+              <button onClick={exportDraft} disabled={recoveringState}>
+                Exportar rascunho
+              </button>
+              <button onClick={loadCurrent} disabled={recoveringState}>
+                {recoveringState ? "Carregando estado..." : "Carregar estado salvo"}
+              </button>
+              <button
+                onClick={() => supabase.auth.signOut()}
+                disabled={recoveringState}
+              >
+                Sair
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
