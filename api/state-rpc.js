@@ -7,7 +7,7 @@ const ALLOWED_RPCS = new Set([
 
 function getConfig() {
   const url = String(process.env.VITE_SUPABASE_URL || "").replace(/\/$/, "");
-  const key = String(process.env.VITE_SUPABASE_ANON_KEY || "");
+  const key = String(process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "");
   return { url, key };
 }
 
