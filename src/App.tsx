@@ -929,6 +929,12 @@ function System({ session }: { session: Session }) {
           ? error
           : "Não foi possível carregar o estado salvo.";
 
+    if (/DIRECT_STATE_READ_TIMEOUT/i.test(message)) {
+      return "A leitura direta do seu estado salvo também demorou demais. Isso indica lentidão do Supabase ou um estado muito grande. Nenhum dado foi alterado.";
+    }
+    if (/DIRECT_STATE_NOT_FOUND|DIRECT_STATE_READ_FAILED/i.test(message)) {
+      return "A leitura alternativa do seu estado salvo falhou. Nenhum dado foi alterado.";
+    }
     if (/STATE_READ_TIMEOUT|SESSION_REFRESH_TIMEOUT/i.test(message)) {
       return "O Supabase demorou demais para responder. Nenhum dado foi alterado. Tente novamente; se persistir, saia e entre novamente no sistema.";
     }
@@ -961,6 +967,60 @@ function System({ session }: { session: Session }) {
     ]);
   }
 
+  function identitiesReadyFromState(value: any) {
+    const uuid =
+      /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
+    for (const key of ["products", "clients", "sales"]) {
+      const rows = Array.isArray(value?.[key]) ? value[key] : [];
+      if (
+        rows.some(
+          (row: any) =>
+            typeof row?.externalId !== "string" ||
+            !uuid.test(row.externalId),
+        )
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async function openStateDirectlyFromOwnRow() {
+    const { data: row, error } = await withTimeout(
+      supabase
+        .from("app_state")
+        .select("data,revision")
+        .maybeSingle(),
+      12_000,
+      "DIRECT_STATE_READ_TIMEOUT",
+    );
+
+    if (error) throw new Error(error.message || "DIRECT_STATE_READ_FAILED");
+    if (
+      !row ||
+      !row.data ||
+      typeof row.revision !== "number" && typeof row.revision !== "string"
+    ) {
+      throw new Error("DIRECT_STATE_NOT_FOUND");
+    }
+
+    const revision = String(row.revision);
+    if (!/^\d+$/.test(revision)) {
+      throw new Error("INVALID_STATE_REVISION");
+    }
+
+    return new FabioStateWriter(
+      supabase,
+      {
+        data: row.data,
+        revision,
+        identitiesReady: identitiesReadyFromState(row.data),
+      },
+      buildCatalog,
+      fallbackCatalog,
+    );
+  }
+
   async function openConfirmedState() {
     try {
       return await withTimeout(
@@ -975,7 +1035,15 @@ function System({ session }: { session: Session }) {
         /jwt|session|refresh token|authentication required|not authenticated|management admin required|permission denied|42501/i.test(
           message,
         );
-      if (!authRelated) throw firstError;
+      if (!authRelated) {
+        if (
+          firstError instanceof Error &&
+          /STATE_READ_TIMEOUT/i.test(firstError.message)
+        ) {
+          return openStateDirectlyFromOwnRow();
+        }
+        throw firstError;
+      }
 
       const { data: refreshed, error: refreshError } = await withTimeout(
         supabase.auth.refreshSession(),
@@ -986,11 +1054,21 @@ function System({ session }: { session: Session }) {
         throw refreshError || new Error("SESSION_REFRESH_FAILED");
       }
 
-      return withTimeout(
-        FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog),
-        10_000,
-        "STATE_READ_TIMEOUT",
-      );
+      try {
+        return await withTimeout(
+          FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog),
+          10_000,
+          "STATE_READ_TIMEOUT",
+        );
+      } catch (retryError) {
+        if (
+          retryError instanceof Error &&
+          /STATE_READ_TIMEOUT/i.test(retryError.message)
+        ) {
+          return openStateDirectlyFromOwnRow();
+        }
+        throw retryError;
+      }
     }
   }
   function setData(update: D | ((current: D) => D)) {
