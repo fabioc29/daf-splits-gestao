@@ -929,6 +929,10 @@ function System({ session }: { session: Session }) {
           ? error
           : "Não foi possível carregar o estado salvo.";
 
+    if (/STATE_READ_TIMEOUT|SESSION_REFRESH_TIMEOUT/i.test(message)) {
+      return "O Supabase demorou demais para responder. Nenhum dado foi alterado. Tente novamente; se persistir, saia e entre novamente no sistema.";
+    }
+
     if (/jwt|session|refresh token|authentication required|not authenticated/i.test(message)) {
       return "Sua sessão expirou ou não pôde ser renovada. Saia do sistema e entre novamente.";
     }
@@ -944,9 +948,26 @@ function System({ session }: { session: Session }) {
     return `Não foi possível carregar o estado salvo. Motivo: ${message}`;
   }
 
+  function withTimeout<T>(
+    promise: PromiseLike<T>,
+    milliseconds: number,
+    code: string,
+  ): Promise<T> {
+    return Promise.race([
+      Promise.resolve(promise),
+      new Promise<T>((_resolve, reject) => {
+        window.setTimeout(() => reject(new Error(code)), milliseconds);
+      }),
+    ]);
+  }
+
   async function openConfirmedState() {
     try {
-      return await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
+      return await withTimeout(
+        FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog),
+        10_000,
+        "STATE_READ_TIMEOUT",
+      );
     } catch (firstError) {
       const message =
         firstError instanceof Error ? firstError.message : String(firstError);
@@ -956,13 +977,20 @@ function System({ session }: { session: Session }) {
         );
       if (!authRelated) throw firstError;
 
-      const { data: refreshed, error: refreshError } =
-        await supabase.auth.refreshSession();
+      const { data: refreshed, error: refreshError } = await withTimeout(
+        supabase.auth.refreshSession(),
+        8_000,
+        "SESSION_REFRESH_TIMEOUT",
+      );
       if (refreshError || !refreshed.session) {
         throw refreshError || new Error("SESSION_REFRESH_FAILED");
       }
 
-      return FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
+      return withTimeout(
+        FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog),
+        10_000,
+        "STATE_READ_TIMEOUT",
+      );
     }
   }
   function setData(update: D | ((current: D) => D)) {
