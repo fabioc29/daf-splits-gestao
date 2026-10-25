@@ -1005,6 +1005,25 @@ function System({ session }: { session: Session }) {
     ]);
   }
 
+  async function openConfirmedStateWithRetry(attempts = 3) {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        return await openConfirmedState();
+      } catch (error) {
+        lastError = error;
+        if (attempt < attempts) {
+          await new Promise((resolve) =>
+            window.setTimeout(resolve, attempt * 1200),
+          );
+        }
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("STATE_RECOVERY_FAILED");
+  }
+
   async function openConfirmedState() {
     try {
       return await withTimeout(
@@ -1090,7 +1109,7 @@ function System({ session }: { session: Session }) {
         throw Error("Aguarde a gravação em andamento.");
       }
 
-      const current = await openConfirmedState();
+      const current = await openConfirmedStateWithRetry(3);
       if (!mounted.current || version !== saveVersion.current) {
         current.dispose();
         return;
@@ -1244,7 +1263,7 @@ function System({ session }: { session: Session }) {
     mounted.current = true;
     (async () => {
       try {
-        const current = await openConfirmedState();
+        const current = await openConfirmedStateWithRetry(3);
         if (!active) { current.dispose(); return; }
         writer.current = current;
         recovery.current = new LocalRecovery(session.user.id);
@@ -1286,7 +1305,7 @@ function System({ session }: { session: Session }) {
         if (active) {
           blockEditing(
             writer.current
-              ? "Estado confirmado no banco. A recuperação local está indisponível; a edição está bloqueada. Exporte os rascunhos e tente carregar o estado salvo."
+              ? "Estado confirmado no banco. A recuperação local está indisponível; a edição está bloqueada."
               : stateRecoveryMessage(error),
           );
           setSync("error");
