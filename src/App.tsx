@@ -950,6 +950,7 @@ function System({ session }: { session: Session }) {
   const [saveNotice, setSaveNotice] = useState("");
   const [catalogNotice, setCatalogNotice] = useState("");
   const [recoveringState, setRecoveringState] = useState(false);
+  const [offlineReadOnly, setOfflineReadOnly] = useState(false);
   const recovery = useRef<LocalRecovery | null>(null);
   const recoveredDrafts = useRef<unknown[]>([]);
   const [editingBlocked, setEditingBlocked] = useState(true);
@@ -957,6 +958,60 @@ function System({ session }: { session: Session }) {
     blocked.current = true;
     setEditingBlocked(true);
     setSaveNotice(message);
+  }
+
+  const confirmedStateCacheKey = `daf-v4-confirmed-state:${session.user.id}`;
+
+  function cacheConfirmedState(snapshot: { revision: string; data: any }) {
+    try {
+      optionalLocalSet(
+        confirmedStateCacheKey,
+        JSON.stringify({
+          format: "daf-confirmed-state-v1",
+          userId: session.user.id,
+          revision: snapshot.revision,
+          data: snapshot.data,
+          updatedAt: new Date().toISOString(),
+        }),
+      );
+    } catch {}
+  }
+
+  function readOfflineState() {
+    try {
+      recovery.current ||= new LocalRecovery(session.user.id);
+      const drafts = recovery.current
+        .list()
+        .filter((record: any) => record?.draft && typeof record.draft === "object")
+        .sort((a: any, b: any) => {
+          const ar = /^\d+$/.test(String(a.revision)) ? Number(a.revision) : -1;
+          const br = /^\d+$/.test(String(b.revision)) ? Number(b.revision) : -1;
+          return br - ar;
+        });
+      if (drafts.length) {
+        return {
+          data: normalizeData(drafts[0].draft),
+          source: "rascunho local",
+        };
+      }
+    } catch {}
+
+    try {
+      const cached = JSON.parse(optionalLocalGet(confirmedStateCacheKey) || "null");
+      if (
+        cached?.format === "daf-confirmed-state-v1" &&
+        cached?.userId === session.user.id &&
+        cached?.data &&
+        typeof cached.data === "object"
+      ) {
+        return {
+          data: normalizeData(cached.data),
+          source: "último estado confirmado",
+        };
+      }
+    } catch {}
+
+    return null;
   }
 
   function stateRecoveryMessage(error: unknown) {
@@ -1142,6 +1197,11 @@ function System({ session }: { session: Session }) {
       }
 
       lastSynced.current = JSON.stringify(normalized);
+      cacheConfirmedState({
+        revision: current.snapshot.revision,
+        data: normalized,
+      });
+      setOfflineReadOnly(false);
       recovery.current ||= new LocalRecovery(session.user.id);
       recovery.current.clearAll();
       recoveredDrafts.current = [];
@@ -1294,6 +1354,11 @@ function System({ session }: { session: Session }) {
           });
         }
         lastSynced.current = JSON.stringify(normalized);
+        cacheConfirmedState({
+          revision: current.snapshot.revision,
+          data: normalized,
+        });
+        setOfflineReadOnly(false);
         blocked.current = pending.length > 0 || !current.snapshot.identitiesReady;
         setEditingBlocked(blocked.current);
         // Never replay a recovered draft or silently rebase it over a different revision.
@@ -1303,32 +1368,100 @@ function System({ session }: { session: Session }) {
         setReady(true); setSync(blocked.current ? "error" : "saved");
       } catch (error) {
         if (active) {
-          blockEditing(
-            writer.current
-              ? "Estado confirmado no banco. A recuperação local está indisponível; a edição está bloqueada."
-              : stateRecoveryMessage(error),
-          );
-          setSync("error");
+          const offline = readOfflineState();
+          if (offline) {
+            writer.current?.dispose();
+            writer.current = null;
+            blocked.current = true;
+            setEditingBlocked(true);
+            setOfflineReadOnly(true);
+            setDataState(offline.data);
+            setReady(true);
+            setSync("error");
+            setSaveNotice(
+              `Modo de contingência: exibindo ${offline.source}. O Supabase está indisponível e as alterações estão temporariamente desativadas. A reconexão será tentada automaticamente.`,
+            );
+          } else {
+            blockEditing(stateRecoveryMessage(error));
+            setSync("error");
+          }
         }
       }
     })();
     const timer = window.setInterval(async () => {
-      const current = writer.current, version = saveVersion.current;
-      if (!current || current.pending || modalRef.current || blocked.current || JSON.stringify(dataRef.current) !== lastSynced.current) return;
+      if (!active || modalRef.current) return;
+
+      if (offlineReadOnly || !writer.current) {
+        try {
+          const current = await openConfirmedState();
+          if (!active) {
+            current.dispose();
+            return;
+          }
+          writer.current?.dispose();
+          writer.current = current;
+          const normalized = normalizeData(current.snapshot.data);
+          lastSynced.current = JSON.stringify(normalized);
+          cacheConfirmedState({
+            revision: current.snapshot.revision,
+            data: normalized,
+          });
+          setDataState(normalized);
+          blocked.current = !current.snapshot.identitiesReady;
+          setEditingBlocked(blocked.current);
+          setOfflineReadOnly(false);
+          setSaveNotice(
+            blocked.current
+              ? "A adoção de UUIDs precisa ser concluída antes de salvar."
+              : "",
+          );
+          setSync(blocked.current ? "error" : "saved");
+        } catch {
+          // Continua em contingência e tenta novamente no próximo ciclo.
+        }
+        return;
+      }
+
+      const current = writer.current;
+      const version = saveVersion.current;
+      if (
+        current.pending ||
+        blocked.current ||
+        JSON.stringify(dataRef.current) !== lastSynced.current
+      )
+        return;
       try {
         const remote = await readState(stateClient);
-        if (!active || modalRef.current || blocked.current || current !== writer.current || current.pending || version !== saveVersion.current || remote.data === null) return;
+        if (
+          !active ||
+          modalRef.current ||
+          blocked.current ||
+          current !== writer.current ||
+          current.pending ||
+          version !== saveVersion.current ||
+          remote.data === null
+        )
+          return;
         if (remote.revision === current.snapshot.revision) return;
         current.snapshot = remote;
         const normalized = normalizeData(remote.data);
         lastSynced.current = JSON.stringify(normalized);
+        cacheConfirmedState({ revision: remote.revision, data: normalized });
         setDataState(normalized);
         blocked.current = !remote.identitiesReady;
-        if (blocked.current) { setEditingBlocked(true); setSaveNotice("A adoção de UUIDs precisa ser concluída antes de salvar."); setSync("error"); }
-      } catch { /* An idle read never acknowledges or retries a write. */ }
-    }, 5000);
+        if (blocked.current) {
+          setEditingBlocked(true);
+          setSaveNotice(
+            "A adoção de UUIDs precisa ser concluída antes de salvar.",
+          );
+          setSync("error");
+        }
+      } catch {
+        /* Uma leitura ociosa nunca confirma nem repete uma gravação. */
+      }
+    }, offlineReadOnly ? 15000 : 5000);
     return () => { active = false; mounted.current = false; window.clearInterval(timer); writer.current?.dispose(); writer.current = null; };
-  }, [session.user.id]);
+  }, [session.user.id, offlineReadOnly]);
   useEffect(() => {
     if (!ready) return;
     const serialized = JSON.stringify(data);
@@ -1339,6 +1472,10 @@ function System({ session }: { session: Session }) {
       if (!mounted.current) return;
       const normalized = normalizeData(saved.data);
       lastSynced.current = JSON.stringify(normalized);
+      cacheConfirmedState({
+        revision: saved.revision,
+        data: normalized,
+      });
       if (version === saveVersion.current) {
         // A browser cache failure cannot invalidate an acknowledged database commit.
         setDataState(normalized); setSync("saved"); setSaveNotice("");
@@ -1900,7 +2037,21 @@ const action =
           </div>
         </header>
         <section className={"content contentPage-" + page}>
-          {saveNotice && <div className="card" role="alert"><p>{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button></div>}
+          {saveNotice && (
+            <div className="card" role="alert">
+              <p>{saveNotice}</p>
+              {offlineReadOnly ? (
+                <button onClick={() => void loadCurrent()}>
+                  Tentar reconectar agora
+                </button>
+              ) : (
+                <>
+                  <button onClick={exportDraft}>Exportar rascunho</button>
+                  <button onClick={loadCurrent}>Carregar estado salvo</button>
+                </>
+              )}
+            </div>
+          )}
           {catalogNotice && <div className="card" role="status"><p>{catalogNotice}</p><button disabled={sync !== "saved" || !ready} onClick={async () => { if (writer.current && !writer.current.pending && !blocked.current) recordPublication(await writer.current.publish()); }}>Publicar catálogo da revisão salva</button></div>}
           <div inert={editingBlocked} style={{display:"contents"}}>
           {page === "crm" ? (
