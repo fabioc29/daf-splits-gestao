@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { readState, newIdentities, StateConflict } from "./crm/state-persistence";
+import {
+  readState,
+  newIdentities,
+  StateConflict,
+  type StateClient,
+} from "./crm/state-persistence";
 import { FabioStateWriter, committedCatalogCache, PUBLISHED_CATALOG_KEY } from "./crm/fabio-persistence";
 import { LocalRecovery, optionalLocalGet, optionalLocalSet, optionalLocalRemove } from "./crm/local-recovery";
 import { CRMFeedPanel } from "./crm/CRMFeedPanel";
@@ -902,6 +907,39 @@ function System({ session }: { session: Session }) {
   const [data, setDataState] = useState<D>(() => normalizeData(blank)),
     [ready, setReady] = useState(false),
     [sync, setSync] = useState<"loading" | "saved" | "error">("loading");
+  const stateClient = useMemo<StateClient>(
+    () => ({
+      async rpc(name: string, args?: Record<string, unknown>) {
+        const response = await fetch("/api/state-rpc", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ rpc: name, args: args || {} }),
+        });
+
+        const payload = await response.json().catch(() => ({
+          data: null,
+          error: {
+            code: String(response.status),
+            message: "Resposta inválida do proxy de estado.",
+          },
+        }));
+
+        if (!response.ok && !payload?.error) {
+          payload.error = {
+            code: String(response.status),
+            message: "Falha ao acessar o estado pelo servidor.",
+          };
+        }
+
+        return payload;
+      },
+    }),
+    [session.access_token],
+  );
+
   const writer = useRef<FabioStateWriter | null>(null);
   const saveVersion = useRef(0);
   const lastSynced = useRef("");
@@ -929,14 +967,14 @@ function System({ session }: { session: Session }) {
           ? error
           : "Não foi possível carregar o estado salvo.";
 
-    if (/DIRECT_STATE_READ_TIMEOUT/i.test(message)) {
-      return "A leitura direta do seu estado salvo também demorou demais. Isso indica lentidão do Supabase ou um estado muito grande. Nenhum dado foi alterado.";
+    if (/SUPABASE_PROXY_TIMEOUT|STATE_READ_TIMEOUT/i.test(message)) {
+      return "O servidor da DAF conseguiu receber a solicitação, mas o Supabase demorou demais para responder. Nenhum dado foi alterado.";
     }
-    if (/DIRECT_STATE_NOT_FOUND|DIRECT_STATE_READ_FAILED/i.test(message)) {
-      return "A leitura alternativa do seu estado salvo falhou. Nenhum dado foi alterado.";
+    if (/SUPABASE_PROXY_FAILED/i.test(message)) {
+      return "O servidor da DAF não conseguiu concluir a comunicação com o Supabase. Nenhum dado foi alterado.";
     }
-    if (/STATE_READ_TIMEOUT|SESSION_REFRESH_TIMEOUT/i.test(message)) {
-      return "O Supabase demorou demais para responder. Nenhum dado foi alterado. Tente novamente; se persistir, saia e entre novamente no sistema.";
+    if (/SESSION_REFRESH_TIMEOUT/i.test(message)) {
+      return "Sua sessão demorou demais para ser renovada. Saia e entre novamente no sistema.";
     }
 
     if (/jwt|session|refresh token|authentication required|not authenticated/i.test(message)) {
@@ -967,64 +1005,10 @@ function System({ session }: { session: Session }) {
     ]);
   }
 
-  function identitiesReadyFromState(value: any) {
-    const uuid =
-      /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-    for (const key of ["products", "clients", "sales"]) {
-      const rows = Array.isArray(value?.[key]) ? value[key] : [];
-      if (
-        rows.some(
-          (row: any) =>
-            typeof row?.externalId !== "string" ||
-            !uuid.test(row.externalId),
-        )
-      ) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  async function openStateDirectlyFromOwnRow() {
-    const { data: row, error } = await withTimeout(
-      supabase
-        .from("app_state")
-        .select("data,revision")
-        .maybeSingle(),
-      12_000,
-      "DIRECT_STATE_READ_TIMEOUT",
-    );
-
-    if (error) throw new Error(error.message || "DIRECT_STATE_READ_FAILED");
-    if (
-      !row ||
-      !row.data ||
-      typeof row.revision !== "number" && typeof row.revision !== "string"
-    ) {
-      throw new Error("DIRECT_STATE_NOT_FOUND");
-    }
-
-    const revision = String(row.revision);
-    if (!/^\d+$/.test(revision)) {
-      throw new Error("INVALID_STATE_REVISION");
-    }
-
-    return new FabioStateWriter(
-      supabase,
-      {
-        data: row.data,
-        revision,
-        identitiesReady: identitiesReadyFromState(row.data),
-      },
-      buildCatalog,
-      fallbackCatalog,
-    );
-  }
-
   async function openConfirmedState() {
     try {
       return await withTimeout(
-        FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog),
+        FabioStateWriter.open(stateClient, buildCatalog, fallbackCatalog),
         10_000,
         "STATE_READ_TIMEOUT",
       );
@@ -1035,15 +1019,7 @@ function System({ session }: { session: Session }) {
         /jwt|session|refresh token|authentication required|not authenticated|management admin required|permission denied|42501/i.test(
           message,
         );
-      if (!authRelated) {
-        if (
-          firstError instanceof Error &&
-          /STATE_READ_TIMEOUT/i.test(firstError.message)
-        ) {
-          return openStateDirectlyFromOwnRow();
-        }
-        throw firstError;
-      }
+      if (!authRelated) throw firstError;
 
       const { data: refreshed, error: refreshError } = await withTimeout(
         supabase.auth.refreshSession(),
@@ -1054,21 +1030,11 @@ function System({ session }: { session: Session }) {
         throw refreshError || new Error("SESSION_REFRESH_FAILED");
       }
 
-      try {
-        return await withTimeout(
-          FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog),
-          10_000,
-          "STATE_READ_TIMEOUT",
-        );
-      } catch (retryError) {
-        if (
-          retryError instanceof Error &&
-          /STATE_READ_TIMEOUT/i.test(retryError.message)
-        ) {
-          return openStateDirectlyFromOwnRow();
-        }
-        throw retryError;
-      }
+      return withTimeout(
+        FabioStateWriter.open(stateClient, buildCatalog, fallbackCatalog),
+        12_000,
+        "STATE_READ_TIMEOUT",
+      );
     }
   }
   function setData(update: D | ((current: D) => D)) {
@@ -1331,7 +1297,7 @@ function System({ session }: { session: Session }) {
       const current = writer.current, version = saveVersion.current;
       if (!current || current.pending || modalRef.current || blocked.current || JSON.stringify(dataRef.current) !== lastSynced.current) return;
       try {
-        const remote = await readState(supabase);
+        const remote = await readState(stateClient);
         if (!active || modalRef.current || blocked.current || current !== writer.current || current.pending || version !== saveVersion.current || remote.data === null) return;
         if (remote.revision === current.snapshot.revision) return;
         current.snapshot = remote;
