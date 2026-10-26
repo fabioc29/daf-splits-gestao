@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { readState, newIdentities, StateConflict } from "./crm/state-persistence";
-import { FabioStateWriter, committedCatalogCache, PUBLISHED_CATALOG_KEY } from "./crm/fabio-persistence";
+import { FabioStateWriter } from "./crm/fabio-persistence";
 import { LocalRecovery, optionalLocalGet, optionalLocalSet, optionalLocalRemove } from "./crm/local-recovery";
 import { CRMFeedPanel } from "./crm/CRMFeedPanel";
 import {
@@ -55,16 +55,7 @@ import {
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
-import {
-  CatalogAdminPreview,
-  catalogItemsFromProducts,
-  enrichCatalogItemsWithImages,
-  catalogSnapshotPayload,
-  catalogSettingsForPersistence,
-  DEFAULT_CATALOG_SETTINGS,
-  normalizeCatalogSettings,
-  type CatalogSettings,
-} from "./Catalog";
+import { catalogSettingsForPersistence, DEFAULT_CATALOG_SETTINGS, type CatalogSettings } from "./Catalog";
 
 type BottleHistoryEntry = {
   number: number;
@@ -910,7 +901,6 @@ function System({ session }: { session: Session }) {
   const blocked = useRef(false);
   const mounted = useRef(true);
   const [saveNotice, setSaveNotice] = useState("");
-  const [catalogNotice, setCatalogNotice] = useState("");
   const recovery = useRef<LocalRecovery | null>(null);
   const recoveredDrafts = useRef<unknown[]>([]);
   const [editingBlocked, setEditingBlocked] = useState(true);
@@ -926,27 +916,6 @@ function System({ session }: { session: Session }) {
     catch { blockEditing("O rascunho está apenas na memória: o armazenamento local falhou. Exporte-o antes de fechar e carregue o estado salvo para continuar."); setDataState(next); return; }
     setDataState(next);
   }
-  function recordPublication(publication: Awaited<ReturnType<FabioStateWriter["publish"]>>) {
-    const cache = committedCatalogCache(publication);
-    if (cache && !optionalLocalSet(PUBLISHED_CATALOG_KEY, cache)) {
-      setCatalogNotice("Dados e catálogo confirmados no servidor; o cache local do catálogo está indisponível."); return;
-    }
-    setCatalogNotice(publication.status === "published" ? "" : publication.status === "stale"
-      ? "O catálogo aguarda a revisão atual. Outra sessão salvou durante a publicação."
-      : "Dados salvos; o catálogo ainda não foi publicado. Tente publicar novamente após conferir a revisão.");
-  }
-  function fallbackCatalog(persisted: D) { return catalogSnapshotPayload(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), persisted.catalogSettings); }
-  async function buildCatalog(persisted: D, signal?: AbortSignal) {
-    const items = await enrichCatalogItemsWithImages(
-      catalogItemsFromProducts(
-        persisted.products,
-        persisted.catalogSettings?.manualImages,
-      ),
-      signal,
-      persisted.catalogSettings?.productOrder === "mostRated",
-    );
-    return catalogSnapshotPayload(items, persisted.catalogSettings);
-  }
   function exportDraft() {
     const url = URL.createObjectURL(new Blob([JSON.stringify({format:"daf-recovery-export-v1",userId:session.user.id,currentDraft:dataRef.current,pendingDrafts:recoveredDrafts.current}, null, 2)], {type:"application/json"}));
     const link = document.createElement("a"); link.href = url; link.download = "DAF-rascunho-nao-salvo.json"; link.click();
@@ -957,28 +926,15 @@ function System({ session }: { session: Session }) {
     const version = saveVersion.current;
     try {
       if (writer.current?.pending) throw Error("Aguarde a gravação em andamento.");
-      const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
+      const current = await FabioStateWriter.open(supabase);
       if (!mounted.current || version !== saveVersion.current) { current.dispose(); return; }
       writer.current?.dispose(); writer.current = current;
       let normalized = normalizeData(current.snapshot.data);
-      const catalogSettingsNeedTransportMigration =
-        JSON.stringify(current.snapshot.data?.catalogSettings || {}) !==
-        JSON.stringify(normalized.catalogSettings);
-      if (
-        current.snapshot.identitiesReady &&
-        (
-          (
-            Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
-            normalized.hacivatBottleCorrectionVersion === 1
-          ) ||
-          catalogSettingsNeedTransportMigration
-        )
-      ) {
+      if (current.snapshot.identitiesReady &&
+          Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
+          normalized.hacivatBottleCorrectionVersion === 1) {
         const migrated = await current.save(normalized);
         normalized = normalizeData(migrated.saved.data);
-        void migrated.publication.then((publication) => {
-          if (mounted.current) recordPublication(publication);
-        });
       }
       lastSynced.current = JSON.stringify(normalized);
       // The user explicitly chose the confirmed server state, so discard the
@@ -1094,7 +1050,7 @@ function System({ session }: { session: Session }) {
     mounted.current = true;
     (async () => {
       try {
-        const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
+        const current = await FabioStateWriter.open(supabase);
         if (!active) { current.dispose(); return; }
         writer.current = current;
         recovery.current = new LocalRecovery(session.user.id);
@@ -1120,9 +1076,6 @@ function System({ session }: { session: Session }) {
         ) {
           const migrated = await current.save(normalized);
           normalized = normalizeData(migrated.saved.data);
-          void migrated.publication.then((publication) => {
-            if (mounted.current) recordPublication(publication);
-          });
         }
         lastSynced.current = JSON.stringify(normalized);
         blocked.current = pending.length > 0 || !current.snapshot.identitiesReady;
@@ -1159,7 +1112,7 @@ function System({ session }: { session: Session }) {
     if (serialized === lastSynced.current || blocked.current || !writer.current) return;
     const version = saveVersion.current;
     setSync("loading");
-    writer.current.save(data).then(({saved, publication}) => {
+    writer.current.save(data).then(({saved}) => {
       if (!mounted.current) return;
       const normalized = normalizeData(saved.data);
       lastSynced.current = JSON.stringify(normalized);
@@ -1169,7 +1122,6 @@ function System({ session }: { session: Session }) {
         try { recovery.current?.clear(); }
         catch { blockEditing("Gravação confirmada no banco. A recuperação local falhou; novas edições estão bloqueadas. Exporte e carregue o estado salvo."); }
       }
-      void publication.then(result => { if (mounted.current) recordPublication(result); });
     }).catch(error => {
       if (!mounted.current) return;
       blockEditing(error instanceof StateConflict
@@ -1275,7 +1227,7 @@ const action =
             ? ["Cadastrar venda antiga", "oldSale"]
             : null;
   const stockSectionActive =
-    page === "stock" || page === "stock-supplies" || page === "catalog";
+    page === "stock" || page === "stock-supplies";
   const registrationsSectionActive =
     page === "clients" || page === "suppliers" || page === "brands";
   const financeSectionActive =
@@ -1298,9 +1250,7 @@ const action =
       ? "Estoque de perfumes"
       : page === "stock-supplies"
         ? "Estoque de insumos"
-        : page === "catalog"
-          ? "Catálogo"
-          : page === "clients"
+        : page === "clients"
             ? "Clientes"
             : page === "suppliers"
               ? "Fornecedores"
@@ -1376,12 +1326,6 @@ const action =
                         onClick={() => setPage("stock-supplies")}
                       >
                         Insumos
-                      </button>
-                      <button
-                        className={page === "catalog" ? "on" : ""}
-                        onClick={() => setPage("catalog")}
-                      >
-                        Catálogo
                       </button>
                     </div>
                   ) : null}
@@ -1647,54 +1591,6 @@ const action =
                 <ReceiptText /> Relatório
               </button>
             ) : null}
-            {page === "catalog" ? (
-              <button
-                className="secondary"
-                disabled={!ready || sync !== "saved"}
-                onClick={async () => {
-                  if (writer.current && !writer.current.pending && !blocked.current) {
-                    const publication = await writer.current.publish();
-                    if (mounted.current) recordPublication(publication);
-                  }
-                }}
-              >
-                <Cloud /> Publicar revisão salva
-              </button>
-            ) : null}
-            {page === "catalog" ? (
-              <button
-                className="secondary catalogHeaderEditButton"
-                onClick={() =>
-                  window.dispatchEvent(new CustomEvent("daf:catalog-edit"))
-                }
-              >
-                <Palette /> Editar
-              </button>
-            ) : null}
-            {page === "catalog" ? (
-              <button
-                className="secondary catalogHeaderImagesButton"
-                onClick={() =>
-                  window.dispatchEvent(new CustomEvent("daf:catalog-images"))
-                }
-              >
-                <ImageIcon /> Imagens
-              </button>
-            ) : null}
-            {page === "catalog" ? (
-              <button
-                className="secondary catalogPublicButton"
-                onClick={() =>
-                  window.open(
-                    import.meta.env.VITE_PUBLIC_CATALOG_URL || "/catalogo",
-                    "_blank",
-                    "noopener,noreferrer",
-                  )
-                }
-              >
-                <PackageOpen /> Abrir catálogo público
-              </button>
-            ) : null}
             {action ? (
               <button
                 className="primary"
@@ -1709,7 +1605,6 @@ const action =
         </header>
         <section className={"content contentPage-" + page}>
           {saveNotice && <div className="card" role="alert"><p>{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button></div>}
-          {catalogNotice && <div className="card" role="status"><p>{catalogNotice}</p><button disabled={sync !== "saved" || !ready} onClick={async () => { if (writer.current && !writer.current.pending && !blocked.current) recordPublication(await writer.current.publish()); }}>Publicar catálogo da revisão salva</button></div>}
           <div inert={editingBlocked} style={{display:"contents"}}>
           {page === "crm" ? (
             <CRMFeedPanel userId={session.user.id} synced={ready && sync === "saved" && !blocked.current} />
@@ -1752,17 +1647,6 @@ const action =
               editSupply={(id) => setModal({ type: "supplyEdit", id })}
               edit={(id) => setModal({ type: "product", id })}
               notify={notify}
-            />
-          ) : page === "catalog" ? (
-            <CatalogAdminPreview
-              products={data.products}
-              settings={data.catalogSettings}
-              onSettingsChange={(catalogSettings) =>
-                setData((current) => ({
-                  ...current,
-                  catalogSettings: catalogSettingsForPersistence(catalogSettings),
-                }))
-              }
             />
           ) : page === "purchases" ? (
             <Purchases
