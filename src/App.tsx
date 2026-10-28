@@ -7315,8 +7315,10 @@ function PendingPerfumes({
           ) : null}
         </div>
 
-        <footer>
-          <button type="button" onClick={close}>Fechar</button>
+        <footer className="pendingPerfumesFooter">
+          <button type="button" className="secondary" onClick={close}>
+            Fechar
+          </button>
         </footer>
       </div>
     </div>
@@ -13128,6 +13130,7 @@ function Form({
             <footer className="perfumeArrivalActions">
               <button
                 type="button"
+                className="secondary"
                 onClick={() => commitPerfumePurchase(false)}
               >
                 Ainda não chegou
