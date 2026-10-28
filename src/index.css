@@ -12636,9 +12636,17 @@ main > header {
 
 
 /* DAF — entrada de perfumes comprados e fila de pendências */
-.pendingPerfumesHeaderButton {
+.stockPendingAction {
   position: relative;
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
+  white-space: nowrap;
+}
+
+.stockPendingAction svg {
+  width: 16px;
+  height: 16px;
 }
 
 .pendingPerfumesCount {
