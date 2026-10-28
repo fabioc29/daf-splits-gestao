@@ -9556,6 +9556,29 @@ function InventoryEdit({
         setError("Quantidade e volume devem ser positivos.");
         return;
       }
+      if (
+        purchase.type === "Perfume" &&
+        purchase.arrivalStatus === "pending"
+      ) {
+        set((x: D) => ({
+          ...x,
+          purchases: x.purchases.map((item) =>
+            item.id === purchase.id
+              ? {
+                  ...item,
+                  date: String(f.date),
+                  supplier: String(f.supplier),
+                  qty,
+                  total,
+                  mlPerBottle: ml,
+                }
+              : item,
+          ),
+        }));
+        close();
+        return;
+      }
+
       const product = d.products.find(
         (p) =>
           `${p.brand} ${p.name}`.trim().toLowerCase() ===
@@ -9695,10 +9718,18 @@ function InventoryEdit({
               />
             ) : null}
             <Field n="total" l="Total pago" t="number" v={purchase.total} />
-            <p>
-              A quantidade altera o estoque pela diferença. O preço unitário
-              será atualizado para o valor desta compra corrigida.
-            </p>
+            {purchase.type === "Perfume" &&
+            purchase.arrivalStatus === "pending" ? (
+              <p>
+                Esta compra ainda está pendente. As alterações serão salvas
+                somente na fila e não modificarão o estoque até a chegada.
+              </p>
+            ) : (
+              <p>
+                A quantidade altera o estoque pela diferença. O preço unitário
+                será atualizado para o valor desta compra corrigida.
+              </p>
+            )}
           </>
         ) : null}
         {error ? <p role="alert">{error}</p> : null}
