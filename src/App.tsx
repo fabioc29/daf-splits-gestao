@@ -1734,19 +1734,6 @@ const action =
             ) : null}
             {page === "stock" ? (
               <button
-                className="secondary pendingPerfumesHeaderButton"
-                onClick={() => setModal({ type: "pendingPerfumes" })}
-              >
-                <PackageOpen /> Perfumes pendentes
-                {pendingPerfumeCount ? (
-                  <span className="pendingPerfumesCount">
-                    {pendingPerfumeCount}
-                  </span>
-                ) : null}
-              </button>
-            ) : null}
-            {page === "stock" ? (
-              <button
                 className="secondary stockReportHeaderButton"
                 onClick={() => setModal({ type: "stockReport" })}
               >
@@ -1809,6 +1796,8 @@ const action =
               editSupply={(id) => setModal({ type: "supplyEdit", id })}
               edit={(id) => setModal({ type: "product", id })}
               notify={notify}
+              pendingPerfumeCount={pendingPerfumeCount}
+              openPendingPerfumes={() => setModal({ type: "pendingPerfumes" })}
             />
           ) : page === "purchases" ? (
             <Purchases
@@ -7865,6 +7854,8 @@ function Stock({
   edit,
   set,
   notify,
+  pendingPerfumeCount,
+  openPendingPerfumes,
 }: {
   d: D;
   mode: "perfumes" | "supplies";
@@ -7874,6 +7865,8 @@ function Stock({
   edit: (id: number) => void;
   set: any;
   notify: (s: string) => void;
+  pendingPerfumeCount: number;
+  openPendingPerfumes: () => void;
 }) {
   const [apcOnly, setApcOnly] = useState(false),
     [category, setCategory] = useState("Todos"),
@@ -8032,6 +8025,21 @@ function Stock({
           </p>
         </div>
         <div className="stockHeadActions">
+          {view !== "supplies" ? (
+            <button
+              type="button"
+              className="secondary stockPendingAction"
+              onClick={openPendingPerfumes}
+            >
+              <PackageOpen />
+              Perfumes pendentes
+              {pendingPerfumeCount ? (
+                <span className="pendingPerfumesCount">
+                  {pendingPerfumeCount}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
           <button
             className="primary stockAction"
             onClick={view !== "supplies" ? addProduct : add}
