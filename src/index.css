@@ -12876,3 +12876,15 @@ main > header {
     grid-template-columns: 1fr;
   }
 }
+
+
+.pendingPerfumesFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.pendingPerfumesFooter .secondary {
+  width: auto;
+}
