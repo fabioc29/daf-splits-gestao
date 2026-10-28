@@ -193,6 +193,14 @@ type B = {
   mlPerBottle?: number;
   attachCost?: boolean;
   bottleNumbers?: number[];
+  arrivalStatus?: "pending" | "received";
+  receivedAt?: string;
+  productId?: number;
+  perfumeBrand?: string;
+  perfumeName?: string;
+  perfumeCategory?: string;
+  perfumeGender?: string;
+  perfumeApc?: boolean;
 };
 type SupplierType =
   | "Fornecedor de perfumes"
@@ -476,6 +484,138 @@ function perfumeIdentity(brand: unknown, name: unknown) {
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+function pendingPerfumePurchases(d: D) {
+  return d.purchases
+    .filter(
+      (purchase) =>
+        purchase.type === "Perfume" && purchase.arrivalStatus === "pending",
+    )
+    .sort(
+      (a, b) =>
+        String(b.date || "").localeCompare(String(a.date || "")) ||
+        Number(b.id) - Number(a.id),
+    );
+}
+
+function receivePerfumePurchase(
+  state: D,
+  purchaseId: number,
+  receivedAt = today(),
+): D {
+  const purchase = state.purchases.find((item) => item.id === purchaseId);
+  if (
+    !purchase ||
+    purchase.type !== "Perfume" ||
+    purchase.arrivalStatus === "received"
+  ) {
+    return state;
+  }
+
+  const brand = String(purchase.perfumeBrand || "").trim();
+  const name = parseBottleMarker(purchase.perfumeName || "").name.trim();
+  const qty = Math.max(1, Math.round(Number(purchase.qty) || 1));
+  const mlPerBottle = Math.max(0, Number(purchase.mlPerBottle) || 0);
+  const volume = qty * mlPerBottle;
+  if (!brand || !name || volume <= 0) return state;
+
+  const existing = state.products.find(
+    (product) =>
+      perfumeIdentity(product.brand, product.name) ===
+      perfumeIdentity(brand, name),
+  );
+  const startingBottleNumber = Math.max(
+    0,
+    Number(existing?.bottleNumber) || 0,
+  );
+  const bottleNumbers = Array.from(
+    { length: qty },
+    (_, index) => startingBottleNumber + index + 1,
+  );
+  const newBottleHistory = bottleNumbers.map((number) => ({
+    number,
+    date: receivedAt,
+    purchaseId,
+    ml: mlPerBottle,
+  }));
+
+  const productId =
+    existing?.id ||
+    Math.max(
+      Date.now(),
+      state.products.reduce(
+        (max, product) => Math.max(max, Number(product.id) || 0),
+        0,
+      ) + 1,
+    );
+
+  const products = existing
+    ? state.products.map((product) =>
+        product.id === existing.id
+          ? {
+              ...product,
+              name: parseBottleMarker(product.name).name,
+              stock: product.stock + volume,
+              cost:
+                (product.cost * product.stock + Number(purchase.total || 0)) /
+                (product.stock + volume || 1),
+              apc: purchase.perfumeApc ? 1 : Math.min(1, product.apc),
+              bottleNumber:
+                bottleNumbers[bottleNumbers.length - 1] ||
+                product.bottleNumber ||
+                1,
+              bottleHistory: [
+                ...(product.bottleHistory ||
+                  normalizeBottleHistory(
+                    product,
+                    product.bottleNumber || 1,
+                  )),
+                ...newBottleHistory,
+              ],
+            }
+          : product,
+      )
+    : [
+        ...state.products,
+        {
+          id: productId,
+          brand,
+          name,
+          category: String(purchase.perfumeCategory || "Designer"),
+          gender: String(purchase.perfumeGender || "Unissex"),
+          stock: volume,
+          min: 0,
+          cost: Number(purchase.total || 0) / (volume || 1),
+          apc: purchase.perfumeApc ? 1 : 0,
+          bottleNumber: bottleNumbers[bottleNumbers.length - 1] || qty,
+          bottleHistory: newBottleHistory,
+        },
+      ];
+
+  const brands = state.brands.some(
+    (item) =>
+      item.localeCompare(brand, "pt-BR", { sensitivity: "base" }) === 0,
+  )
+    ? state.brands
+    : [...state.brands, brand];
+
+  return {
+    ...state,
+    products,
+    brands,
+    purchases: state.purchases.map((item) =>
+      item.id === purchaseId
+        ? {
+            ...item,
+            arrivalStatus: "received",
+            receivedAt,
+            productId,
+            bottleNumbers,
+          }
+        : item,
+    ),
+  };
 }
 
 function normalizeBottleHistory(
@@ -1165,6 +1305,7 @@ function System({ session }: { session: Session }) {
   }
   return overdue ? "overdue" : dueToday ? "today" : null;
 })();
+const pendingPerfumeCount = pendingPerfumePurchases(data).length;
 const action =
   page === "sales"
       ? ["Nova venda", "sale"]
@@ -1464,6 +1605,19 @@ const action =
             ) : null}
             {page === "stock" ? (
               <button
+                className="secondary pendingPerfumesHeaderButton"
+                onClick={() => setModal({ type: "pendingPerfumes" })}
+              >
+                <PackageOpen /> Perfumes pendentes
+                {pendingPerfumeCount ? (
+                  <span className="pendingPerfumesCount">
+                    {pendingPerfumeCount}
+                  </span>
+                ) : null}
+              </button>
+            ) : null}
+            {page === "stock" ? (
+              <button
                 className="secondary stockReportHeaderButton"
                 onClick={() => setModal({ type: "stockReport" })}
               >
@@ -1595,7 +1749,14 @@ const action =
         </section>
       </main>
       <div inert={editingBlocked} style={{display:"contents"}}>
-      {modal?.type === "supplyEdit" || modal?.type === "purchaseEdit" ? (
+      {modal?.type === "pendingPerfumes" ? (
+        <PendingPerfumes
+          d={data}
+          set={setData}
+          close={() => setModal(null)}
+          notify={notify}
+        />
+      ) : modal?.type === "supplyEdit" || modal?.type === "purchaseEdit" ? (
         <InventoryEdit
           modal={modal}
           d={data}
@@ -1972,6 +2133,16 @@ function normalizeData(stored: any): D {
       ...purchase,
       description: cleanedDescription,
       supplier: supplierByKey.get(supplierKey(cleaned)) || cleaned,
+      arrivalStatus:
+        purchase.type === "Perfume"
+          ? purchase.arrivalStatus === "pending"
+            ? "pending"
+            : "received"
+          : undefined,
+      perfumeApc:
+        purchase.type === "Perfume"
+          ? Boolean(purchase.perfumeApc)
+          : undefined,
     };
   });
   const normalizedClients = (merged.clients || []).map((client: C) => ({
@@ -6646,6 +6817,139 @@ function Receivables({
   );
 }
 
+function PendingPerfumes({
+  d,
+  set,
+  close,
+  notify,
+}: {
+  d: D;
+  set: any;
+  close: () => void;
+  notify: (message: string) => void;
+}) {
+  const pending = pendingPerfumePurchases(d);
+
+  function markArrived(purchase: B) {
+    const alreadyInStock = d.products.find(
+      (product) =>
+        perfumeIdentity(product.brand, product.name) ===
+        perfumeIdentity(
+          purchase.perfumeBrand,
+          purchase.perfumeName,
+        ),
+    );
+    const message = alreadyInStock
+      ? `Confirmar a chegada de ${purchase.description}? O novo volume será somado ao cadastro já existente, sem criar outro perfume.`
+      : `Confirmar a chegada de ${purchase.description}? O perfume será incluído no estoque e ficará disponível no catálogo.`;
+    if (!window.confirm(message)) return;
+    set((state: D) => receivePerfumePurchase(state, purchase.id));
+    notify(
+      alreadyInStock
+        ? "Perfume recebido e somado ao estoque existente."
+        : "Perfume recebido e adicionado ao estoque.",
+    );
+  }
+
+  return (
+    <div className="overlay">
+      <div className="systemDialog pendingPerfumesDialog">
+        <header>
+          <div>
+            <small>ESTOQUE DE PERFUMES</small>
+            <h2>Perfumes pendentes</h2>
+          </div>
+          <button
+            type="button"
+            onClick={close}
+            aria-label="Fechar perfumes pendentes"
+          >
+            <X />
+          </button>
+        </header>
+
+        <p className="pendingPerfumesHint">
+          Compras de perfumes que ainda não deram entrada no estoque. Ao
+          confirmar a chegada, o sistema atualiza o estoque e o catálogo sem
+          duplicar perfumes já cadastrados.
+        </p>
+
+        <div className="pendingPerfumesList">
+          {pending.map((purchase) => {
+            const existing = d.products.find(
+              (product) =>
+                perfumeIdentity(product.brand, product.name) ===
+                perfumeIdentity(
+                  purchase.perfumeBrand,
+                  purchase.perfumeName,
+                ),
+            );
+            return (
+              <article className="pendingPerfumeCard" key={purchase.id}>
+                <div className="pendingPerfumeMain">
+                  <div>
+                    <small>{existing ? "RECOMPRA" : "NOVO PERFUME"}</small>
+                    <strong>{purchase.description}</strong>
+                    <span>
+                      {purchase.qty} frasco(s)
+                      {purchase.mlPerBottle
+                        ? ` × ${purchase.mlPerBottle} ml`
+                        : ""}
+                    </span>
+                  </div>
+                  <span className="purchaseArrivalBadge pending">
+                    Aguardando chegada
+                  </span>
+                </div>
+                <div className="pendingPerfumeMeta">
+                  <span>
+                    <b>Compra:</b> {dateBR(purchase.date)}
+                  </span>
+                  <span>
+                    <b>Fornecedor:</b> {purchase.supplier}
+                  </span>
+                  <span>
+                    <b>Valor:</b> {brl(purchase.total)}
+                  </span>
+                  {existing ? (
+                    <span>
+                      <b>Estoque atual:</b>{" "}
+                      {existing.stock.toLocaleString("pt-BR", {
+                        maximumFractionDigits: 2,
+                      })}{" "}
+                      ml
+                    </span>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className="primary pendingPerfumeArrivedButton"
+                  onClick={() => markArrived(purchase)}
+                >
+                  <Check /> Marcar como chegou
+                </button>
+              </article>
+            );
+          })}
+          {!pending.length ? (
+            <div className="pendingPerfumesEmpty">
+              <Check />
+              <strong>Nenhum perfume pendente.</strong>
+              <span>Todas as compras de perfumes já deram entrada no estoque.</span>
+            </div>
+          ) : null}
+        </div>
+
+        <footer>
+          <button type="button" onClick={close}>
+            Fechar
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function StockReport({
   d,
   close,
@@ -7807,12 +8111,12 @@ function Purchases({
         b.date.localeCompare(a.date) || b.id - a.id,
     );
   function remove(id: number) {
-    if (
-      !window.confirm(
-        "Excluir este registro de compra? O estoque já lançado não será alterado.",
-      )
-    )
-      return;
+    const purchase = d.purchases.find((item) => item.id === id);
+    const confirmation =
+      purchase?.type === "Perfume" && purchase.arrivalStatus === "pending"
+        ? "Excluir este perfume pendente? Ele ainda não alterou o estoque."
+        : "Excluir este registro de compra? O estoque já lançado não será alterado.";
+    if (!window.confirm(confirmation)) return;
     set((x: D) => ({
       ...x,
       purchases: x.purchases.filter((p) => p.id !== id),
@@ -7902,6 +8206,7 @@ function Purchases({
               <th>Fornecedor</th>
               <th>Tipo</th>
               <th>Descrição</th>
+              <th>Status</th>
               <th>Quantidade</th>
               <th>Total</th>
               <th>Ações</th>
@@ -7914,6 +8219,20 @@ function Purchases({
                 <td>{p.supplier}</td>
                 <td>{p.type}</td>
                 <td>{p.description}</td>
+                <td>
+                  {p.type === "Perfume" ? (
+                    <span
+                      className={
+                        "purchaseArrivalBadge " +
+                        (p.arrivalStatus === "pending" ? "pending" : "received")
+                      }
+                    >
+                      {p.arrivalStatus === "pending" ? "Pendente" : "Recebido"}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td>
                   {p.qty}
                   {p.mlPerBottle ? ` × ${p.mlPerBottle} ml` : ""}
@@ -9390,6 +9709,62 @@ function InventoryEdit({
           <button className="primary">Salvar alterações</button>
         </footer>
       </form>
+
+      {pendingPerfumeForm ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog perfumeArrivalDialog">
+            <header>
+              <div>
+                <small>ENTRADA NO ESTOQUE</small>
+                <h2>O perfume já chegou?</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingPerfumeForm(null)}
+                aria-label="Voltar ao registro da compra"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="perfumeArrivalContent">
+              <PackageOpen />
+              <div>
+                <strong>{pendingArrivalName}</strong>
+                {pendingArrivalMatch ? (
+                  <p>
+                    Este perfume já existe no estoque. Se ele já chegou, o
+                    novo volume será somado ao cadastro existente, sem criar
+                    outro perfume.
+                  </p>
+                ) : (
+                  <p>
+                    Se ele já chegou, será incluído no estoque e ficará
+                    disponível no catálogo. Se ainda não chegou, ficará na
+                    fila de Perfumes pendentes.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <footer className="perfumeArrivalActions">
+              <button
+                type="button"
+                onClick={() => commitPerfumePurchase(false)}
+              >
+                Ainda não chegou
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => commitPerfumePurchase(true)}
+              >
+                <Check /> Sim, já chegou
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -9447,6 +9822,7 @@ function Form({
       existingClient?.addresses.length || 1,
     ),
     [purchaseCalc, setPurchaseCalc] = useState({ qty: 0, ml: 0, total: 0 }),
+    [pendingPerfumeForm, setPendingPerfumeForm] = useState<Record<string, any> | null>(null),
     [supplyCalc, setSupplyCalc] = useState({ qty: 0, total: 0 }),
     [installmentLines, setInstallmentLines] = useState(
       existingInstallments.length || 1,
@@ -9636,6 +10012,95 @@ function Form({
     }, 0);
   }
 
+  function commitPerfumePurchase(arrived: boolean) {
+    const f = pendingPerfumeForm;
+    if (!f) return;
+
+    const supplier = (
+      newSupplier ? String(f.newSupplier) : String(f.supplier)
+    ).trim();
+    const qty = Math.max(1, Math.round(Number(f.qty || 1)));
+    const mlPerBottle = Math.max(0, Number(f.mlPerBottle) || 0);
+    const total = Math.max(0, Number(f.total) || 0);
+    const brand = String(f.brand || "").trim();
+    const perfumeName = parseBottleMarker(f.productName).name.trim();
+    const description = `${brand} ${perfumeName}`.trim();
+
+    set((state: D) => {
+      const purchaseId = Math.max(
+        Date.now(),
+        state.purchases.reduce(
+          (max, purchase) => Math.max(max, Number(purchase.id) || 0),
+          0,
+        ) + 1,
+      );
+      const purchase: B = {
+        id: purchaseId,
+        date: String(f.date),
+        supplier,
+        type: "Perfume",
+        description,
+        qty,
+        mlPerBottle,
+        total,
+        arrivalStatus: "pending",
+        perfumeBrand: brand,
+        perfumeName,
+        perfumeCategory: String(f.category || "Designer"),
+        perfumeGender: String(f.gender || "Unissex"),
+        perfumeApc: String(f.apc) === "Sim",
+      };
+
+      const supplierAlreadyExists = state.suppliers.some(
+        (name) => name.toLowerCase() === supplier.toLowerCase(),
+      );
+      const newSupplierType = newSupplier
+        ? SUPPLIER_TYPES.includes(String(f.newSupplierType) as SupplierType)
+          ? (String(f.newSupplierType) as SupplierType)
+          : "Outros"
+        : undefined;
+      const brandAlreadyExists = state.brands.some(
+        (item) =>
+          item.localeCompare(brand, "pt-BR", { sensitivity: "base" }) === 0,
+      );
+
+      let nextState: D = {
+        ...state,
+        brands: brandAlreadyExists ? state.brands : [...state.brands, brand],
+        purchases: [purchase, ...state.purchases],
+        suppliers: supplierAlreadyExists
+          ? state.suppliers
+          : [...state.suppliers, supplier],
+        supplierTypes:
+          newSupplier && !supplierAlreadyExists
+            ? {
+                ...(state.supplierTypes || {}),
+                [supplier]: newSupplierType || "Outros",
+              }
+            : state.supplierTypes,
+        supplierDates:
+          newSupplier && !supplierAlreadyExists
+            ? {
+                ...(state.supplierDates || {}),
+                [supplier]: String(f.date || today()),
+              }
+            : state.supplierDates,
+      };
+
+      if (arrived) {
+        nextState = receivePerfumePurchase(
+          nextState,
+          purchaseId,
+          String(f.date || today()),
+        );
+      }
+      return nextState;
+    });
+
+    setPendingPerfumeForm(null);
+    close();
+  }
+
   function submit(e: any) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
@@ -9710,6 +10175,11 @@ function Form({
         return;
       }
     }
+    if (type === "purchase" && kind === "Perfume") {
+      setPendingPerfumeForm(f);
+      return;
+    }
+
     set((x: D) => {
       if (type === "product") {
         const brand = String(f.brand || "").trim();
@@ -10312,6 +10782,22 @@ function Form({
     });
     close();
   }
+  const pendingArrivalMatch = pendingPerfumeForm
+    ? d.products.find(
+        (product) =>
+          perfumeIdentity(product.brand, product.name) ===
+          perfumeIdentity(
+            pendingPerfumeForm.brand,
+            parseBottleMarker(pendingPerfumeForm.productName).name,
+          ),
+      )
+    : undefined;
+  const pendingArrivalName = pendingPerfumeForm
+    ? `${String(pendingPerfumeForm.brand || "").trim()} ${parseBottleMarker(
+        pendingPerfumeForm.productName,
+      ).name}`.trim()
+    : "";
+
   const title = isSale
     ? isOldSale
       ? "Cadastrar venda antiga a receber"
