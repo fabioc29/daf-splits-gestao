@@ -9709,62 +9709,6 @@ function InventoryEdit({
           <button className="primary">Salvar alterações</button>
         </footer>
       </form>
-
-      {pendingPerfumeForm ? (
-        <div className="overlay nestedOverlay">
-          <div className="systemDialog perfumeArrivalDialog">
-            <header>
-              <div>
-                <small>ENTRADA NO ESTOQUE</small>
-                <h2>O perfume já chegou?</h2>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPendingPerfumeForm(null)}
-                aria-label="Voltar ao registro da compra"
-              >
-                <X />
-              </button>
-            </header>
-
-            <div className="perfumeArrivalContent">
-              <PackageOpen />
-              <div>
-                <strong>{pendingArrivalName}</strong>
-                {pendingArrivalMatch ? (
-                  <p>
-                    Este perfume já existe no estoque. Se ele já chegou, o
-                    novo volume será somado ao cadastro existente, sem criar
-                    outro perfume.
-                  </p>
-                ) : (
-                  <p>
-                    Se ele já chegou, será incluído no estoque e ficará
-                    disponível no catálogo. Se ainda não chegou, ficará na
-                    fila de Perfumes pendentes.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <footer className="perfumeArrivalActions">
-              <button
-                type="button"
-                onClick={() => commitPerfumePurchase(false)}
-              >
-                Ainda não chegou
-              </button>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => commitPerfumePurchase(true)}
-              >
-                <Check /> Sim, já chegou
-              </button>
-            </footer>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -11598,6 +11542,62 @@ function Form({
           <button className="primary">Salvar registro</button>
         </footer>
       </form>
+
+      {pendingPerfumeForm ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog perfumeArrivalDialog">
+            <header>
+              <div>
+                <small>ENTRADA NO ESTOQUE</small>
+                <h2>O perfume já chegou?</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingPerfumeForm(null)}
+                aria-label="Voltar ao registro da compra"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="perfumeArrivalContent">
+              <PackageOpen />
+              <div>
+                <strong>{pendingArrivalName}</strong>
+                {pendingArrivalMatch ? (
+                  <p>
+                    Este perfume já existe no estoque. Se ele já chegou, o
+                    novo volume será somado ao cadastro existente, sem criar
+                    outro perfume.
+                  </p>
+                ) : (
+                  <p>
+                    Se ele já chegou, será incluído no estoque e ficará
+                    disponível no catálogo. Se ainda não chegou, ficará na
+                    fila de Perfumes pendentes.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <footer className="perfumeArrivalActions">
+              <button
+                type="button"
+                onClick={() => commitPerfumePurchase(false)}
+              >
+                Ainda não chegou
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => commitPerfumePurchase(true)}
+              >
+                <Check /> Sim, já chegou
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
