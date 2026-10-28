@@ -10571,3 +10571,252 @@ aside nav {
     width: calc(100vw - 20px) !important;
   }
 }
+
+
+/* DAF — entrada de perfumes comprados e fila de pendências */
+.pendingPerfumesHeaderButton {
+  position: relative;
+  gap: 8px;
+}
+
+.pendingPerfumesCount {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--warning);
+  color: #111;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.purchaseArrivalBadge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.purchaseArrivalBadge.pending {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--line));
+  background: color-mix(in srgb, var(--warning) 12%, var(--panel));
+  color: var(--warning);
+}
+
+.purchaseArrivalBadge.received {
+  border-color: color-mix(in srgb, var(--success) 55%, var(--line));
+  background: color-mix(in srgb, var(--success) 10%, var(--panel));
+  color: var(--success);
+}
+
+.perfumeArrivalDialog {
+  width: min(520px, calc(100vw - 28px));
+}
+
+.perfumeArrivalContent {
+  padding: 22px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.perfumeArrivalContent > svg {
+  width: 46px;
+  height: 46px;
+  padding: 11px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.perfumeArrivalContent > div {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.perfumeArrivalContent strong {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.perfumeArrivalContent p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.perfumeArrivalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.perfumeArrivalActions .primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.perfumeArrivalActions .primary svg {
+  width: 15px;
+  height: 15px;
+}
+
+.pendingPerfumesDialog {
+  width: min(760px, calc(100vw - 28px));
+  max-height: min(760px, calc(100dvh - 34px));
+}
+
+.pendingPerfumesHint {
+  margin: 0;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.pendingPerfumesList {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px 20px;
+  display: grid;
+  gap: 11px;
+}
+
+.pendingPerfumeCard {
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 14px;
+  background: var(--panel-2);
+  display: grid;
+  gap: 12px;
+}
+
+.pendingPerfumeMain {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pendingPerfumeMain > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.pendingPerfumeMain small {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.pendingPerfumeMain strong {
+  color: var(--text);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.pendingPerfumeMain span:not(.purchaseArrivalBadge) {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.pendingPerfumeMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.pendingPerfumeMeta b {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.pendingPerfumeArrivedButton {
+  width: fit-content;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pendingPerfumeArrivedButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.pendingPerfumesEmpty {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.pendingPerfumesEmpty > svg {
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.pendingPerfumesEmpty strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.pendingPerfumesEmpty span {
+  font-size: 10px;
+}
+
+@media (max-width: 700px) {
+  .pendingPerfumeMain {
+    display: grid;
+  }
+
+  .pendingPerfumeMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .pendingPerfumeArrivedButton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .perfumeArrivalActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .perfumeArrivalActions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
