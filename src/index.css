@@ -13437,3 +13437,63 @@ main > header {
     justify-content: center;
   }
 }
+
+
+.pendingArrivalConfirmDialog,
+.pendingArrivalWarningDialog {
+  width: min(560px, calc(100vw - 32px)) !important;
+}
+
+.pendingArrivalConfirmContent {
+  padding: 8px 0 4px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: start;
+  gap: 13px;
+}
+
+.pendingArrivalConfirmContent > svg {
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border-radius: 13px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pendingArrivalConfirmContent > div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.pendingArrivalConfirmContent strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.pendingArrivalConfirmContent p,
+.pendingArrivalWarningText {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.pendingArrivalConfirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+@media (max-width: 560px) {
+  .pendingArrivalConfirmActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .pendingArrivalConfirmActions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
