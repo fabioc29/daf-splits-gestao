@@ -13801,3 +13801,294 @@ main > header {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* DAF — drill-down de regiões e histórico de faturamento simplificado */
+.regionSalesPanel {
+  position: relative;
+}
+
+.regionSalesHeader {
+  display: flex !important;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.regionSalesHeader > div {
+  min-width: 0;
+}
+
+.regionBackButton {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+}
+
+.regionBackButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.regionLegendButton,
+.regionLegendStaticRow {
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 6px 9px !important;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.regionLegendButton {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+
+.regionLegendButton:hover {
+  border-color: var(--accent);
+  background: var(--hover);
+  transform: translateY(-1px);
+}
+
+.regionLegendButton > span,
+.regionLegendStaticRow > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+}
+
+.regionLegendButton > span > i,
+.regionLegendStaticRow > span > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.regionLegendButton > b,
+.regionLegendStaticRow > b {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.regionLegendButton > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.regionMarketplaceNote {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 8.5px;
+  line-height: 1.35;
+}
+
+.unidentifiedRegionDialog {
+  width: min(820px, calc(100vw - 32px)) !important;
+  max-height: min(760px, calc(100dvh - 32px)) !important;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+.unidentifiedRegionDialog > header {
+  flex: 0 0 auto;
+  padding: 24px 28px 20px;
+}
+
+.unidentifiedRegionDialog > header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.unidentifiedRegionList {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 28px 20px;
+  display: grid;
+  gap: 9px;
+}
+
+.unidentifiedRegionSale {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.unidentifiedRegionSaleMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.unidentifiedRegionSaleMain > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.unidentifiedRegionSaleMain strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.unidentifiedRegionSaleMain small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.unidentifiedRegionSaleMain > button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unidentifiedRegionSaleMain > button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.unidentifiedStateGrid {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.unidentifiedStateGrid button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.unidentifiedStateGrid button:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--accent);
+}
+
+.unidentifiedRegionNoClient {
+  color: var(--warning);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.unidentifiedRegionEmpty {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.unidentifiedRegionEmpty > svg {
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.unidentifiedRegionEmpty strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.unidentifiedRegionEmpty span {
+  font-size: 9px;
+}
+
+.unidentifiedRegionFooter {
+  flex: 0 0 auto;
+  padding: 14px 28px 20px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.revenueHistorySummary {
+  display: none !important;
+}
+
+.revenueHistoryTotal {
+  flex: 0 0 auto;
+  min-height: 142px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  text-align: center;
+  padding: 20px;
+}
+
+.revenueHistoryTotal b {
+  color: var(--text);
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 500;
+  letter-spacing: -.03em;
+  line-height: 1;
+}
+
+.revenueHistoryTotal span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .regionSalesHeader {
+    display: grid !important;
+  }
+
+  .regionBackButton {
+    width: fit-content;
+  }
+
+  .unidentifiedRegionSaleMain {
+    display: grid;
+  }
+
+  .unidentifiedRegionSaleMain > button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .unidentifiedStateGrid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
