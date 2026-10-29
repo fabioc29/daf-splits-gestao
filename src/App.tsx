@@ -4388,7 +4388,14 @@ function Sales({
   }
   const filteredSales = d.sales.filter((sale) => {
     if (isHistoricalSale(sale)) return false;
-    const customer = saleCustomer(sale, d).toLowerCase();
+    const client = d.clients.find((item) => item.id === sale.clientId);
+    const matchesSearch = smartSearchMatch(
+      query,
+      saleCustomer(sale, d),
+      client?.cpf,
+      client?.phone,
+      orderNo(sale.id),
+    );
     const matchesStatus =
       saleStatus === "all" ||
       (saleStatus === "paid" &&
@@ -4403,7 +4410,7 @@ function Sales({
         isMarketplaceSale(sale)) ||
       (saleStatus === "cancelled" && sale.status === "cancelled");
     return (
-      customer.includes(query.trim().toLowerCase()) &&
+      matchesSearch &&
       sale.date.startsWith(month) &&
       (!saleDay || sale.date === saleDay) &&
       (origin === "all" ||
@@ -4475,7 +4482,7 @@ function Sales({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Pesquisar pelo nome do cliente"
+            placeholder="Pesquisar por cliente, CPF ou pedido"
           />
         </label>
         <div className="monthPicker" aria-label="Mês das vendas">
@@ -5153,9 +5160,13 @@ function Shipping({
       !isHistoricalSale(sale) &&
       sale.date.startsWith(shippingMonth) &&
       (tab === "sent" ? sale.sent : !sale.sent) &&
-      saleCustomer(sale, d)
-        .toLowerCase()
-        .includes(shippingQuery.trim().toLowerCase()),
+      smartSearchMatch(
+        shippingQuery,
+        saleCustomer(sale, d),
+        d.clients.find((client) => client.id === sale.clientId)?.cpf,
+        d.clients.find((client) => client.id === sale.clientId)?.phone,
+        orderNo(sale.id),
+      ),
   );
 
   function toggle(sale: V) {
@@ -7641,7 +7652,7 @@ function BrandManager({
   const [productsBrand, setProductsBrand] = useState("");
 
   const filteredBrands = brands.filter((brand) =>
-    brand.toLowerCase().includes(query.trim().toLowerCase()),
+    smartSearchMatch(query, brand),
   );
   const selectedBrandProducts = productsBrand
     ? d.products
@@ -8138,7 +8149,7 @@ function Stock({
         (!apcOnly || p.apc > 0) &&
         (category === "Todos" || p.category === category) &&
         (brand === "Todas" || p.brand === brand) &&
-        `${p.brand} ${p.name}`.toLowerCase().includes(query.toLowerCase()),
+        smartSearchMatch(query, p.brand, p.name, p.category, p.gender),
     )
     .sort((a, b) =>
       `${a.brand} ${a.name}`.localeCompare(`${b.brand} ${b.name}`, "pt-BR", {
@@ -8633,12 +8644,16 @@ function Purchases({
     .filter((purchase) => {
       const matchesSupplier =
         supplierFilter === "Todos" || purchase.supplier === supplierFilter;
-      const searchable =
-        `${purchase.date} ${purchase.supplier} ${purchase.type} ${purchase.description}`.toLowerCase();
       return (
         purchase.date.startsWith(month) &&
         matchesSupplier &&
-        searchable.includes(purchaseQuery.trim().toLowerCase())
+        smartSearchMatch(
+          purchaseQuery,
+          purchase.date,
+          purchase.supplier,
+          purchase.type,
+          purchase.description,
+        )
       );
     })
     .sort(
@@ -8822,7 +8837,14 @@ function Clients({
     (client) => !groupFilter || client.leadSource === groupFilter,
   );
   const clients = groupClients.filter((client) =>
-    client.name.toLowerCase().includes(query.trim().toLowerCase()),
+    smartSearchMatch(
+      query,
+      client.name,
+      client.cpf,
+      client.phone,
+      client.city,
+      client.state,
+    ),
   );
   const clientCountLabel = groupFilter
     ? `Clientes no ${groupFilter}`
@@ -8888,8 +8910,8 @@ function Clients({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Pesquisar cliente pelo nome"
-            aria-label="Pesquisar cliente pelo nome"
+            placeholder="Pesquisar por nome, CPF, telefone ou cidade"
+            aria-label="Pesquisar cliente por nome, CPF, telefone ou cidade"
           />
         </label>
 
@@ -9053,9 +9075,7 @@ function Suppliers({
 
   const suppliers = d.suppliers
     .map((name, index) => ({ name, index }))
-    .filter(({ name }) =>
-      name.toLowerCase().includes(query.trim().toLowerCase()),
-    );
+    .filter(({ name }) => smartSearchMatch(query, name));
   function remove(index: number, name: string) {
     if (d.purchases.some((purchase) => purchase.supplier === name)) {
       window.alert(
