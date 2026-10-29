@@ -9759,13 +9759,8 @@ function SupplierHistory({
       0,
     );
   const filteredPurchases = purchases.filter((purchase) => {
-    const productText = (
-      purchase.description +
-      " " +
-      purchase.type
-    ).toLowerCase();
     return (
-      productText.includes(query.trim().toLowerCase()) &&
+      smartSearchMatch(query, purchase.description, purchase.type) &&
       (!month || purchase.date.startsWith(month)) &&
       (!purchaseDay || purchase.date === purchaseDay)
     );
@@ -14544,10 +14539,9 @@ function History({ id, d, close }: { id: number; d: D; close: () => void }) {
           ? product.brand + " " + product.name
           : sale.description || "";
       })
-      .join(" ")
-      .toLowerCase();
+      .join(" ");
     return (
-      perfumeText.includes(query.trim().toLowerCase()) &&
+      smartSearchMatch(query, perfumeText, sale.description) &&
       (!month || sale.date.startsWith(month)) &&
       (!saleDay || sale.date === saleDay)
     );
