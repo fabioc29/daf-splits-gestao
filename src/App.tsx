@@ -883,6 +883,26 @@ function brazilRegion(state: unknown): BrazilRegion {
   if (["PR", "RS", "SC"].includes(uf)) return "Sul";
   return "Não informado";
 }
+
+const BRAZIL_REGION_STATES: Record<Exclude<BrazilRegion, "Não informado">, string[]> = {
+  Norte: ["AC", "AP", "AM", "PA", "RO", "RR", "TO"],
+  Nordeste: ["AL", "BA", "CE", "MA", "PB", "PE", "PI", "RN", "SE"],
+  "Centro-Oeste": ["DF", "GO", "MT", "MS"],
+  Sudeste: ["ES", "MG", "RJ", "SP"],
+  Sul: ["PR", "RS", "SC"],
+};
+
+const REGION_STATE_COLORS = [
+  "#7186ff",
+  "#54c7d4",
+  "#32bf8a",
+  "#f2b84b",
+  "#8b5cf6",
+  "#ef6670",
+  "#4ba3ff",
+  "#d76de8",
+  "#76c85a",
+];
 const isMarketplaceSale = (sale: V) =>
   sale.channel === "marketplace" || Boolean(sale.marketplace);
 const isHistoricalSale = (sale: V) =>
@@ -3800,15 +3820,21 @@ function CategoryChart({ d, sales }: { d: D; sales: V[] }) {
   );
 }
 
-function RegionChart({ d, sales }: { d: D; sales: V[] }) {
-  const regions: BrazilRegion[] = [
-    "Norte",
-    "Nordeste",
-    "Centro-Oeste",
-    "Sudeste",
-    "Sul",
-    "Não informado",
-  ];
+function RegionChart({
+  d,
+  set,
+  sales,
+}: {
+  d: D;
+  set: any;
+  sales: V[];
+}) {
+  const [selectedRegion, setSelectedRegion] = useState<
+    Exclude<BrazilRegion, "Não informado"> | null
+  >(null);
+  const [unidentifiedOpen, setUnidentifiedOpen] = useState(false);
+  const [editingSaleId, setEditingSaleId] = useState<number | null>(null);
+
   const regionColors: Record<BrazilRegion, string> = {
     Norte: "var(--success)",
     Nordeste: "var(--warning)",
@@ -3817,66 +3843,312 @@ function RegionChart({ d, sales }: { d: D; sales: V[] }) {
     Sul: "#8b5cf6",
     "Não informado": "var(--muted)",
   };
-  const rows = regions.map((region) => {
-    const regionSales = sales.filter((sale) => {
-      const client = d.clients.find((item) => item.id === sale.clientId);
-      const state =
-        client?.state ||
-        client?.addresses?.find((address) => address.state)?.state ||
-        "";
-      return brazilRegion(state) === region;
-    });
-    const revenue = regionSales.reduce(
-      (sum, sale) =>
-        sum +
-        (sale.status === "cancelled" || isNoCost(sale)
-          ? 0
-          : Math.max(0, Number(sale.total) || 0)),
-      0,
-    );
-    return { region, revenue, orders: regionSales.length };
-  });
-  const total = rows.reduce((sum, item) => sum + item.revenue, 0);
-  const visibleRows = rows.filter(
-    (item) => item.revenue > 0 || item.orders > 0 || item.region !== "Não informado",
+
+  const directSales = sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      !isMarketplaceSale(sale),
   );
-  return (
-    <div className="panel dashboardMetricPanel regionSalesPanel">
-      <div className="dashboardMiniHeader">
-        <h2>Vendas por região</h2>
-        <p>Distribuição do faturamento pelas regiões do Brasil.</p>
-      </div>
-      <div className="dashboardMiniVisual">
-        <InteractiveDonutChart
-          segments={rows.map((item) => ({
-            label: item.region,
-            value: item.revenue,
-            color: regionColors[item.region],
-          }))}
-          centerTop="Faturamento"
-          centerBottom={brl(total)}
-          className="sideInteractiveDonut"
-          infoPrefix="Região"
-        />
-      </div>
-      <div className="dashboardMiniLegend regionLegend">
-        {visibleRows.map((item) => {
-          const percentage = total
-            ? Math.round((item.revenue / total) * 100)
-            : 0;
-          return (
-            <div key={item.region}>
-              <span>
-                <i style={{ background: regionColors[item.region] }} />
-                <strong>{item.region}</strong>
-                <small>{percentage}%</small>
-              </span>
-              <b>{brl(item.revenue)}</b>
-            </div>
+
+  function saleState(sale: V) {
+    const client = d.clients.find((item) => item.id === sale.clientId);
+    return (
+      client?.state ||
+      client?.addresses?.find((address) => address.state)?.state ||
+      ""
+    )
+      .trim()
+      .toUpperCase();
+  }
+
+  const regions: BrazilRegion[] = [
+    "Norte",
+    "Nordeste",
+    "Centro-Oeste",
+    "Sudeste",
+    "Sul",
+    "Não informado",
+  ];
+
+  const rows = regions
+    .map((region) => {
+      const regionSales = directSales.filter(
+        (sale) => brazilRegion(saleState(sale)) === region,
+      );
+      const revenue = regionSales.reduce(
+        (sum, sale) => sum + Math.max(0, Number(sale.total) || 0),
+        0,
+      );
+      return { region, revenue, orders: regionSales.length, sales: regionSales };
+    })
+    .sort(
+      (a, b) =>
+        b.revenue - a.revenue ||
+        b.orders - a.orders ||
+        regions.indexOf(a.region) - regions.indexOf(b.region),
+    );
+
+  const total = rows.reduce((sum, item) => sum + item.revenue, 0);
+  const unidentifiedSales =
+    rows.find((item) => item.region === "Não informado")?.sales || [];
+
+  const selectedRegionRow = selectedRegion
+    ? rows.find((item) => item.region === selectedRegion)
+    : undefined;
+
+  const stateRows = selectedRegion
+    ? BRAZIL_REGION_STATES[selectedRegion]
+        .map((state, index) => {
+          const stateSales = directSales.filter(
+            (sale) => saleState(sale) === state,
           );
-        })}
+          const revenue = stateSales.reduce(
+            (sum, sale) => sum + Math.max(0, Number(sale.total) || 0),
+            0,
+          );
+          return {
+            state,
+            revenue,
+            orders: stateSales.length,
+            color: REGION_STATE_COLORS[index % REGION_STATE_COLORS.length],
+          };
+        })
+        .sort((a, b) => b.revenue - a.revenue || b.orders - a.orders)
+    : [];
+
+  const selectedTotal = stateRows.reduce((sum, item) => sum + item.revenue, 0);
+
+  function chooseRegion(region: BrazilRegion) {
+    if (region === "Não informado") {
+      setEditingSaleId(null);
+      setUnidentifiedOpen(true);
+      return;
+    }
+    setSelectedRegion(region);
+  }
+
+  function updateClientState(sale: V, nextState: string) {
+    if (!sale.clientId) return;
+    set((current: D) => ({
+      ...current,
+      clients: current.clients.map((client) => {
+        if (client.id !== sale.clientId) return client;
+        const addresses = (client.addresses || []).length
+          ? client.addresses.map((address, index) =>
+              index === 0 ? { ...address, state: nextState } : address,
+            )
+          : client.addresses;
+        return {
+          ...client,
+          state: nextState,
+          addresses,
+        };
+      }),
+    }));
+    setEditingSaleId(null);
+  }
+
+  return (
+    <>
+      <div className="panel dashboardMetricPanel regionSalesPanel">
+        <div className="dashboardMiniHeader regionSalesHeader">
+          <div>
+            <h2>
+              {selectedRegion
+                ? `Vendas — ${selectedRegion}`
+                : "Vendas por região"}
+            </h2>
+            <p>
+              {selectedRegion
+                ? "Participação dos estados dentro da região selecionada."
+                : "Distribuição do faturamento pelas regiões do Brasil."}
+            </p>
+          </div>
+          {selectedRegion ? (
+            <button
+              type="button"
+              className="secondary regionBackButton"
+              onClick={() => setSelectedRegion(null)}
+            >
+              <ChevronLeft /> Voltar às regiões
+            </button>
+          ) : null}
+        </div>
+
+        <div className="dashboardMiniVisual">
+          <InteractiveDonutChart
+            segments={
+              selectedRegion
+                ? stateRows.map((item) => ({
+                    label: item.state,
+                    value: item.revenue,
+                    color: item.color,
+                  }))
+                : rows.map((item) => ({
+                    label: item.region,
+                    value: item.revenue,
+                    color: regionColors[item.region],
+                  }))
+            }
+            centerTop={selectedRegion ? selectedRegion : "Faturamento"}
+            centerBottom={brl(selectedRegion ? selectedTotal : total)}
+            className="sideInteractiveDonut"
+            infoPrefix={selectedRegion ? "Estado" : "Região"}
+          />
+        </div>
+
+        <div className="dashboardMiniLegend regionLegend">
+          {(selectedRegion ? stateRows : rows).map((item) => {
+            const isState = "state" in item;
+            const label = isState ? item.state : item.region;
+            const value = item.revenue;
+            const comparisonTotal = selectedRegion ? selectedTotal : total;
+            const percentage = comparisonTotal
+              ? Math.round((value / comparisonTotal) * 100)
+              : 0;
+            const color = isState ? item.color : regionColors[item.region];
+            return selectedRegion ? (
+              <div key={label} className="regionLegendStaticRow">
+                <span>
+                  <i style={{ background: color }} />
+                  <strong>{label}</strong>
+                  <small>{percentage}%</small>
+                </span>
+                <b>{brl(value)}</b>
+              </div>
+            ) : (
+              <button
+                type="button"
+                key={label}
+                className="regionLegendButton"
+                onClick={() => chooseRegion(item.region)}
+              >
+                <span>
+                  <i style={{ background: color }} />
+                  <strong>{label}</strong>
+                  <small>{percentage}%</small>
+                </span>
+                <b>{brl(value)}</b>
+                <ChevronRight />
+              </button>
+            );
+          })}
+        </div>
+
+        <small className="regionMarketplaceNote">
+          * Não considera vendas de TikTok Shop e Shopee.
+        </small>
       </div>
-    </div>
+
+      {unidentifiedOpen ? (
+        <div className="overlay">
+          <div className="systemDialog unidentifiedRegionDialog">
+            <header>
+              <div>
+                <small>VENDAS POR REGIÃO</small>
+                <h2>Vendas sem estado identificado</h2>
+                <p>
+                  Defina a UF do cliente sem sair deste box. Ao salvar, o
+                  gráfico será atualizado automaticamente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setUnidentifiedOpen(false);
+                  setEditingSaleId(null);
+                }}
+                aria-label="Fechar vendas sem estado"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="unidentifiedRegionList">
+              {unidentifiedSales.map((sale) => {
+                const client = d.clients.find(
+                  (item) => item.id === sale.clientId,
+                );
+                const editing = editingSaleId === sale.id;
+                return (
+                  <article className="unidentifiedRegionSale" key={sale.id}>
+                    <div className="unidentifiedRegionSaleMain">
+                      <div>
+                        <strong>{saleCustomer(sale, d)}</strong>
+                        <small>
+                          Pedido #{orderNo(sale.id)} · {dateBR(sale.date)} ·{" "}
+                          {brl(sale.total)}
+                        </small>
+                        {client?.city ? (
+                          <small>{client.city} · estado não informado</small>
+                        ) : (
+                          <small>Estado do cliente não informado</small>
+                        )}
+                      </div>
+                      {sale.clientId ? (
+                        <button
+                          type="button"
+                          className={editing ? "secondary active" : "secondary"}
+                          onClick={() =>
+                            setEditingSaleId((current) =>
+                              current === sale.id ? null : sale.id,
+                            )
+                          }
+                        >
+                          <MapPin /> Definir estado
+                        </button>
+                      ) : (
+                        <span className="unidentifiedRegionNoClient">
+                          Cliente não vinculado
+                        </span>
+                      )}
+                    </div>
+
+                    {editing ? (
+                      <div className="unidentifiedStateGrid">
+                        {BRAZIL_STATES.map((state) => (
+                          <button
+                            type="button"
+                            key={state}
+                            onClick={() => updateClientState(sale, state)}
+                          >
+                            {state}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+
+              {!unidentifiedSales.length ? (
+                <div className="unidentifiedRegionEmpty">
+                  <Check />
+                  <strong>Todas as vendas estão identificadas.</strong>
+                  <span>
+                    Não há vendas diretas sem estado do cliente neste período.
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            <footer className="unidentifiedRegionFooter">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setUnidentifiedOpen(false);
+                  setEditingSaleId(null);
+                }}
+              >
+                Fechar
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -4341,7 +4613,7 @@ function Dash({ d, set }: { d: D; set: any }) {
         <OrderSummaryChart sales={periodSales} />
         <PaymentBreakdown d={d} sales={activeSales} compact />
         <CategoryChart d={d} sales={activeSales} />
-        <RegionChart d={d} sales={activeSales} />
+        <RegionChart d={d} set={set} sales={activeSales} />
       </div>
 
       <div className="dashboardRankingGrid">
@@ -10922,13 +11194,6 @@ function RevenueHistoryModal({
   });
 
   const total = rows.reduce((sum, row) => sum + row.revenue, 0);
-  const systemTotal = rows
-    .filter((row) => !row.legacy)
-    .reduce((sum, row) => sum + row.revenue, 0);
-  const legacyTotal = rows
-    .filter((row) => row.legacy)
-    .reduce((sum, row) => sum + row.revenue, 0);
-
   return (
     <div className="overlay">
       <div className="systemDialog revenueHistoryDialog">
@@ -10950,22 +11215,9 @@ function RevenueHistoryModal({
           </button>
         </header>
 
-        <div className="revenueHistorySummary">
-          <div>
-            <span>Faturamento geral</span>
-            <b>{brl(total)}</b>
-            <small>Desde junho de 2026</small>
-          </div>
-          <div>
-            <span>Antes do sistema</span>
-            <b>{brl(legacyTotal)}</b>
-            <small>Junho, julho e agosto de 2026</small>
-          </div>
-          <div>
-            <span>Registrado no sistema</span>
-            <b>{brl(systemTotal)}</b>
-            <small>Meses posteriores à implantação</small>
-          </div>
+        <div className="revenueHistoryTotal">
+          <b>{brl(total)}</b>
+          <span>Desde Junho de 2026</span>
         </div>
 
         <div className="revenueHistoryList">
