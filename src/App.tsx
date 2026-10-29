@@ -3947,11 +3947,7 @@ function PartnerRanking({
               </i>
               <small>
                 {brl(item.revenue)} · {item.orders} pedido
-                {item.orders === 1 ? "" : "s"} · participação{" "}
-                {(item.partner.equityPercent || 0).toLocaleString("pt-BR", {
-                  maximumFractionDigits: 2,
-                })}
-                %
+                {item.orders === 1 ? "" : "s"}
               </small>
             </div>
           </div>
@@ -11859,6 +11855,9 @@ function Form({
     existingSale?.items.map((item) => item.ml) || [],
   );
   const formRef = useRef<HTMLFormElement | null>(null);
+  const saleVolumeTimerRef = useRef<number | null>(null);
+  const stockWarningTimerRef = useRef<number | null>(null);
+  const saleAmountTimerRef = useRef<number | null>(null);
   const sellerIdRef = useRef(existingSale?.sellerId || 0);
   const [stockWarnings, setStockWarnings] = useState<Record<number, string>>({});
   const [clientDraft, setClientDraft] = useState({
@@ -11879,6 +11878,47 @@ function Form({
     label: existingClient?.addresses[0]?.label || "Principal",
   });
   const [clientLookupMessage, setClientLookupMessage] = useState("");
+
+  const saleSelectableProducts = useMemo(
+    () =>
+      d.products.filter(
+        (product) =>
+          product.stock > 0 ||
+          Boolean(
+            existingSale?.items.some((item) => item.productId === product.id),
+          ),
+      ),
+    [d.products, existingSale],
+  );
+
+  const saleSupplyItems = useMemo(
+    () =>
+      Array.from({ length: lines }, (_, index) => ({
+        ml: saleVolumes[index] || 0,
+        isApc: Boolean(apcLines[index]),
+      })),
+    [lines, saleVolumes, apcLines],
+  );
+
+  useEffect(
+    () => () => {
+      if (saleVolumeTimerRef.current)
+        window.clearTimeout(saleVolumeTimerRef.current);
+      if (stockWarningTimerRef.current)
+        window.clearTimeout(stockWarningTimerRef.current);
+      if (saleAmountTimerRef.current)
+        window.clearTimeout(saleAmountTimerRef.current);
+    },
+    [],
+  );
+
+  function scheduleSaleAmount(key: "total" | "paid", value: number) {
+    if (saleAmountTimerRef.current)
+      window.clearTimeout(saleAmountTimerRef.current);
+    saleAmountTimerRef.current = window.setTimeout(() => {
+      setSaleAmounts((current) => ({ ...current, [key]: value }));
+    }, 90);
+  }
   function addBrandFromForm(brand: string) {
     const clean = brand.trim();
     if (!clean) return;
@@ -12120,23 +12160,34 @@ function Form({
 
   function handleSaleVolumeChange(index: number, event: any) {
     const nextValue = Math.max(0, parseDecimal(event.target.value));
-    setSaleVolumes((current) => {
-      const next = [...current];
-      next[index] = nextValue;
-      return next;
-    });
-
     const form = event.currentTarget.form as HTMLFormElement | null;
+
+    if (saleVolumeTimerRef.current)
+      window.clearTimeout(saleVolumeTimerRef.current);
+    saleVolumeTimerRef.current = window.setTimeout(() => {
+      setSaleVolumes((current) => {
+        const next = [...current];
+        next[index] = nextValue;
+        return next;
+      });
+    }, 90);
+
     if (!form) return;
-    setStockWarnings(collectSaleStockWarnings(form, index, nextValue));
+    if (stockWarningTimerRef.current)
+      window.clearTimeout(stockWarningTimerRef.current);
+    stockWarningTimerRef.current = window.setTimeout(() => {
+      setStockWarnings(collectSaleStockWarnings(form, index, nextValue));
+    }, 140);
   }
 
-  function handleSaleProductChange(event: any) {
-    const form = event.currentTarget.form as HTMLFormElement | null;
+  function handleSaleProductChange() {
+    const form = formRef.current;
     if (!form) return;
-    window.setTimeout(() => {
+    if (stockWarningTimerRef.current)
+      window.clearTimeout(stockWarningTimerRef.current);
+    stockWarningTimerRef.current = window.setTimeout(() => {
       setStockWarnings(collectSaleStockWarnings(form));
-    }, 0);
+    }, 80);
   }
 
   function commitPerfumePurchase(arrived: boolean) {
@@ -13185,11 +13236,7 @@ function Form({
               <div className="row item" key={i}>
                 <ProductSearch
                   index={i}
-                  products={d.products.filter(
-                    (p) =>
-                      p.stock > 0 ||
-                      existingSale?.items.some((x) => x.productId === p.id),
-                  )}
+                  products={saleSelectableProducts}
                   value={existingSale?.items[i]?.productId}
                   onChange={handleSaleProductChange}
                 />
@@ -13253,10 +13300,7 @@ function Form({
     ) : null}
   </div>
             <SaleSupplyPicker
-              items={Array.from({ length: lines }, (_, index) => ({
-                ml: saleVolumes[index] || 0,
-                isApc: Boolean(apcLines[index]),
-              }))}
+              items={saleSupplyItems}
               supplies={d.supplies}
               overrides={supplyOverrides}
               setOverrides={setSupplyOverrides}
@@ -13274,10 +13318,7 @@ function Form({
                 t="number"
                 v={existingSale?.total}
                 onChange={(e) =>
-                  setSaleAmounts((v) => ({
-                    ...v,
-                    total: Number(e.target.value),
-                  }))
+                  scheduleSaleAmount("total", Number(e.target.value))
                 }
               />
             </div>
@@ -13287,7 +13328,7 @@ function Form({
               t="number"
               v={existingSale?.paid}
               onChange={(e) =>
-                setSaleAmounts((v) => ({ ...v, paid: Number(e.target.value) }))
+                scheduleSaleAmount("paid", Number(e.target.value))
               }
             />
             {isMarketplace ? (
@@ -14104,13 +14145,16 @@ function SaleSupplyPicker({
   overrides: Record<string, number>;
   setOverrides: (value: Record<string, number>) => void;
 }) {
-  const options = packagingOptions({ items }, supplies);
-  const automatic = Object.fromEntries(
-    options.map(({ name, automaticQty }) => [name, automaticQty]),
-  ) as Record<string, number>;
-  const effectiveSale = { items, supplyOverrides: overrides };
-  const effectiveLines = packaging(effectiveSale, supplies).lines;
-  const total = effectiveLines.reduce((sum, line) => sum + line.total, 0);
+  const { options, effectiveLines, total } = useMemo(() => {
+    const nextOptions = packagingOptions({ items }, supplies);
+    const effectiveSale = { items, supplyOverrides: overrides };
+    const nextLines = packaging(effectiveSale, supplies).lines;
+    return {
+      options: nextOptions,
+      effectiveLines: nextLines,
+      total: nextLines.reduce((sum, line) => sum + line.total, 0),
+    };
+  }, [items, supplies, overrides]);
 
   function update(name: string, qty: number) {
     setOverrides({ ...overrides, [name]: Math.max(0, qty) });
@@ -14366,42 +14410,113 @@ function ProductSearch({
   index: number;
   products: P[];
   value?: number;
-  onChange?: (event: any) => void;
+  onChange?: () => void;
 }) {
-  const selected = products.find((p) => p.id === value);
-  const displayNames = Array.from(
-    new Set(products.map((product) => productDisplayName(product))),
+  const selected = useMemo(
+    () => products.find((product) => product.id === value),
+    [products, value],
   );
-  const selectableProducts = displayNames
-    .map((displayName) =>
-      resolveSaleProduct(products, displayName, {
-        preferredId:
-          selected && productDisplayName(selected) === displayName
-            ? selected.id
-            : undefined,
-      }),
-    )
-    .filter(Boolean) as P[];
+  const [query, setQuery] = useState(
+    selected ? productDisplayName(selected) : "",
+  );
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (selected) setQuery(productDisplayName(selected));
+  }, [selected?.id]);
+
+  const selectableProducts = useMemo(() => {
+    const displayNames = Array.from(
+      new Set(products.map((product) => productDisplayName(product))),
+    );
+    return displayNames
+      .map((displayName) =>
+        resolveSaleProduct(products, displayName, {
+          preferredId:
+            selected && productDisplayName(selected) === displayName
+              ? selected.id
+              : undefined,
+        }),
+      )
+      .filter(Boolean) as P[];
+  }, [products, selected?.id]);
+
+  const filteredProducts = useMemo(
+    () =>
+      selectableProducts
+        .filter((product) =>
+          smartSearchMatch(
+            query,
+            productDisplayName(product),
+            product.brand,
+            product.name,
+            product.category,
+            product.gender,
+          ),
+        )
+        .slice(0, 30),
+    [selectableProducts, query],
+  );
+
+  function selectProduct(product: P) {
+    setQuery(productDisplayName(product));
+    setOpen(false);
+    window.setTimeout(() => onChange?.(), 0);
+  }
 
   return (
-    <label>
+    <label className="saleProductSearch">
       <span>Perfume {index + 1}</span>
-      <input
-        name={"productName" + index}
-        list={"products" + index}
-        defaultValue={selected ? productDisplayName(selected) : ""}
-        placeholder="Digite para buscar..."
-        required
-        onChange={onChange}
-      />
-      <datalist id={"products" + index}>
-        {selectableProducts.map((p) => (
-          <option key={p.id} value={productDisplayName(p)}>
-            {p.stock} ml disponíveis · Frasco nº {p.bottleNumber || 1} · APC{" "}
-            {p.apc ? "disponível" : "indisponível"}
-          </option>
-        ))}
-      </datalist>
+      <div className="saleProductSearchControl">
+        <Search />
+        <input
+          name={"productName" + index}
+          value={query}
+          placeholder="Digite para buscar..."
+          autoComplete="off"
+          required
+          onFocus={() => setOpen(true)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        />
+      </div>
+      {open ? (
+        <div className="saleProductSearchPopover">
+          {filteredProducts.map((product) => (
+            <button
+              type="button"
+              key={product.id}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => selectProduct(product)}
+            >
+              <span>
+                <b>{productDisplayName(product)}</b>
+                <small>
+                  {product.stock.toLocaleString("pt-BR", {
+                    maximumFractionDigits: 2,
+                  })}{" "}
+                  ml disponíveis · Frasco nº {product.bottleNumber || 1}
+                </small>
+              </span>
+              <em className={product.apc ? "available" : "unavailable"}>
+                APC {product.apc ? "disponível" : "indisponível"}
+              </em>
+            </button>
+          ))}
+          {!filteredProducts.length ? (
+            <p className="empty">Nenhum perfume encontrado.</p>
+          ) : null}
+          {selectableProducts.length > 30 &&
+          filteredProducts.length === 30 ? (
+            <small className="saleProductSearchHint">
+              Refine a busca para ver mais resultados.
+            </small>
+          ) : null}
+        </div>
+      ) : null}
     </label>
   );
 }
