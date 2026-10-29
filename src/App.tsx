@@ -1492,7 +1492,7 @@ const action =
   const stockSectionActive =
     page === "stock" || page === "stock-supplies";
   const registrationsSectionActive =
-    page === "clients" || page === "suppliers" || page === "brands";
+    page === "clients" || page === "suppliers" || page === "brands" || page === "team";
   const financeSectionActive =
     page === "finance" ||
     page === "receivables" ||
@@ -1519,7 +1519,9 @@ const action =
               ? "Fornecedores"
               : page === "brands"
                 ? "Marcas"
-                : page === "receivables"
+                : page === "team"
+                  ? "Sócios/Funcionários"
+                  : page === "receivables"
             ? "Vendas a receber"
             : page === "payables"
               ? "Compras a pagar"
@@ -1636,6 +1638,12 @@ const action =
                         onClick={() => setPage("brands")}
                       >
                         Marcas
+                      </button>
+                      <button
+                        className={page === "team" ? "on" : ""}
+                        onClick={() => setPage("team")}
+                      >
+                        Sócios/Funcionários
                       </button>
                     </div>
                   ) : null}
@@ -1936,6 +1944,8 @@ const action =
               edit={(id) => setModal({ type: "supplier", id })}
               notify={notify}
             />
+          ) : page === "team" ? (
+            <TeamMembers d={data} set={setData} notify={notify} />
           ) : page === "brands" ? (
             <BrandManager
               d={data}
@@ -3780,6 +3790,173 @@ function CategoryChart({ d, sales }: { d: D; sales: V[] }) {
   );
 }
 
+function RegionChart({ d, sales }: { d: D; sales: V[] }) {
+  const regions: BrazilRegion[] = [
+    "Norte",
+    "Nordeste",
+    "Centro-Oeste",
+    "Sudeste",
+    "Sul",
+    "Não informado",
+  ];
+  const regionColors: Record<BrazilRegion, string> = {
+    Norte: "var(--success)",
+    Nordeste: "var(--warning)",
+    "Centro-Oeste": "var(--cyan)",
+    Sudeste: "var(--accent)",
+    Sul: "#8b5cf6",
+    "Não informado": "var(--muted)",
+  };
+  const rows = regions.map((region) => {
+    const regionSales = sales.filter((sale) => {
+      const client = d.clients.find((item) => item.id === sale.clientId);
+      return brazilRegion(client?.state) === region;
+    });
+    const revenue = regionSales.reduce(
+      (sum, sale) =>
+        sum +
+        (sale.status === "cancelled" || isNoCost(sale)
+          ? 0
+          : Math.max(0, Number(sale.total) || 0)),
+      0,
+    );
+    return { region, revenue, orders: regionSales.length };
+  });
+  const total = rows.reduce((sum, item) => sum + item.revenue, 0);
+  const visibleRows = rows.filter(
+    (item) => item.revenue > 0 || item.orders > 0 || item.region !== "Não informado",
+  );
+  return (
+    <div className="panel dashboardMetricPanel regionSalesPanel">
+      <div className="dashboardMiniHeader">
+        <h2>Vendas por região</h2>
+        <p>Distribuição do faturamento pelas regiões do Brasil.</p>
+      </div>
+      <div className="dashboardMiniVisual">
+        <InteractiveDonutChart
+          segments={rows.map((item) => ({
+            label: item.region,
+            value: item.revenue,
+            color: regionColors[item.region],
+          }))}
+          centerTop="Faturamento"
+          centerBottom={brl(total)}
+          className="sideInteractiveDonut"
+          infoPrefix="Região"
+        />
+      </div>
+      <div className="dashboardMiniLegend regionLegend">
+        {visibleRows.map((item) => {
+          const percentage = total
+            ? Math.round((item.revenue / total) * 100)
+            : 0;
+          return (
+            <div key={item.region}>
+              <span>
+                <i style={{ background: regionColors[item.region] }} />
+                <strong>{item.region}</strong>
+                <small>{percentage}%</small>
+              </span>
+              <b>{brl(item.revenue)}</b>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PartnerRanking({
+  d,
+  start,
+  end,
+}: {
+  d: D;
+  start: string;
+  end: string;
+}) {
+  const [metric, setMetric] = useState<"revenue" | "orders" | "ticket">(
+    "revenue",
+  );
+  const sales = d.sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      dateInRange(sale.date, start, end),
+  );
+  const partners = d.teamMembers.filter(
+    (member) => member.role === "partner" && member.active !== false,
+  );
+  const ranking = partners
+    .map((partner, index) => {
+      const partnerSales = sales.filter((sale) => sale.sellerId === partner.id);
+      const revenue = partnerSales.reduce(
+        (sum, sale) => sum + Math.max(0, Number(sale.total) || 0),
+        0,
+      );
+      const orders = partnerSales.length;
+      const ticket = orders ? revenue / orders : 0;
+      const value =
+        metric === "revenue" ? revenue : metric === "orders" ? orders : ticket;
+      return { partner, revenue, orders, ticket, value, index };
+    })
+    .sort(
+      (a, b) =>
+        b.value - a.value ||
+        b.revenue - a.revenue ||
+        a.index - b.index,
+    );
+  const max = Math.max(1, ...ranking.map((item) => item.value));
+  const formatMetric = (item: (typeof ranking)[number]) =>
+    metric === "revenue"
+      ? brl(item.revenue)
+      : metric === "orders"
+        ? `${item.orders} pedido${item.orders === 1 ? "" : "s"}`
+        : brl(item.ticket);
+
+  return (
+    <div className="panel dashboardMetricPanel partnerRankingPanel">
+      <div className="dashboardMiniHeader">
+        <h2>Ranking de sócios</h2>
+        <p>Vendas atribuídas a cada sócio no período.</p>
+      </div>
+      <div className="groupRankingMetricButtons" role="group" aria-label="Classificar ranking de sócios">
+        <button type="button" className={metric === "revenue" ? "active" : ""} onClick={() => setMetric("revenue")}>Faturamento</button>
+        <button type="button" className={metric === "orders" ? "active" : ""} onClick={() => setMetric("orders")}>Pedidos</button>
+        <button type="button" className={metric === "ticket" ? "active" : ""} onClick={() => setMetric("ticket")}>Ticket médio</button>
+      </div>
+      <div className="leadRankingList partnerRankingList">
+        {ranking.map((item, index) => (
+          <div key={item.partner.id}>
+            <span className="leadRankPosition">{index + 1}º</span>
+            <div className="leadRankContent">
+              <span>
+                <strong>{item.partner.name}</strong>
+                <b>{formatMetric(item)}</b>
+              </span>
+              <i>
+                <em
+                  style={{
+                    width: `${item.value ? Math.max(5, (item.value / max) * 100) : 0}%`,
+                  }}
+                />
+              </i>
+              <small>
+                {brl(item.revenue)} · {item.orders} pedido
+                {item.orders === 1 ? "" : "s"} · participação{" "}
+                {(item.partner.equityPercent || 0).toLocaleString("pt-BR", {
+                  maximumFractionDigits: 2,
+                })}
+                %
+              </small>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LeadRanking({ d, start, end }: { d: D; start: string; end: string }) {
   const [includeMarketplaces, setIncludeMarketplaces] = useState(false);
   const [metric, setMetric] = useState<"revenue" | "orders" | "ticket">("revenue");
@@ -4154,7 +4331,12 @@ function Dash({ d, set }: { d: D; set: any }) {
         <OrderSummaryChart sales={periodSales} />
         <PaymentBreakdown d={d} sales={activeSales} compact />
         <CategoryChart d={d} sales={activeSales} />
+        <RegionChart d={d} sales={activeSales} />
+      </div>
+
+      <div className="dashboardRankingGrid">
         <LeadRanking d={d} start={rangeStart} end={rangeEnd} />
+        <PartnerRanking d={d} start={rangeStart} end={rangeEnd} />
       </div>
 
       <div className="panel dashboardStockSnapshot">
@@ -7620,6 +7802,242 @@ function StockReport({
         </footer>
       </div>
     </div>
+  );
+}
+
+function TeamMembers({
+  d,
+  set,
+  notify,
+}: {
+  d: D;
+  set: any;
+  notify: (message: string) => void;
+}) {
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [role, setRole] = useState<TeamMemberRole>("partner");
+  const [name, setName] = useState("");
+  const [equity, setEquity] = useState("0");
+  const [salary, setSalary] = useState("0");
+  const [commission, setCommission] = useState("0");
+  const [position, setPosition] = useState("");
+
+  const partners = d.teamMembers.filter((member) => member.role === "partner");
+  const employees = d.teamMembers.filter((member) => member.role === "employee");
+  const equityTotal = partners.reduce(
+    (sum, member) => sum + Math.max(0, Number(member.equityPercent) || 0),
+    0,
+  );
+
+  function openNew() {
+    setEditingId(null);
+    setRole("partner");
+    setName("");
+    setEquity("0");
+    setSalary("0");
+    setCommission("0");
+    setPosition("");
+    setEditorOpen(true);
+  }
+
+  function openEdit(member: TeamMember) {
+    setEditingId(member.id);
+    setRole(member.role);
+    setName(member.name);
+    setEquity(String(member.equityPercent || 0));
+    setSalary(String(member.salary || 0));
+    setCommission(String(member.commissionPercent || 0));
+    setPosition(member.position || "");
+    setEditorOpen(true);
+  }
+
+  function saveMember() {
+    const cleanName = name.trim();
+    if (!cleanName) return;
+    set((state: D) => {
+      const id = editingId || Math.max(Date.now(), ...state.teamMembers.map((member) => member.id + 1));
+      const current = state.teamMembers.find((member) => member.id === editingId);
+      let members = editingId
+        ? state.teamMembers.map((member) =>
+            member.id === editingId
+              ? {
+                  ...member,
+                  name: cleanName,
+                  salary:
+                    role === "employee" ? Math.max(0, parseDecimal(salary)) : undefined,
+                  commissionPercent:
+                    role === "employee"
+                      ? Math.max(0, parseDecimal(commission))
+                      : undefined,
+                  position: role === "employee" ? position.trim() : undefined,
+                }
+              : member,
+          )
+        : [
+            ...state.teamMembers,
+            {
+              id,
+              name: cleanName,
+              role,
+              equityPercent: role === "partner" ? 0 : undefined,
+              salary: role === "employee" ? Math.max(0, parseDecimal(salary)) : undefined,
+              commissionPercent:
+                role === "employee" ? Math.max(0, parseDecimal(commission)) : undefined,
+              position: role === "employee" ? position.trim() : undefined,
+              active: true,
+            } as TeamMember,
+          ];
+
+      if (role === "partner") {
+        members = rebalancePartnerEquity(
+          members,
+          id,
+          Math.max(0, parseDecimal(equity)),
+        );
+      } else if (current?.role === "partner") {
+        const remainingPartners = members.filter(
+          (member) => member.role === "partner" && member.id !== id,
+        );
+        if (remainingPartners.length) {
+          const first = remainingPartners[0];
+          members = rebalancePartnerEquity(
+            members,
+            first.id,
+            Number(first.equityPercent) || 0,
+          );
+        }
+      }
+      return { ...state, teamMembers: members };
+    });
+    setEditorOpen(false);
+    notify(editingId ? "Cadastro atualizado." : "Sócio/funcionário cadastrado.");
+  }
+
+  return (
+    <>
+      <div className="teamSummaryGrid">
+        <div className="panel teamSummaryCard">
+          <span>Sócios</span>
+          <b>{partners.length}</b>
+          <small>{equityTotal.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% da sociedade cadastrada</small>
+        </div>
+        <div className="panel teamSummaryCard">
+          <span>Funcionários</span>
+          <b>{employees.length}</b>
+          <small>Cadastros ativos na equipe</small>
+        </div>
+        <button type="button" className="primary teamNewButton" onClick={openNew}>
+          <Plus /> Novo sócio/funcionário
+        </button>
+      </div>
+
+      <div className="teamMembersGrid">
+        {d.teamMembers.map((member) => (
+          <article className="panel teamMemberCard" key={member.id}>
+            <div className="teamMemberHead">
+              <span className={"teamRoleBadge " + member.role}>
+                {member.role === "partner" ? "Sócio" : "Funcionário"}
+              </span>
+              <button type="button" className="iconButton" onClick={() => openEdit(member)}>
+                <Pencil /> Editar
+              </button>
+            </div>
+            <h3>{member.name}</h3>
+            {member.role === "partner" ? (
+              <div className="teamMemberFacts">
+                <span>Participação societária</span>
+                <b>
+                  {(member.equityPercent || 0).toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                  %
+                </b>
+              </div>
+            ) : (
+              <div className="teamMemberFacts employee">
+                <span><small>Cargo</small><b>{member.position || "Não informado"}</b></span>
+                <span><small>Salário</small><b>{brl(member.salary || 0)}</b></span>
+                <span><small>Comissão</small><b>{(member.commissionPercent || 0).toLocaleString("pt-BR")}%</b></span>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+
+      {editorOpen ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog teamEditorDialog">
+            <header>
+              <div>
+                <small>CADASTROS</small>
+                <h2>{editingId ? "Editar cadastro" : "Novo sócio/funcionário"}</h2>
+              </div>
+              <button type="button" onClick={() => setEditorOpen(false)} aria-label="Fechar cadastro">
+                <X />
+              </button>
+            </header>
+
+            {!editingId ? (
+              <div className="teamRoleSelector">
+                <button type="button" className={role === "partner" ? "active" : ""} onClick={() => setRole("partner")}>
+                  Sócio
+                </button>
+                <button type="button" className={role === "employee" ? "active" : ""} onClick={() => setRole("employee")}>
+                  Funcionário
+                </button>
+              </div>
+            ) : null}
+
+            <label>
+              <span>Nome completo</span>
+              <input value={name} onChange={(event) => setName(event.target.value)} />
+            </label>
+
+            {role === "partner" ? (
+              <label>
+                <span>Participação societária (%)</span>
+                <input
+                  inputMode="decimal"
+                  value={equity}
+                  onChange={(event) => setEquity(event.target.value)}
+                />
+                <small>
+                  Ao salvar, a diferença será redistribuída proporcionalmente entre os demais sócios para manter a sociedade em 100%.
+                </small>
+              </label>
+            ) : (
+              <>
+                <label>
+                  <span>Cargo</span>
+                  <input value={position} onChange={(event) => setPosition(event.target.value)} />
+                </label>
+                <div className="row">
+                  <label>
+                    <span>Salário mensal</span>
+                    <input inputMode="decimal" value={salary} onChange={(event) => setSalary(event.target.value)} />
+                  </label>
+                  <label>
+                    <span>Comissão (%)</span>
+                    <input inputMode="decimal" value={commission} onChange={(event) => setCommission(event.target.value)} />
+                  </label>
+                </div>
+              </>
+            )}
+
+            <footer className="teamEditorActions">
+              <button type="button" className="secondary" onClick={() => setEditorOpen(false)}>
+                Cancelar
+              </button>
+              <button type="button" className="primary" onClick={saveMember}>
+                <Check /> Salvar cadastro
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
