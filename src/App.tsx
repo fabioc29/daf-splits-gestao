@@ -1634,16 +1634,16 @@ const action =
                         Fornecedores
                       </button>
                       <button
-                        className={page === "brands" ? "on" : ""}
-                        onClick={() => setPage("brands")}
-                      >
-                        Marcas
-                      </button>
-                      <button
                         className={page === "team" ? "on" : ""}
                         onClick={() => setPage("team")}
                       >
                         Sócios/Funcionários
+                      </button>
+                      <button
+                        className={page === "brands" ? "on" : ""}
+                        onClick={() => setPage("brands")}
+                      >
+                        Marcas
                       </button>
                     </div>
                   ) : null}
@@ -1831,7 +1831,15 @@ const action =
             <h1>{pageTitle}</h1>
           </div>
           <div className="headerActions">
-            {page === "dashboard" || page === "finance" ? (
+            {page === "finance" ? (
+              <button
+                className="secondary revenueHistoryButton"
+                onClick={() => setModal({ type: "revenueHistory" })}
+              >
+                <BarChart3 /> Histórico de faturamento
+              </button>
+            ) : null}
+                        {page === "dashboard" || page === "finance" ? (
               <button
                 className="secondary reportButton"
                 onClick={() =>
@@ -1970,7 +1978,9 @@ const action =
         </section>
       </main>
       <div inert={editingBlocked} style={{display:"contents"}}>
-      {modal?.type === "pendingPerfumes" ? (
+      {modal?.type === "revenueHistory" ? (
+        <RevenueHistoryModal d={data} close={() => setModal(null)} />
+      ) : modal?.type === "pendingPerfumes" ? (
         <PendingPerfumes
           d={data}
           set={setData}
@@ -10856,6 +10866,134 @@ function PricingCalculator({
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+const LEGACY_REVENUE_2026: Record<string, number> = {
+  "2026-06": 14105,
+  "2026-07": 8047.21,
+  "2026-08": 13013.03,
+};
+
+function RevenueHistoryModal({
+  d,
+  close,
+}: {
+  d: D;
+  close: () => void;
+}) {
+  const startMonth = "2026-06";
+  const currentMonth = today().slice(0, 7);
+  const months: string[] = [];
+  let cursor = startMonth;
+  while (cursor <= currentMonth && months.length < 120) {
+    months.push(cursor);
+    cursor = shiftMonthKey(cursor, 1);
+  }
+
+  const rows = months.map((monthKey) => {
+    const legacy = Object.prototype.hasOwnProperty.call(
+      LEGACY_REVENUE_2026,
+      monthKey,
+    );
+    const revenue = legacy
+      ? LEGACY_REVENUE_2026[monthKey]
+      : d.sales
+          .filter(
+            (sale) =>
+              sale.status !== "cancelled" &&
+              !isNoCost(sale) &&
+              String(sale.date || "").startsWith(monthKey),
+          )
+          .reduce(
+            (sum, sale) => sum + Math.max(0, Number(sale.total) || 0),
+            0,
+          );
+    const orders = legacy
+      ? undefined
+      : d.sales.filter(
+          (sale) =>
+            sale.status !== "cancelled" &&
+            !isNoCost(sale) &&
+            String(sale.date || "").startsWith(monthKey),
+        ).length;
+    return { monthKey, revenue, orders, legacy };
+  });
+
+  const total = rows.reduce((sum, row) => sum + row.revenue, 0);
+  const systemTotal = rows
+    .filter((row) => !row.legacy)
+    .reduce((sum, row) => sum + row.revenue, 0);
+  const legacyTotal = rows
+    .filter((row) => row.legacy)
+    .reduce((sum, row) => sum + row.revenue, 0);
+
+  return (
+    <div className="overlay">
+      <div className="systemDialog revenueHistoryDialog">
+        <header>
+          <div>
+            <small>FINANCEIRO</small>
+            <h2>Histórico de faturamento</h2>
+            <p>
+              Faturamento mensal desde junho de 2026, incluindo os valores
+              anteriores à implantação do sistema.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={close}
+            aria-label="Fechar histórico de faturamento"
+          >
+            <X />
+          </button>
+        </header>
+
+        <div className="revenueHistorySummary">
+          <div>
+            <span>Faturamento geral</span>
+            <b>{brl(total)}</b>
+            <small>Desde junho de 2026</small>
+          </div>
+          <div>
+            <span>Antes do sistema</span>
+            <b>{brl(legacyTotal)}</b>
+            <small>Junho, julho e agosto de 2026</small>
+          </div>
+          <div>
+            <span>Registrado no sistema</span>
+            <b>{brl(systemTotal)}</b>
+            <small>Meses posteriores à implantação</small>
+          </div>
+        </div>
+
+        <div className="revenueHistoryList">
+          {[...rows].reverse().map((row) => (
+            <article key={row.monthKey} className="revenueHistoryRow">
+              <div>
+                <strong>
+                  {periodMonthLabel(row.monthKey).replace(/^./, (letter) =>
+                    letter.toUpperCase(),
+                  )}
+                </strong>
+                <small>
+                  {row.legacy
+                    ? "Valor histórico informado"
+                    : `${row.orders || 0} pedido${row.orders === 1 ? "" : "s"} registrado${row.orders === 1 ? "" : "s"}`}
+                </small>
+              </div>
+              <b>{brl(row.revenue)}</b>
+            </article>
+          ))}
+        </div>
+
+        <footer className="revenueHistoryFooter">
+          <button type="button" className="secondary" onClick={close}>
+            Fechar
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }
