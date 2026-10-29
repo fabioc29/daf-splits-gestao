@@ -12876,3 +12876,1219 @@ main > header {
     grid-template-columns: 1fr;
   }
 }
+
+
+.pendingPerfumesFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.pendingPerfumesFooter .secondary {
+  width: auto;
+}
+
+
+/* =========================================================
+   DAF — melhorias 29/10: pendências, vendas, dashboard e equipe
+   ========================================================= */
+
+/* O box de perfumes pendentes cabe sempre na viewport e rola só a lista. */
+.pendingPerfumesDialog {
+  width: min(900px, calc(100vw - 32px)) !important;
+  height: min(720px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px) !important;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden !important;
+  gap: 0 !important;
+  padding: 0 !important;
+}
+.pendingPerfumesDialog > header {
+  flex: 0 0 auto;
+  padding: 24px 30px 20px;
+}
+.pendingPerfumesHint {
+  flex: 0 0 auto;
+  padding: 18px 30px !important;
+}
+.pendingPerfumesList {
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  padding: 18px 30px 22px !important;
+  scrollbar-gutter: stable;
+}
+.pendingPerfumeCard {
+  flex: 0 0 auto;
+}
+.pendingPerfumesFooter {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  padding: 14px 30px 20px !important;
+  background: var(--panel);
+}
+
+/* A tabela de vendas não captura a rolagem vertical da página. */
+.salesTablePanel {
+  overflow: visible !important;
+}
+.salesTablePanel .recordsTableScroll {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  overscroll-behavior-x: contain !important;
+  overscroll-behavior-y: auto !important;
+  touch-action: pan-x pan-y;
+}
+
+/* Seletor próprio de cliente no lançamento de vendas. */
+.saleClientSelectionBlock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  position: relative;
+}
+.saleClientSelector {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.saleClientSelectorLabel {
+  color: #647185;
+  font-size: 11px;
+  font-weight: 800;
+}
+.saleClientSelectorButton {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #cfd5dd;
+  border-radius: 10px;
+  background: #fff;
+  color: #172233;
+  padding: 8px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+.saleClientSelectorButton.open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.saleClientSelectorButton > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.saleClientSelectorButton b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saleClientSelectorButton small {
+  color: #778296;
+  font-size: 9px;
+}
+.saleClientSelectorButton svg {
+  width: 16px;
+  flex: 0 0 auto;
+}
+.saleClientSelectorPopover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  min-width: min(520px, calc(100vw - 80px));
+  max-height: 360px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 10px;
+  box-shadow: 0 22px 56px rgb(0 0 0 / 35%);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.saleClientSelectorSearch {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  padding: 0 10px;
+  display: flex !important;
+  align-items: center;
+  grid-template-columns: none !important;
+  gap: 8px !important;
+}
+.saleClientSelectorSearch svg {
+  width: 15px;
+  color: var(--muted);
+}
+.saleClientSelectorSearch input {
+  flex: 1;
+  min-width: 0;
+  height: 40px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  outline: 0;
+}
+.saleClientSelectorResults {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 5px;
+}
+.saleClientSelectorResults > button {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+.saleClientSelectorResults > button:hover,
+.saleClientSelectorResults > button.selected {
+  border-color: var(--line-strong);
+  background: var(--hover);
+}
+.saleClientSelectorResults > button > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.saleClientSelectorResults small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.saleClientSelectorResults svg {
+  width: 16px;
+  color: var(--success);
+}
+.saleClientCreateInside,
+.saleNewClientButton {
+  justify-content: center;
+}
+.saleNewClientButton {
+  min-height: 48px;
+  color: var(--accent) !important;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line)) !important;
+}
+.saleClientError {
+  grid-column: 1 / -1;
+  color: #d64b57;
+  font-size: 10px;
+  font-weight: 800;
+}
+.saleNewClientDialog {
+  width: min(820px, calc(100vw - 32px)) !important;
+}
+.saleLeadSourcePicker {
+  display: grid;
+  gap: 7px;
+}
+.saleLeadSourcePicker > span {
+  color: #647185;
+  font-size: 11px;
+  font-weight: 800;
+}
+.saleLeadSourcePicker > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.saleLeadSourcePicker button {
+  min-height: 38px;
+  border: 1px solid #cfd5dd;
+  border-radius: 9px;
+  background: #fff;
+  color: #334155;
+  padding: 0 13px;
+  font-weight: 800;
+}
+.saleLeadSourcePicker button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  color: var(--accent-strong);
+}
+.saleNewClientActions,
+.teamEditorActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+.sellerPromptDialog {
+  width: min(580px, calc(100vw - 32px)) !important;
+}
+.sellerPromptList {
+  display: grid;
+  gap: 8px;
+}
+.sellerPromptList > button {
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+.sellerPromptList > button:hover {
+  border-color: var(--accent);
+  background: var(--hover);
+}
+.sellerPromptList > button span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.sellerPromptList small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.sellerPromptList svg {
+  width: 16px;
+  color: var(--muted);
+}
+
+/* Dashboard: categoria + região na mesma linha; rankings em uma nova linha. */
+.dashboardLowerGrid .categories .dashboardMiniLegend {
+  padding-top: 16px !important;
+}
+.regionLegend {
+  grid-auto-rows: 38px !important;
+  gap: 5px !important;
+  padding-top: 4px !important;
+}
+.dashboardLowerGrid .regionLegend > div {
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 6px 9px !important;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.regionLegend > div > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.regionLegend > div > span > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.regionLegend strong,
+.regionLegend b {
+  font-size: 9.5px;
+}
+.regionLegend small {
+  color: var(--muted);
+  font-size: 8px;
+}
+.dashboardRankingGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+.dashboardRankingGrid > .panel {
+  min-width: 0;
+  min-height: 470px;
+  height: 470px;
+  padding: 18px;
+  overflow: hidden;
+}
+.dashboardRankingGrid .leadRankingPanel {
+  display: grid;
+  grid-template-rows: 82px minmax(0, 1fr) 30px;
+  gap: 10px;
+}
+.dashboardRankingGrid .leadRankingHead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 10px;
+  align-items: start;
+}
+.dashboardRankingGrid .leadRankingHead h2,
+.partnerRankingPanel .dashboardMiniHeader h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.dashboardRankingGrid .leadRankingHead p,
+.partnerRankingPanel .dashboardMiniHeader p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.dashboardRankingGrid .leadRankingBody {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 46px minmax(0, 1fr);
+  gap: 10px;
+}
+.dashboardRankingGrid .leadRankingList,
+.partnerRankingList {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding-right: 4px;
+}
+.dashboardRankingGrid .leadRankingList > div,
+.partnerRankingList > div {
+  min-height: 70px;
+}
+.partnerRankingPanel {
+  display: grid;
+  grid-template-rows: 72px 46px minmax(0, 1fr);
+  gap: 10px;
+}
+.partnerRankingPanel .groupRankingMetricButtons {
+  margin: 0;
+  height: 42px;
+}
+.partnerRankingPanel .groupRankingMetricButtons button {
+  min-height: 42px;
+}
+
+/* Sócios e funcionários. */
+.teamSummaryGrid {
+  display: grid;
+  grid-template-columns: minmax(180px, .7fr) minmax(180px, .7fr) minmax(220px, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+.teamSummaryCard {
+  display: grid;
+  gap: 5px;
+}
+.teamSummaryCard span,
+.teamSummaryCard small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.teamSummaryCard b {
+  color: var(--text);
+  font-size: 24px;
+}
+.teamNewButton {
+  min-height: 100%;
+  justify-content: center;
+  gap: 8px;
+}
+.teamMembersGrid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.teamMemberCard {
+  display: grid;
+  gap: 13px;
+}
+.teamMemberHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.teamRoleBadge {
+  width: fit-content;
+  min-height: 25px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.teamRoleBadge.partner {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.teamRoleBadge.employee {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 50%, var(--line));
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+.teamMemberCard h3 {
+  margin: 0;
+  color: var(--text);
+}
+.teamMemberFacts {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.teamMemberFacts > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.teamMemberFacts > b {
+  color: var(--text);
+  font-size: 22px;
+}
+.teamMemberFacts.employee {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+}
+.teamMemberFacts.employee > span {
+  display: grid;
+  gap: 4px;
+}
+.teamMemberFacts.employee small {
+  color: var(--muted);
+  font-size: 8px;
+}
+.teamMemberFacts.employee b {
+  color: var(--text);
+  font-size: 12px;
+}
+.teamEditorDialog {
+  width: min(620px, calc(100vw - 32px)) !important;
+}
+.teamRoleSelector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.teamRoleSelector button {
+  min-height: 43px;
+  border: 1px solid #cfd5dd;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  font-weight: 850;
+}
+.teamRoleSelector button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  color: var(--accent-strong);
+}
+.teamEditorDialog label > small {
+  color: #778296;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1100px) {
+  .dashboardRankingGrid,
+  .teamMembersGrid {
+    grid-template-columns: 1fr;
+  }
+  .dashboardRankingGrid > .panel {
+    height: auto;
+    min-height: 450px;
+  }
+}
+@media (max-width: 760px) {
+  .saleClientSelectionBlock,
+  .teamSummaryGrid {
+    grid-template-columns: 1fr;
+  }
+  .saleClientSelectorPopover {
+    min-width: 100%;
+  }
+  .saleNewClientButton {
+    width: 100%;
+  }
+  .teamMemberFacts.employee {
+    grid-template-columns: 1fr;
+  }
+  .saleNewClientActions,
+  .teamEditorActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .saleNewClientActions button,
+  .teamEditorActions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+
+.pendingArrivalConfirmDialog,
+.pendingArrivalWarningDialog {
+  width: min(560px, calc(100vw - 32px)) !important;
+}
+
+.pendingArrivalConfirmContent {
+  padding: 8px 0 4px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: start;
+  gap: 13px;
+}
+
+.pendingArrivalConfirmContent > svg {
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border-radius: 13px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pendingArrivalConfirmContent > div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.pendingArrivalConfirmContent strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.pendingArrivalConfirmContent p,
+.pendingArrivalWarningText {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.pendingArrivalConfirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+@media (max-width: 560px) {
+  .pendingArrivalConfirmActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .pendingArrivalConfirmActions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+
+/* DAF — ajuste final dos rankings e desempenho do lançamento de vendas */
+.dashboardRankingGrid > .panel {
+  height: 570px !important;
+  min-height: 570px !important;
+}
+
+.partnerRankingList {
+  overflow-y: visible !important;
+  padding-right: 0 !important;
+}
+
+.partnerRankingPanel {
+  overflow: hidden !important;
+}
+
+.saleProductSearch {
+  position: relative;
+  min-width: 0;
+}
+
+.saleProductSearchControl {
+  min-height: 46px;
+  border: 1px solid #cfd5dd;
+  border-radius: 10px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+}
+
+.saleProductSearchControl:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.saleProductSearchControl > svg {
+  width: 15px;
+  height: 15px;
+  color: #778296;
+  flex: 0 0 auto;
+}
+
+.saleProductSearchControl > input {
+  width: 100%;
+  min-width: 0;
+  height: 44px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: #172233 !important;
+  box-shadow: none !important;
+}
+
+.saleProductSearchPopover {
+  position: absolute;
+  z-index: 90;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 7px;
+  box-shadow: 0 18px 44px rgb(0 0 0 / 30%);
+}
+
+.saleProductSearchPopover > button {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+}
+
+.saleProductSearchPopover > button:hover {
+  border-color: var(--line-strong);
+  background: var(--hover);
+}
+
+.saleProductSearchPopover > button > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.saleProductSearchPopover b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.saleProductSearchPopover small {
+  color: var(--muted);
+  font-size: 8.5px;
+}
+
+.saleProductSearchPopover em {
+  flex: 0 0 auto;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.saleProductSearchPopover em.available {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+}
+
+.saleProductSearchPopover em.unavailable {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
+.saleProductSearchPopover .empty,
+.saleProductSearchHint {
+  margin: 0;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+@media (max-width: 1100px) {
+  .dashboardRankingGrid > .panel {
+    height: 570px !important;
+    min-height: 570px !important;
+  }
+}
+
+
+/* DAF — histórico de faturamento e legibilidade dos rankings */
+.revenueHistoryButton {
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.revenueHistoryButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.revenueHistoryDialog {
+  width: min(760px, calc(100vw - 32px)) !important;
+  max-height: min(760px, calc(100dvh - 32px)) !important;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+.revenueHistoryDialog > header {
+  flex: 0 0 auto;
+  padding: 24px 28px 20px;
+}
+
+.revenueHistoryDialog > header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.revenueHistorySummary {
+  flex: 0 0 auto;
+  padding: 16px 28px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.revenueHistorySummary > div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 13px;
+  display: grid;
+  gap: 5px;
+}
+
+.revenueHistorySummary span,
+.revenueHistorySummary small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.revenueHistorySummary b {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.revenueHistoryList {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 28px 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.revenueHistoryRow {
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.revenueHistoryRow > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.revenueHistoryRow strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.revenueHistoryRow small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.revenueHistoryRow > b {
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.revenueHistoryFooter {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 28px 20px;
+  border-top: 1px solid var(--line);
+}
+
+/* Aumenta a leitura dos dois rankings sem alterar o tamanho dos cards. */
+.dashboardRankingGrid .dashboardMiniHeader h2,
+.dashboardRankingGrid .leadRankingHead h2 {
+  font-size: 19px !important;
+}
+
+.dashboardRankingGrid .dashboardMiniHeader p,
+.dashboardRankingGrid .leadRankingHead p {
+  font-size: 11.5px !important;
+  line-height: 1.4;
+}
+
+.dashboardRankingGrid .groupRankingMetricButtons button {
+  font-size: 11.5px !important;
+}
+
+.dashboardRankingGrid .leadRankPosition {
+  font-size: 11px !important;
+}
+
+.dashboardRankingGrid .leadRankContent strong {
+  font-size: 12.5px !important;
+}
+
+.dashboardRankingGrid .leadRankContent b {
+  font-size: 11.5px !important;
+}
+
+.dashboardRankingGrid .leadRankContent small,
+.dashboardRankingGrid .leadRankingReset {
+  font-size: 10.5px !important;
+  line-height: 1.35;
+}
+
+.dashboardRankingGrid .leadRankingHead > button {
+  font-size: 10.5px !important;
+}
+
+@media (max-width: 760px) {
+  .revenueHistorySummary {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* DAF — drill-down de regiões e histórico de faturamento simplificado */
+.regionSalesPanel {
+  position: relative;
+}
+
+.regionSalesHeader {
+  display: flex !important;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.regionSalesHeader > div {
+  min-width: 0;
+}
+
+.regionBackButton {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+}
+
+.regionBackButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.regionLegendButton,
+.regionLegendStaticRow {
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 6px 9px !important;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.regionLegendButton {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+
+.regionLegendButton:hover {
+  border-color: var(--accent);
+  background: var(--hover);
+  transform: translateY(-1px);
+}
+
+.regionLegendButton > span,
+.regionLegendStaticRow > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+}
+
+.regionLegendButton > span > i,
+.regionLegendStaticRow > span > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.regionLegendButton > b,
+.regionLegendStaticRow > b {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.regionLegendButton > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.regionMarketplaceNote {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 8.5px;
+  line-height: 1.35;
+}
+
+.unidentifiedRegionDialog {
+  width: min(820px, calc(100vw - 32px)) !important;
+  max-height: min(760px, calc(100dvh - 32px)) !important;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+.unidentifiedRegionDialog > header {
+  flex: 0 0 auto;
+  padding: 24px 28px 20px;
+}
+
+.unidentifiedRegionDialog > header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.unidentifiedRegionList {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 28px 20px;
+  display: grid;
+  gap: 9px;
+}
+
+.unidentifiedRegionSale {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.unidentifiedRegionSaleMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.unidentifiedRegionSaleMain > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.unidentifiedRegionSaleMain strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.unidentifiedRegionSaleMain small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.unidentifiedRegionSaleMain > button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unidentifiedRegionSaleMain > button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.unidentifiedStateGrid {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.unidentifiedStateGrid button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.unidentifiedStateGrid button:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--accent);
+}
+
+.unidentifiedRegionNoClient {
+  color: var(--warning);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.unidentifiedRegionEmpty {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.unidentifiedRegionEmpty > svg {
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.unidentifiedRegionEmpty strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.unidentifiedRegionEmpty span {
+  font-size: 9px;
+}
+
+.unidentifiedRegionFooter {
+  flex: 0 0 auto;
+  padding: 14px 28px 20px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.revenueHistorySummary {
+  display: none !important;
+}
+
+.revenueHistoryTotal {
+  flex: 0 0 auto;
+  min-height: 142px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  text-align: center;
+  padding: 20px;
+}
+
+.revenueHistoryTotal b {
+  color: var(--text);
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 500;
+  letter-spacing: -.03em;
+  line-height: 1;
+}
+
+.revenueHistoryTotal span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .regionSalesHeader {
+    display: grid !important;
+  }
+
+  .regionBackButton {
+    width: fit-content;
+  }
+
+  .unidentifiedRegionSaleMain {
+    display: grid;
+  }
+
+  .unidentifiedRegionSaleMain > button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .unidentifiedStateGrid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
