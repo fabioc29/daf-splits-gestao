@@ -13642,3 +13642,162 @@ main > header {
     min-height: 570px !important;
   }
 }
+
+
+/* DAF — histórico de faturamento e legibilidade dos rankings */
+.revenueHistoryButton {
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.revenueHistoryButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.revenueHistoryDialog {
+  width: min(760px, calc(100vw - 32px)) !important;
+  max-height: min(760px, calc(100dvh - 32px)) !important;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+.revenueHistoryDialog > header {
+  flex: 0 0 auto;
+  padding: 24px 28px 20px;
+}
+
+.revenueHistoryDialog > header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.revenueHistorySummary {
+  flex: 0 0 auto;
+  padding: 16px 28px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.revenueHistorySummary > div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 13px;
+  display: grid;
+  gap: 5px;
+}
+
+.revenueHistorySummary span,
+.revenueHistorySummary small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.revenueHistorySummary b {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.revenueHistoryList {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 28px 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.revenueHistoryRow {
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.revenueHistoryRow > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.revenueHistoryRow strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.revenueHistoryRow small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.revenueHistoryRow > b {
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.revenueHistoryFooter {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 28px 20px;
+  border-top: 1px solid var(--line);
+}
+
+/* Aumenta a leitura dos dois rankings sem alterar o tamanho dos cards. */
+.dashboardRankingGrid .dashboardMiniHeader h2,
+.dashboardRankingGrid .leadRankingHead h2 {
+  font-size: 19px !important;
+}
+
+.dashboardRankingGrid .dashboardMiniHeader p,
+.dashboardRankingGrid .leadRankingHead p {
+  font-size: 11.5px !important;
+  line-height: 1.4;
+}
+
+.dashboardRankingGrid .groupRankingMetricButtons button {
+  font-size: 11.5px !important;
+}
+
+.dashboardRankingGrid .leadRankPosition {
+  font-size: 11px !important;
+}
+
+.dashboardRankingGrid .leadRankContent strong {
+  font-size: 12.5px !important;
+}
+
+.dashboardRankingGrid .leadRankContent b {
+  font-size: 11.5px !important;
+}
+
+.dashboardRankingGrid .leadRankContent small,
+.dashboardRankingGrid .leadRankingReset {
+  font-size: 10.5px !important;
+  line-height: 1.35;
+}
+
+.dashboardRankingGrid .leadRankingHead > button {
+  font-size: 10.5px !important;
+}
+
+@media (max-width: 760px) {
+  .revenueHistorySummary {
+    grid-template-columns: 1fr;
+  }
+}
