@@ -176,6 +176,7 @@ type V = SourceIdentity & {
   };
   historical?: boolean;
   description?: string;
+  sellerId?: number;
 };
 type B = {
   id: number;
@@ -202,6 +203,25 @@ type B = {
   perfumeGender?: string;
   perfumeApc?: boolean;
 };
+type TeamMemberRole = "partner" | "employee";
+type TeamMember = {
+  id: number;
+  name: string;
+  role: TeamMemberRole;
+  equityPercent?: number;
+  salary?: number;
+  commissionPercent?: number;
+  position?: string;
+  active?: boolean;
+};
+
+const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
+  { id: 1001, name: "Fábio Cardoso Cruz", role: "partner", equityPercent: 31.66, active: true },
+  { id: 1002, name: "Davi Cesar Ferreira Costa", role: "partner", equityPercent: 31.66, active: true },
+  { id: 1003, name: "Agnaldo Tavares Junior", role: "partner", equityPercent: 31.66, active: true },
+  { id: 1004, name: "Gabriel Rodrigo dos Santos Miguel", role: "partner", equityPercent: 5, active: true },
+];
+
 type SupplierType =
   | "Fornecedor de perfumes"
   | "Fornecedor de suprimentos/insumos"
@@ -229,6 +249,7 @@ type D = {
   marketplacePayoutDays?: { "TikTok Shop": number; Shopee: number };
   catalogSettings: CatalogSettings;
   dashboardSupplyReportIds: number[];
+  teamMembers: TeamMember[];
 };
 type Modal = { type: string; id?: number } | null;
 
@@ -452,11 +473,85 @@ const blank: D = {
   marketplacePayoutDays: { "TikTok Shop": 9, Shopee: 7 },
   catalogSettings: { ...DEFAULT_CATALOG_SETTINGS },
   dashboardSupplyReportIds: [],
+  teamMembers: DEFAULT_TEAM_MEMBERS.map((member) => ({ ...member })),
 };
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const parseDecimal = (value: unknown) =>
   Number(String(value ?? "").trim().replace(",", ".")) || 0;
+
+function normalizeSearchValue(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function smartSearchMatch(query: unknown, ...values: unknown[]) {
+  const rawQuery = String(query ?? "").trim();
+  if (!rawQuery) return true;
+  const normalizedQuery = normalizeSearchValue(rawQuery);
+  const normalizedTarget = normalizeSearchValue(values.filter(Boolean).join(" "));
+  const tokens = normalizedQuery.split(" ").filter(Boolean);
+  const textMatch = tokens.every((token) => normalizedTarget.includes(token));
+  if (textMatch) return true;
+  const queryDigits = rawQuery.replace(/\D/g, "");
+  if (queryDigits.length >= 3) {
+    const targetDigits = values.join(" ").replace(/\D/g, "");
+    if (targetDigits.includes(queryDigits)) return true;
+  }
+  return false;
+}
+
+function rebalancePartnerEquity(
+  members: TeamMember[],
+  editedId: number,
+  requestedPercent: number,
+) {
+  const partners = members.filter((member) => member.role === "partner");
+  const edited = partners.find((member) => member.id === editedId);
+  if (!edited) return members;
+  const percent = Math.max(0, Math.min(100, Number(requestedPercent) || 0));
+  const others = partners.filter((member) => member.id !== editedId);
+  if (!others.length) {
+    return members.map((member) =>
+      member.id === editedId ? { ...member, equityPercent: 100 } : member,
+    );
+  }
+  const remaining = Math.max(0, 100 - percent);
+  const currentOtherTotal = others.reduce(
+    (sum, member) => sum + Math.max(0, Number(member.equityPercent) || 0),
+    0,
+  );
+  let distributed = 0;
+  const nextValues = new Map<number, number>();
+  others.forEach((member, index) => {
+    const next =
+      index === others.length - 1
+        ? Math.max(0, Number((remaining - distributed).toFixed(2)))
+        : Number(
+            (
+              currentOtherTotal > 0
+                ? remaining *
+                  (Math.max(0, Number(member.equityPercent) || 0) /
+                    currentOtherTotal)
+                : remaining / others.length
+            ).toFixed(2),
+          );
+    distributed += next;
+    nextValues.set(member.id, next);
+  });
+  return members.map((member) =>
+    member.id === editedId
+      ? { ...member, equityPercent: Number(percent.toFixed(2)) }
+      : nextValues.has(member.id)
+        ? { ...member, equityPercent: nextValues.get(member.id) }
+        : member,
+  );
+}
 
 function parseBottleMarker(value: unknown) {
   const original = String(value || "").trim();
@@ -769,6 +864,25 @@ const BRAZIL_STATES = [
   "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO",
   "RR", "SC", "SP", "SE", "TO",
 ];
+
+type BrazilRegion =
+  | "Norte"
+  | "Nordeste"
+  | "Centro-Oeste"
+  | "Sudeste"
+  | "Sul"
+  | "Não informado";
+
+function brazilRegion(state: unknown): BrazilRegion {
+  const uf = String(state || "").trim().toUpperCase();
+  if (["AC", "AP", "AM", "PA", "RO", "RR", "TO"].includes(uf)) return "Norte";
+  if (["AL", "BA", "CE", "MA", "PB", "PE", "PI", "RN", "SE"].includes(uf))
+    return "Nordeste";
+  if (["DF", "GO", "MT", "MS"].includes(uf)) return "Centro-Oeste";
+  if (["ES", "MG", "RJ", "SP"].includes(uf)) return "Sudeste";
+  if (["PR", "RS", "SC"].includes(uf)) return "Sul";
+  return "Não informado";
+}
 const isMarketplaceSale = (sale: V) =>
   sale.channel === "marketplace" || Boolean(sale.marketplace);
 const isHistoricalSale = (sale: V) =>
@@ -2300,6 +2414,7 @@ function normalizeData(stored: any): D {
       payment: marketplaceSale ? "À prazo" : s.payment,
       sent: Boolean(s.sent),
       status: s.status || "active",
+      sellerId: Number(s.sellerId) || undefined,
       expenses: Number(s.expenses || 0),
       supplyOverrides: Object.fromEntries(
         Object.entries(s.supplyOverrides || {}).map(([name, qty]) => [
@@ -2437,6 +2552,30 @@ function normalizeData(stored: any): D {
     });
   }
   normalizedSupplies = normalizedSupplies.map(activateNextSupplyLot);
+  const normalizedTeamMembers: TeamMember[] =
+    Array.isArray(merged.teamMembers) && merged.teamMembers.length
+      ? merged.teamMembers.map((member: TeamMember) => ({
+          id: Number(member.id) || Date.now(),
+          name: String(member.name || "").trim(),
+          role: member.role === "employee" ? "employee" : "partner",
+          equityPercent:
+            member.role === "employee"
+              ? undefined
+              : Math.max(0, Number(member.equityPercent) || 0),
+          salary:
+            member.role === "employee"
+              ? Math.max(0, Number(member.salary) || 0)
+              : undefined,
+          commissionPercent:
+            member.role === "employee"
+              ? Math.max(0, Number(member.commissionPercent) || 0)
+              : undefined,
+          position:
+            member.role === "employee" ? String(member.position || "") : undefined,
+          active: member.active !== false,
+        }))
+      : DEFAULT_TEAM_MEMBERS.map((member) => ({ ...member }));
+
   return {
     ...merged,
     products,
@@ -2461,6 +2600,7 @@ function normalizeData(stored: any): D {
     supplierDates,
     brands,
     sales: normalizedSales,
+    teamMembers: normalizedTeamMembers,
   };
 }
 function readLocal(): D {
