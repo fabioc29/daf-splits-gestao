@@ -3810,7 +3810,11 @@ function RegionChart({ d, sales }: { d: D; sales: V[] }) {
   const rows = regions.map((region) => {
     const regionSales = sales.filter((sale) => {
       const client = d.clients.find((item) => item.id === sale.clientId);
-      return brazilRegion(client?.state) === region;
+      const state =
+        client?.state ||
+        client?.addresses?.find((address) => address.state)?.state ||
+        "";
+      return brazilRegion(state) === region;
     });
     const revenue = regionSales.reduce(
       (sum, sale) =>
@@ -7534,31 +7538,41 @@ function PendingPerfumes({
   notify: (message: string) => void;
 }) {
   const pending = pendingPerfumePurchases(d);
+  const [arrivalConfirm, setArrivalConfirm] = useState<B | null>(null);
+  const [pendingWarning, setPendingWarning] = useState("");
 
-  function markArrived(purchase: B) {
+  function requestMarkArrived(purchase: B) {
     const matches = d.products.filter(
       (product) =>
         perfumeIdentity(product.brand, product.name) ===
         perfumeIdentity(purchase.perfumeBrand, purchase.perfumeName),
     );
     if (matches.length > 1) {
-      window.alert(
+      setPendingWarning(
         "Há mais de um cadastro para este perfume. Corrija a duplicidade antes de confirmar a chegada.",
       );
       return;
     }
-    const alreadyInStock = matches[0];
-    const message = alreadyInStock
-      ? `Confirmar a chegada de ${purchase.description}? O novo volume será somado ao cadastro existente, sem criar outro perfume.`
-      : `Confirmar a chegada de ${purchase.description}? O perfume será incluído no estoque.`;
-    if (!window.confirm(message)) return;
+    setArrivalConfirm(purchase);
+  }
 
-    set((state: D) => receivePerfumePurchase(state, purchase.id));
+  function confirmArrival() {
+    if (!arrivalConfirm) return;
+    const existing = d.products.find(
+      (product) =>
+        perfumeIdentity(product.brand, product.name) ===
+        perfumeIdentity(
+          arrivalConfirm.perfumeBrand,
+          arrivalConfirm.perfumeName,
+        ),
+    );
+    set((state: D) => receivePerfumePurchase(state, arrivalConfirm.id));
     notify(
-      alreadyInStock
+      existing
         ? "Perfume recebido e somado ao estoque existente."
         : "Perfume recebido e adicionado ao estoque.",
     );
+    setArrivalConfirm(null);
   }
 
   return (
@@ -7632,7 +7646,7 @@ function PendingPerfumes({
                 <button
                   type="button"
                   className="primary pendingPerfumeArrivedButton"
-                  onClick={() => markArrived(purchase)}
+                  onClick={() => requestMarkArrived(purchase)}
                 >
                   <Check /> Marcar como chegou
                 </button>
@@ -7654,6 +7668,86 @@ function PendingPerfumes({
           </button>
         </footer>
       </div>
+
+      {arrivalConfirm ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog pendingArrivalConfirmDialog">
+            <header>
+              <div>
+                <small>CONFIRMAR CHEGADA</small>
+                <h2>Dar entrada no estoque?</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setArrivalConfirm(null)}
+                aria-label="Fechar confirmação"
+              >
+                <X />
+              </button>
+            </header>
+            <div className="pendingArrivalConfirmContent">
+              <PackageOpen />
+              <div>
+                <strong>{arrivalConfirm.description}</strong>
+                <p>
+                  {d.products.some(
+                    (product) =>
+                      perfumeIdentity(product.brand, product.name) ===
+                      perfumeIdentity(
+                        arrivalConfirm.perfumeBrand,
+                        arrivalConfirm.perfumeName,
+                      ),
+                  )
+                    ? "O novo volume será somado ao cadastro já existente, sem criar outro perfume."
+                    : "O perfume será incluído no estoque e passará a ficar disponível no sistema."}
+                </p>
+              </div>
+            </div>
+            <footer className="pendingArrivalConfirmActions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setArrivalConfirm(null)}
+              >
+                Cancelar
+              </button>
+              <button type="button" className="primary" onClick={confirmArrival}>
+                <Check /> Confirmar chegada
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingWarning ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog pendingArrivalWarningDialog">
+            <header>
+              <div>
+                <small>ATENÇÃO</small>
+                <h2>Não foi possível dar entrada</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingWarning("")}
+                aria-label="Fechar aviso"
+              >
+                <X />
+              </button>
+            </header>
+            <p className="pendingArrivalWarningText">{pendingWarning}</p>
+            <footer className="pendingArrivalConfirmActions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setPendingWarning("")}
+              >
+                Entendi
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -13970,7 +14064,7 @@ function Form({
               <div>
                 <small>NOVA VENDA</small>
                 <h2>Quem realizou a venda?</h2>
-                <p>Selecione o responsável para contabilizar no Ranking de sócios.</p>
+                <p>Selecione o responsável para registrar a autoria desta venda.</p>
               </div>
               <button type="button" onClick={() => setSellerPromptOpen(false)} aria-label="Fechar seleção de responsável">
                 <X />
