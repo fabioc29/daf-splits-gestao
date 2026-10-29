@@ -11592,6 +11592,110 @@ function InventoryEdit({
   );
 }
 
+function SaleClientPicker({
+  clients,
+  selectedId,
+  onSelect,
+  onNewClient,
+}: {
+  clients: C[];
+  selectedId: number;
+  onSelect: (id: number) => void;
+  onNewClient: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selected = clients.find((client) => client.id === selectedId);
+  const filtered = clients
+    .filter((client) =>
+      smartSearchMatch(
+        query,
+        client.name,
+        client.cpf,
+        client.phone,
+        client.city,
+        client.state,
+      ),
+    )
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
+    );
+
+  return (
+    <div className="saleClientSelector">
+      <span className="saleClientSelectorLabel">Cliente</span>
+      <button
+        type="button"
+        className={"saleClientSelectorButton" + (open ? " open" : "")}
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+      >
+        <span>
+          <b>{selected?.name || "Selecionar cliente"}</b>
+          <small>
+            {selected
+              ? [selected.cpf, selected.phone].filter(Boolean).join(" · ") ||
+                "Cliente cadastrado"
+              : "Pesquise por nome ou CPF"}
+          </small>
+        </span>
+        <ChevronDown />
+      </button>
+      {open ? (
+        <div className="saleClientSelectorPopover">
+          <label className="saleClientSelectorSearch">
+            <Search />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Nome, CPF ou telefone"
+            />
+          </label>
+          <div className="saleClientSelectorResults">
+            {filtered.map((client) => (
+              <button
+                type="button"
+                key={client.id}
+                className={client.id === selectedId ? "selected" : ""}
+                onClick={() => {
+                  onSelect(client.id);
+                  setOpen(false);
+                  setQuery("");
+                }}
+              >
+                <span>
+                  <b>{client.name}</b>
+                  <small>
+                    {[client.cpf, client.phone, client.city, client.state]
+                      .filter(Boolean)
+                      .join(" · ") || "Sem dados adicionais"}
+                  </small>
+                </span>
+                {client.id === selectedId ? <Check /> : null}
+              </button>
+            ))}
+            {!filtered.length ? (
+              <p className="empty">Nenhum cliente encontrado.</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="primary saleClientCreateInside"
+            onClick={() => {
+              setOpen(false);
+              setQuery("");
+              onNewClient();
+            }}
+          >
+            <Plus /> Cadastrar novo cliente
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Form({
   modal,
   d,
@@ -11641,6 +11745,11 @@ function Form({
     [kind, setKind] = useState("Perfume"),
     [newSupplier, setNewSupplier] = useState(false),
     [newClient, setNewClient] = useState(false),
+    [saleClientId, setSaleClientId] = useState(existingSale?.clientId || 0),
+    [newClientDialogOpen, setNewClientDialogOpen] = useState(false),
+    [saleClientError, setSaleClientError] = useState(""),
+    [sellerPromptOpen, setSellerPromptOpen] = useState(false),
+    [selectedSellerId, setSelectedSellerId] = useState(existingSale?.sellerId || 0),
     [addressCount, setAddressCount] = useState(
       existingClient?.addresses.length || 1,
     ),
@@ -11660,6 +11769,8 @@ function Form({
   const [saleVolumes, setSaleVolumes] = useState<number[]>(
     existingSale?.items.map((item) => item.ml) || [],
   );
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const sellerIdRef = useRef(existingSale?.sellerId || 0);
   const [stockWarnings, setStockWarnings] = useState<Record<number, string>>({});
   const [clientDraft, setClientDraft] = useState({
     name: existingClient?.name || "",
@@ -11761,6 +11872,92 @@ function Form({
       setClientLookupMessage("Não foi possível localizar este CEP.");
     }
   }
+  function openNewSaleClient() {
+    setClientDraft({
+      name: "",
+      phone: "",
+      cpf: "",
+      cep: "",
+      address: "",
+      number: "",
+      complement: "",
+      district: "",
+      city: "",
+      state: "",
+      leadSource: "",
+      label: "Principal",
+    });
+    setClientLookupMessage("");
+    setNewClientDialogOpen(true);
+  }
+
+  function saveNewSaleClient() {
+    const cleanName = clientDraft.name.trim();
+    if (!cleanName) {
+      setClientLookupMessage("Informe o nome do cliente.");
+      return;
+    }
+    const cpfDigits = clientDraft.cpf.replace(/\D/g, "");
+    const duplicated = cpfDigits
+      ? d.clients.find(
+          (client) => client.cpf.replace(/\D/g, "") === cpfDigits,
+        )
+      : undefined;
+    if (duplicated) {
+      setSaleClientId(duplicated.id);
+      setSaleClientError("");
+      setNewClientDialogOpen(false);
+      setClientLookupMessage("");
+      return;
+    }
+    const id = Math.max(
+      Date.now(),
+      d.clients.reduce((max, client) => Math.max(max, client.id), 0) + 1,
+    );
+    const address = clientDraft.address.trim();
+    const client: C = {
+      id,
+      name: cleanName,
+      phone: formatClientPhone(clientDraft.phone),
+      cpf: formatCpf(clientDraft.cpf),
+      cep: clientDraft.cep.trim(),
+      number: clientDraft.number.trim(),
+      complement: clientDraft.complement.trim(),
+      district: clientDraft.district.trim(),
+      city: clientDraft.city.trim(),
+      state: clientDraft.state.trim(),
+      leadSource: MANUAL_LEAD_SOURCES.includes(
+        clientDraft.leadSource as LeadSource,
+      )
+        ? (clientDraft.leadSource as LeadSource)
+        : undefined,
+      date: today(),
+      addresses: address
+        ? [
+            {
+              label: clientDraft.label || "Principal",
+              value: address,
+              complement: clientDraft.complement.trim(),
+              district: clientDraft.district.trim(),
+              city: clientDraft.city.trim(),
+              state: clientDraft.state.trim(),
+            },
+          ]
+        : [],
+    };
+    set((state: D) => ({ ...state, clients: [...state.clients, client] }));
+    setSaleClientId(id);
+    setSaleClientError("");
+    setNewClientDialogOpen(false);
+  }
+
+  function chooseSeller(memberId: number) {
+    sellerIdRef.current = memberId;
+    setSelectedSellerId(memberId);
+    setSellerPromptOpen(false);
+    window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+  }
+
   function collectSaleStockWarnings(
     form: HTMLFormElement,
     overrideIndex?: number,
@@ -12059,6 +12256,16 @@ function Form({
     }
     if (type === "purchase" && kind === "Perfume") {
       setPendingPerfumeForm(f);
+      return;
+    }
+
+    if (isSale && !isOldSale && !isMarketplace && !Number(f.clientId || 0)) {
+      setSaleClientError("Selecione um cliente antes de salvar a venda.");
+      return;
+    }
+
+    if (isSale && !isOldSale && !existingSale && !sellerIdRef.current) {
+      setSellerPromptOpen(true);
       return;
     }
 
@@ -12470,12 +12677,15 @@ function Form({
       }
       const typedClientName = isMarketplace
         ? String(f.marketplaceCustomer || "").trim()
-        : String(f.clientName || "").trim();
-      const matchedClient = x.clients.find(
-        (client) =>
-          client.name.trim().toLowerCase() === typedClientName.toLowerCase(),
-      );
-      let clientId = matchedClient?.id || 0,
+        : "";
+      const selectedDirectClientId = Number(f.clientId || 0);
+      const matchedClient = isMarketplace
+        ? x.clients.find(
+            (client) =>
+              client.name.trim().toLowerCase() === typedClientName.toLowerCase(),
+          )
+        : x.clients.find((client) => client.id === selectedDirectClientId);
+      let clientId = matchedClient?.id || selectedDirectClientId || 0,
         clients = x.clients;
 
       if (isMarketplace && typedClientName) {
@@ -12606,11 +12816,7 @@ function Form({
           x.sales.reduce((max, current) => Math.max(max, current.id), 0) + 1,
         date: String(f.date),
         clientId,
-        customerName: isMarketplace
-        ? typedClientName
-        : newClient || matchedClient
-          ? undefined
-          : typedClientName || undefined,
+        customerName: isMarketplace ? typedClientName : undefined,
         items,
         total: Number(f.total),
         paid: Number(f.paid),
@@ -12627,6 +12833,11 @@ function Form({
           existingSale?.accumulatingDecants ||
           inheritedPreparationStatus === "accumulating",
         status: existingSale?.status || "active",
+        sellerId:
+          existingSale?.sellerId ||
+          sellerIdRef.current ||
+          selectedSellerId ||
+          undefined,
         expenses: existingSale?.expenses || 0,
         supplyOverrides,
         channel: isMarketplace ? "marketplace" : "direct",
@@ -12724,6 +12935,7 @@ function Form({
   return (
     <div className={isSale ? "overlay saleRecordOverlay" : "overlay"}>
       <form
+        ref={formRef}
         onSubmit={submit}
         className={isSale ? "recordForm saleRecordForm" : "recordForm"}
       >
@@ -12855,57 +13067,30 @@ function Form({
                 v={existingSale ? saleCustomer(existingSale, d) : ""}
               />
             ) : (
-              <>
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    onChange={(e) => setNewClient(e.target.checked)}
-                  />
-                  Cadastrar cliente nesta venda
-                </label>
-                {newClient ? (
-                  <>
-                    <div className="row three clientSaleIdentityRow">
-                      <label><span>Nome</span><input name="newName" value={clientDraft.name} onChange={(e) => setClientDraft((c) => ({ ...c, name: e.target.value }))} required /></label>
-                      <label><span>CPF (opcional)</span><input name="newCpf" inputMode="numeric" maxLength={14} value={clientDraft.cpf} onChange={(e) => setClientDraft((c) => ({ ...c, cpf: formatCpf(e.target.value) }))} onBlur={(e) => findClientByCpf(e.target.value)} /></label>
-                      <label><span>WhatsApp (opcional)</span><input name="newPhone" inputMode="tel" value={clientDraft.phone} onChange={(e) => setClientDraft((c) => ({ ...c, phone: formatClientPhone(e.target.value) }))} /></label>
-                    </div>
-                    <div className="clientSaleAddressRow">
-                      <label><span>Endereço (opcional)</span><input name="newAddress" value={clientDraft.address} onChange={(e) => setClientDraft((c) => ({ ...c, address: e.target.value }))} /></label>
-                      <label><span>Número (opcional)</span><input name="newNumber" value={clientDraft.number} onChange={(e) => setClientDraft((c) => ({ ...c, number: e.target.value }))} /></label>
-                      <label><span>Complemento (opcional)</span><input name="newComplement" value={clientDraft.complement} onChange={(e) => setClientDraft((c) => ({ ...c, complement: e.target.value }))} placeholder="Apto, bloco, sala..." /></label>
-                      <label><span>CEP (opcional)</span><input name="newCep" value={clientDraft.cep} onChange={(e) => setClientDraft((c) => ({ ...c, cep: e.target.value }))} onBlur={(e) => fillAddressFromCep(e.target.value)} /></label>
-                    </div>
-                    <div className="row three">
-                      <label><span>Bairro (opcional)</span><input name="newDistrict" value={clientDraft.district} onChange={(e) => setClientDraft((c) => ({ ...c, district: e.target.value }))} /></label>
-                      <label><span>Cidade (opcional)</span><input name="newCity" value={clientDraft.city} onChange={(e) => setClientDraft((c) => ({ ...c, city: e.target.value }))} /></label>
-                      <label><span>Estado (opcional)</span><select name="newState" value={clientDraft.state} onChange={(e) => setClientDraft((c) => ({ ...c, state: e.target.value }))}><option value="">Selecione...</option>{BRAZIL_STATES.map((state) => <option key={state}>{state}</option>)}</select></label>
-                    </div>
-                    <Select
-                      n="newLeadSource"
-                      l="Origem do lead / Grupo"
-                      o={MANUAL_LEAD_SOURCES.map((source) => [source, source])}
-                    />
-                    {clientLookupMessage ? <small className="cepStatus">{clientLookupMessage}</small> : null}
-                  </>
-                ) : (
-        <label className="saleClientInput">
-          <span>Cliente</span>
-          <input
-            name="clientName"
-            list="sale-client-options"
-            defaultValue={existingSale ? saleCustomer(existingSale, d) : ""}
-            placeholder="Selecione ou digite o nome do cliente"
-            required
-          />
-          <datalist id="sale-client-options">
-            {d.clients.map((client) => (
-              <option key={client.id} value={client.name} />
-            ))}
-          </datalist>
-        </label>
-      )}
-              </>
+              <div className="saleClientSelectionBlock">
+                <input type="hidden" name="clientId" value={saleClientId || ""} />
+                <SaleClientPicker
+                  clients={d.clients}
+                  selectedId={saleClientId}
+                  onSelect={(id) => {
+                    setSaleClientId(id);
+                    setSaleClientError("");
+                  }}
+                  onNewClient={openNewSaleClient}
+                />
+                <button
+                  type="button"
+                  className="secondary saleNewClientButton"
+                  onClick={openNewSaleClient}
+                >
+                  <Plus /> Cadastrar novo cliente
+                </button>
+                {saleClientError ? (
+                  <small className="saleClientError" role="alert">
+                    {saleClientError}
+                  </small>
+                ) : null}
+              </div>
             )}{" "}
             {Array.from({ length: lines }, (_, i) => (
               <div className="row item" key={i}>
@@ -13721,6 +13906,97 @@ function Form({
                 <Check /> Sim, já chegou
               </button>
             </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {newClientDialogOpen ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog saleNewClientDialog">
+            <header>
+              <div>
+                <small>NOVA VENDA</small>
+                <h2>Cadastrar novo cliente</h2>
+              </div>
+              <button type="button" onClick={() => setNewClientDialogOpen(false)} aria-label="Fechar cadastro de cliente">
+                <X />
+              </button>
+            </header>
+
+            <div className="row three clientSaleIdentityRow">
+              <label><span>Nome</span><input value={clientDraft.name} onChange={(event) => setClientDraft((current) => ({ ...current, name: event.target.value }))} /></label>
+              <label><span>CPF (opcional)</span><input inputMode="numeric" maxLength={14} value={clientDraft.cpf} onChange={(event) => setClientDraft((current) => ({ ...current, cpf: formatCpf(event.target.value) }))} onBlur={(event) => findClientByCpf(event.target.value)} /></label>
+              <label><span>WhatsApp (opcional)</span><input inputMode="tel" value={clientDraft.phone} onChange={(event) => setClientDraft((current) => ({ ...current, phone: formatClientPhone(event.target.value) }))} /></label>
+            </div>
+            <div className="clientSaleAddressRow">
+              <label><span>Endereço (opcional)</span><input value={clientDraft.address} onChange={(event) => setClientDraft((current) => ({ ...current, address: event.target.value }))} /></label>
+              <label><span>Número (opcional)</span><input value={clientDraft.number} onChange={(event) => setClientDraft((current) => ({ ...current, number: event.target.value }))} /></label>
+              <label><span>Complemento (opcional)</span><input value={clientDraft.complement} onChange={(event) => setClientDraft((current) => ({ ...current, complement: event.target.value }))} placeholder="Apto, bloco, sala..." /></label>
+              <label><span>CEP (opcional)</span><input value={clientDraft.cep} onChange={(event) => setClientDraft((current) => ({ ...current, cep: event.target.value }))} onBlur={(event) => fillAddressFromCep(event.target.value)} /></label>
+            </div>
+            <div className="row three">
+              <label><span>Bairro (opcional)</span><input value={clientDraft.district} onChange={(event) => setClientDraft((current) => ({ ...current, district: event.target.value }))} /></label>
+              <label><span>Cidade (opcional)</span><input value={clientDraft.city} onChange={(event) => setClientDraft((current) => ({ ...current, city: event.target.value }))} /></label>
+              <label><span>Estado (opcional)</span><select value={clientDraft.state} onChange={(event) => setClientDraft((current) => ({ ...current, state: event.target.value }))}><option value="">Selecione...</option>{BRAZIL_STATES.map((state) => <option key={state}>{state}</option>)}</select></label>
+            </div>
+            <div className="saleLeadSourcePicker">
+              <span>Origem do lead / Grupo</span>
+              <div>
+                {MANUAL_LEAD_SOURCES.map((source) => (
+                  <button
+                    type="button"
+                    key={source}
+                    className={clientDraft.leadSource === source ? "active" : ""}
+                    onClick={() => setClientDraft((current) => ({ ...current, leadSource: source }))}
+                  >
+                    {source}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {clientLookupMessage ? <small className="cepStatus">{clientLookupMessage}</small> : null}
+            <footer className="saleNewClientActions">
+              <button type="button" className="secondary" onClick={() => setNewClientDialogOpen(false)}>Cancelar</button>
+              <button type="button" className="primary" onClick={saveNewSaleClient}><Check /> Salvar cliente</button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {sellerPromptOpen ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog sellerPromptDialog">
+            <header>
+              <div>
+                <small>NOVA VENDA</small>
+                <h2>Quem realizou a venda?</h2>
+                <p>Selecione o responsável para contabilizar no Ranking de sócios.</p>
+              </div>
+              <button type="button" onClick={() => setSellerPromptOpen(false)} aria-label="Fechar seleção de responsável">
+                <X />
+              </button>
+            </header>
+            <div className="sellerPromptList">
+              {d.teamMembers
+                .filter((member) => member.active !== false)
+                .map((member) => (
+                  <button
+                    type="button"
+                    key={member.id}
+                    onClick={() => chooseSeller(member.id)}
+                  >
+                    <span>
+                      <b>{member.name}</b>
+                      <small>
+                        {member.role === "partner"
+                          ? `Sócio · ${(member.equityPercent || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`
+                          : `Funcionário · ${member.position || "Cargo não informado"}`}
+                      </small>
+                    </span>
+                    <ChevronRight />
+                  </button>
+                ))}
+            </div>
           </div>
         </div>
       ) : null}
