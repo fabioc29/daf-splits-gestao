@@ -6,6 +6,7 @@ import { readState, newIdentities, StateConflict } from "./crm/state-persistence
 import { FabioStateWriter } from "./crm/fabio-persistence";
 import { LocalRecovery, optionalLocalGet, optionalLocalSet, optionalLocalRemove } from "./crm/local-recovery";
 import { CRMFeedPanel } from "./crm/CRMFeedPanel";
+import { AchievementsPage } from "./Achievements";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -51,6 +52,7 @@ import {
   ArrowUp,
   ArrowDown,
   Image as ImageIcon,
+  Trophy,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
@@ -262,6 +264,7 @@ const DEFAULT_MENU_ORDER = [
   "stock",
   "registrations",
   "finance",
+  "achievements",
   "settings",
 ];
 
@@ -406,6 +409,20 @@ function readLocalUiSettings(): LocalUiSettings {
             typeof id === "string" && DEFAULT_MENU_ORDER.includes(id),
         )
       : [];
+    const completedOrder = [...storedOrder];
+    DEFAULT_MENU_ORDER.forEach((id) => {
+      if (completedOrder.includes(id)) return;
+      if (id === "achievements") {
+        const financeIndex = completedOrder.indexOf("finance");
+        completedOrder.splice(
+          financeIndex >= 0 ? financeIndex + 1 : completedOrder.length,
+          0,
+          id,
+        );
+      } else {
+        completedOrder.push(id);
+      }
+    });
     const legacyAccent =
       typeof stored?.accent === "string" ? stored.accent : undefined;
     const legacyGold =
@@ -439,10 +456,7 @@ function readLocalUiSettings(): LocalUiSettings {
         typeof stored?.panelLabel === "string"
           ? stored.panelLabel
           : DEFAULT_LOCAL_UI_SETTINGS.panelLabel,
-      menuOrder: [
-        ...storedOrder,
-        ...DEFAULT_MENU_ORDER.filter((id) => !storedOrder.includes(id)),
-      ],
+      menuOrder: completedOrder,
       menuZoom: Math.max(
         80,
         Math.min(130, Number(stored?.menuZoom) || 100),
@@ -504,6 +518,20 @@ function smartSearchMatch(query: unknown, ...values: unknown[]) {
     if (targetDigits.includes(queryDigits)) return true;
   }
   return false;
+}
+
+async function syncPublicCatalog(accessToken: string) {
+  const response = await fetch("/api/catalog-sync", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    throw new Error("CATALOG_SYNC_FAILED");
+  }
+  return response.json();
 }
 
 function rebalancePartnerEquity(
@@ -1140,6 +1168,7 @@ const nav = [
   ["stock", "Estoque", Box],
   ["registrations", "Cadastros", Users],
   ["finance", "Financeiro", Wallet],
+  ["achievements", "Conquistas", Trophy],
   ["settings", "Configurações", Settings],
   ["crm", "Integração CRM", Cloud],
 ] as const;
@@ -1367,6 +1396,9 @@ function System({ session }: { session: Session }) {
         setSaveNotice(pending.length ? "Há rascunhos locais pendentes deste usuário. Exporte-os e carregue o estado salvo antes de continuar."
           : blocked.current ? "A adoção de UUIDs precisa ser concluída antes de salvar." : "");
         setReady(true); setSync(blocked.current ? "error" : "saved");
+        void syncPublicCatalog(session.access_token).catch(() => {
+          /* O estado administrativo continua confirmado mesmo se o catálogo estiver indisponível. */
+        });
       } catch {
         if (active) { blockEditing(writer.current ? "Estado confirmado no banco. A recuperação local está indisponível; a edição está bloqueada. Exporte os rascunhos e tente carregar o estado salvo." : "Não foi possível confirmar o estado salvo. A edição está bloqueada; tente carregar o estado salvo antes de continuar."); setSync("error"); }
       }
@@ -1401,6 +1433,9 @@ function System({ session }: { session: Session }) {
       if (version === saveVersion.current) {
         // A browser cache failure cannot invalidate an acknowledged database commit.
         setDataState(normalized); setSync("saved"); setSaveNotice("");
+        void syncPublicCatalog(session.access_token).catch(() =>
+          notify("Dados salvos. O catálogo público será sincronizado na próxima tentativa."),
+        );
         try { recovery.current?.clear(); }
         catch { blockEditing("Gravação confirmada no banco. A recuperação local falhou; novas edições estão bloqueadas. Exporte e carregue o estado salvo."); }
       }
@@ -1983,6 +2018,8 @@ const action =
             />
           ) : page === "finance-pricing" ? (
             <PricingCalculator d={data} notify={notify} />
+          ) : page === "achievements" ? (
+            <AchievementsPage sales={data.sales} logo={LOGO} />
           ) : page === "settings" ? (
             <SettingsPage
               theme={theme}
@@ -3694,29 +3731,49 @@ function HealthGauge({
 }
 
 function OrderSummaryChart({ sales }: { sales: V[] }) {
-  const directOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && !isMarketplaceSale(sale),
+  const validSales = sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      !isHistoricalSale(sale),
+  );
+  const directOrders = validSales.filter(
+    (sale) => !isMarketplaceSale(sale),
   ).length;
-  const tiktokOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && sale.marketplace === "TikTok Shop",
+  const tiktokOrders = validSales.filter(
+    (sale) => sale.marketplace === "TikTok Shop",
   ).length;
-  const shopeeOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && sale.marketplace === "Shopee",
+  const shopeeOrders = validSales.filter(
+    (sale) => sale.marketplace === "Shopee",
   ).length;
-  const cancelledOrders = sales.filter((sale) => sale.status === "cancelled").length;
-  const total = directOrders + tiktokOrders + shopeeOrders + cancelledOrders;
-  const pct = (value: number) => (total ? Math.round((value / total) * 100) : 0);
+  const cancelledOrders = sales.filter(
+    (sale) => sale.status === "cancelled",
+  ).length;
+  const total = directOrders + tiktokOrders + shopeeOrders;
+  const pct = (value: number) =>
+    total ? Math.round((value / total) * 100) : 0;
   const segments = [
-    { label: "Venda direta", value: directOrders, color: "var(--chart-order-direct)" },
-    { label: "TikTok Shop", value: tiktokOrders, color: "var(--chart-order-tiktok)" },
-    { label: "Shopee", value: shopeeOrders, color: "var(--chart-order-shopee)" },
-    { label: "Cancelados", value: cancelledOrders, color: "var(--chart-order-cancelled)" },
+    {
+      label: "Venda direta",
+      value: directOrders,
+      color: "var(--chart-order-direct)",
+    },
+    {
+      label: "TikTok Shop",
+      value: tiktokOrders,
+      color: "var(--chart-order-tiktok)",
+    },
+    {
+      label: "Shopee",
+      value: shopeeOrders,
+      color: "var(--chart-order-shopee)",
+    },
   ];
   return (
     <div className="panel dashboardMetricPanel orderOriginSummary">
       <div className="dashboardMiniHeader">
         <h2>Resumo dos pedidos</h2>
-        <p>Distribuição dos pedidos no período.</p>
+        <p>Distribuição dos pedidos válidos no período.</p>
       </div>
 
       <div className="dashboardMiniVisual">
@@ -3731,21 +3788,37 @@ function OrderSummaryChart({ sales }: { sales: V[] }) {
 
       <div className="dashboardMiniLegend orderOriginLegend">
         <p className="direct">
-          <span className="orderOriginText"><strong>Venda direta</strong><small>{pct(directOrders)}%</small></span>
+          <span className="orderOriginText">
+            <strong>Venda direta</strong>
+            <small>{pct(directOrders)}%</small>
+          </span>
           <b>{directOrders} pedido{directOrders === 1 ? "" : "s"}</b>
         </p>
         <p className="tiktok">
-          <span className="orderOriginText"><strong>TikTok Shop</strong><small>{pct(tiktokOrders)}%</small></span>
+          <span className="orderOriginText">
+            <strong>TikTok Shop</strong>
+            <small>{pct(tiktokOrders)}%</small>
+          </span>
           <b>{tiktokOrders} pedido{tiktokOrders === 1 ? "" : "s"}</b>
         </p>
         <p className="shopee">
-          <span className="orderOriginText"><strong>Shopee</strong><small>{pct(shopeeOrders)}%</small></span>
+          <span className="orderOriginText">
+            <strong>Shopee</strong>
+            <small>{pct(shopeeOrders)}%</small>
+          </span>
           <b>{shopeeOrders} pedido{shopeeOrders === 1 ? "" : "s"}</b>
         </p>
-        <p className="cancelled">
-          <span className="orderOriginText"><strong>Cancelados</strong><small>{pct(cancelledOrders)}%</small></span>
-          <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
-        </p>
+        {cancelledOrders ? (
+          <p className="cancelled orderCancelledOutsideTotal">
+            <span className="orderOriginText">
+              <strong>Cancelados</strong>
+              <small>fora do total</small>
+            </span>
+            <b>
+              {cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}
+            </b>
+          </p>
+        ) : null}
       </div>
     </div>
   );
