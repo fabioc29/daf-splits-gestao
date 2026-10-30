@@ -14092,3 +14092,309 @@ main > header {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
+
+
+/* =========================================================
+   DAF — conquistas
+   ========================================================= */
+.achievementsWorkspace {
+  display: grid;
+  gap: 18px;
+}
+
+.achievementsHero {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  overflow: hidden;
+  position: relative;
+}
+
+.achievementsHero::after {
+  content: "";
+  position: absolute;
+  inset: -40% -10% auto auto;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    transparent 68%
+  );
+  pointer-events: none;
+}
+
+.achievementsHero > div:first-child {
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
+}
+
+.achievementsHero h2 {
+  margin: 5px 0 7px;
+  font-size: 28px;
+}
+
+.achievementsHero p {
+  margin: 0;
+  max-width: 630px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.achievementsHeroScore {
+  position: relative;
+  z-index: 1;
+  min-width: 180px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel-2);
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.achievementsHeroScore svg {
+  width: 30px;
+  height: 30px;
+  color: #e8b437;
+}
+
+.achievementsHeroScore strong {
+  font-size: 30px;
+  color: var(--text);
+}
+
+.achievementsHeroScore span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.achievementsSection {
+  display: grid;
+  gap: 10px;
+}
+
+.achievementsSection > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+}
+
+.achievementsSection > header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.achievementsSection > header span {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.achievementsSection > header small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.achievementGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.achievementBadge {
+  --achievement-a: #e8b437;
+  --achievement-b: #c77b18;
+  min-width: 0;
+  min-height: 300px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--achievement-a) 9%, transparent), transparent 42%),
+    linear-gradient(320deg, color-mix(in srgb, var(--achievement-b) 8%, transparent), transparent 45%),
+    var(--panel);
+  color: var(--text);
+  padding: 15px;
+  text-align: left;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: 14px;
+  overflow: hidden;
+  position: relative;
+  transition:
+    transform .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease;
+}
+
+.achievementBadge::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  border: 1px solid color-mix(in srgb, var(--achievement-a) 28%, transparent);
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.achievementBadge.unlocked {
+  cursor: pointer;
+  border-color: color-mix(in srgb, var(--achievement-a) 62%, var(--line));
+  box-shadow: inset 0 0 32px color-mix(in srgb, var(--achievement-a) 5%, transparent);
+}
+
+.achievementBadge.unlocked:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 13px 30px rgb(0 0 0 / 22%),
+    inset 0 0 38px color-mix(in srgb, var(--achievement-a) 8%, transparent);
+}
+
+.achievementBadge.locked {
+  cursor: default;
+  filter: grayscale(1);
+  opacity: .58;
+}
+
+.achievementBadgeTop,
+.achievementBadgeFooter {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.achievementBadgeTop {
+  justify-content: space-between;
+}
+
+.achievementBadgeIcon {
+  width: 31px;
+  height: 31px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--achievement-a) 13%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--achievement-a) 32%, var(--line));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.achievementBadgeIcon svg {
+  width: 16px;
+  height: 16px;
+  color: var(--achievement-a);
+}
+
+.achievementBadgeStatus {
+  color: var(--muted);
+  font-size: 7.5px;
+  letter-spacing: .12em;
+  font-weight: 950;
+}
+
+.achievementBadgeCenter {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  text-align: center;
+}
+
+.achievementBadgeCenter strong {
+  color: var(--achievement-a);
+  font-size: clamp(38px, 4vw, 58px);
+  line-height: .95;
+  letter-spacing: -.04em;
+  text-shadow: 0 3px 18px color-mix(in srgb, var(--achievement-a) 20%, transparent);
+}
+
+.achievementBadgeCenter b {
+  margin-top: 10px;
+  color: var(--text);
+  font-size: 15px;
+  letter-spacing: .02em;
+}
+
+.achievementBadgeCenter span {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.achievementBadgeProgress {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 6px;
+}
+
+.achievementBadgeProgress > i {
+  width: 100%;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-3);
+}
+
+.achievementBadgeProgress > i > em {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--achievement-a), var(--achievement-b));
+}
+
+.achievementBadgeProgress small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+}
+
+.achievementBadgeFooter {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.achievementBadgeFooter svg {
+  width: 13px;
+  height: 13px;
+  color: var(--achievement-a);
+}
+
+.orderCancelledOutsideTotal small {
+  color: var(--muted) !important;
+  font-style: italic;
+}
+
+@media (max-width: 1260px) {
+  .achievementGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .achievementGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .achievementsHero {
+    display: grid;
+  }
+
+  .achievementsHeroScore {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .achievementGrid {
+    grid-template-columns: 1fr;
+  }
+}
