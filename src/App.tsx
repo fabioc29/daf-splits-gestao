@@ -51,11 +51,20 @@ import {
   ArrowUp,
   ArrowDown,
   Image as ImageIcon,
+  Trophy,
+  Download,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
-import { catalogSettingsForPersistence, DEFAULT_CATALOG_SETTINGS, type CatalogSettings } from "./Catalog";
+import {
+  catalogItemsFromProducts,
+  catalogSettingsForPersistence,
+  catalogSnapshotPayload,
+  DEFAULT_CATALOG_SETTINGS,
+  enrichCatalogItemsWithImages,
+  type CatalogSettings,
+} from "./Catalog";
 
 type BottleHistoryEntry = {
   number: number;
@@ -262,6 +271,7 @@ const DEFAULT_MENU_ORDER = [
   "stock",
   "registrations",
   "finance",
+  "achievements",
   "settings",
 ];
 
@@ -1140,6 +1150,7 @@ const nav = [
   ["stock", "Estoque", Box],
   ["registrations", "Cadastros", Users],
   ["finance", "Financeiro", Wallet],
+  ["achievements", "Conquistas", Trophy],
   ["settings", "Configurações", Settings],
   ["crm", "Integração CRM", Cloud],
 ] as const;
@@ -1198,6 +1209,26 @@ function System({ session }: { session: Session }) {
     catch { blockEditing("O rascunho está apenas na memória: o armazenamento local falhou. Exporte-o antes de fechar e carregue o estado salvo para continuar."); setDataState(next); return; }
     setDataState(next);
   }
+  function fallbackCatalog(persisted: D) {
+    return catalogSnapshotPayload(
+      catalogItemsFromProducts(
+        persisted.products,
+        persisted.catalogSettings?.manualImages,
+      ),
+      persisted.catalogSettings,
+    );
+  }
+  async function buildCatalog(persisted: D, signal?: AbortSignal) {
+    const items = await enrichCatalogItemsWithImages(
+      catalogItemsFromProducts(
+        persisted.products,
+        persisted.catalogSettings?.manualImages,
+      ),
+      signal,
+      persisted.catalogSettings?.productOrder === "mostRated",
+    );
+    return catalogSnapshotPayload(items, persisted.catalogSettings);
+  }
   function exportDraft() {
     const url = URL.createObjectURL(new Blob([JSON.stringify({format:"daf-recovery-export-v1",userId:session.user.id,currentDraft:dataRef.current,pendingDrafts:recoveredDrafts.current}, null, 2)], {type:"application/json"}));
     const link = document.createElement("a"); link.href = url; link.download = "DAF-rascunho-nao-salvo.json"; link.click();
@@ -1208,7 +1239,7 @@ function System({ session }: { session: Session }) {
     const version = saveVersion.current;
     try {
       if (writer.current?.pending) throw Error("Aguarde a gravação em andamento.");
-      const current = await FabioStateWriter.open(supabase);
+      const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
       if (!mounted.current || version !== saveVersion.current) { current.dispose(); return; }
       writer.current?.dispose(); writer.current = current;
       let normalized = normalizeData(current.snapshot.data);
@@ -1332,7 +1363,7 @@ function System({ session }: { session: Session }) {
     mounted.current = true;
     (async () => {
       try {
-        const current = await FabioStateWriter.open(supabase);
+        const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
         if (!active) { current.dispose(); return; }
         writer.current = current;
         recovery.current = new LocalRecovery(session.user.id);
@@ -1394,10 +1425,18 @@ function System({ session }: { session: Session }) {
     if (serialized === lastSynced.current || blocked.current || !writer.current) return;
     const version = saveVersion.current;
     setSync("loading");
-    writer.current.save(data).then(({saved}) => {
+    writer.current.save(data).then(({saved, publication}) => {
       if (!mounted.current) return;
       const normalized = normalizeData(saved.data);
       lastSynced.current = JSON.stringify(normalized);
+      void publication?.then((result) => {
+        if (!mounted.current || result.status === "published") return;
+        notify(
+          result.status === "stale"
+            ? "Dados salvos. O catálogo será reconciliado na próxima gravação da revisão atual."
+            : "Dados salvos, mas o catálogo público não pôde ser atualizado.",
+        );
+      });
       if (version === saveVersion.current) {
         // A browser cache failure cannot invalidate an acknowledged database commit.
         setDataState(normalized); setSync("saved"); setSaveNotice("");
@@ -1983,6 +2022,8 @@ const action =
             />
           ) : page === "finance-pricing" ? (
             <PricingCalculator d={data} notify={notify} />
+          ) : page === "achievements" ? (
+            <Achievements d={data} />
           ) : page === "settings" ? (
             <SettingsPage
               theme={theme}
@@ -3694,29 +3735,32 @@ function HealthGauge({
 }
 
 function OrderSummaryChart({ sales }: { sales: V[] }) {
-  const directOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && !isMarketplaceSale(sale),
+  const activeSales = sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      !isHistoricalSale(sale),
+  );
+  const directOrders = activeSales.filter((sale) => !isMarketplaceSale(sale)).length;
+  const tiktokOrders = activeSales.filter(
+    (sale) => sale.marketplace === "TikTok Shop",
   ).length;
-  const tiktokOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && sale.marketplace === "TikTok Shop",
-  ).length;
-  const shopeeOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && sale.marketplace === "Shopee",
+  const shopeeOrders = activeSales.filter(
+    (sale) => sale.marketplace === "Shopee",
   ).length;
   const cancelledOrders = sales.filter((sale) => sale.status === "cancelled").length;
-  const total = directOrders + tiktokOrders + shopeeOrders + cancelledOrders;
+  const total = directOrders + tiktokOrders + shopeeOrders;
   const pct = (value: number) => (total ? Math.round((value / total) * 100) : 0);
   const segments = [
     { label: "Venda direta", value: directOrders, color: "var(--chart-order-direct)" },
     { label: "TikTok Shop", value: tiktokOrders, color: "var(--chart-order-tiktok)" },
     { label: "Shopee", value: shopeeOrders, color: "var(--chart-order-shopee)" },
-    { label: "Cancelados", value: cancelledOrders, color: "var(--chart-order-cancelled)" },
   ];
   return (
     <div className="panel dashboardMetricPanel orderOriginSummary">
       <div className="dashboardMiniHeader">
         <h2>Resumo dos pedidos</h2>
-        <p>Distribuição dos pedidos no período.</p>
+        <p>Distribuição dos pedidos válidos no período.</p>
       </div>
 
       <div className="dashboardMiniVisual">
@@ -3742,10 +3786,12 @@ function OrderSummaryChart({ sales }: { sales: V[] }) {
           <span className="orderOriginText"><strong>Shopee</strong><small>{pct(shopeeOrders)}%</small></span>
           <b>{shopeeOrders} pedido{shopeeOrders === 1 ? "" : "s"}</b>
         </p>
-        <p className="cancelled">
-          <span className="orderOriginText"><strong>Cancelados</strong><small>{pct(cancelledOrders)}%</small></span>
-          <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
-        </p>
+        {cancelledOrders ? (
+          <p className="cancelled">
+            <span className="orderOriginText"><strong>Cancelados</strong><small>fora do total</small></span>
+            <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -11147,6 +11193,427 @@ const LEGACY_REVENUE_2026: Record<string, number> = {
   "2026-07": 8047.21,
   "2026-08": 13013.03,
 };
+
+
+type AchievementMetric =
+  | "revenueHistory"
+  | "revenueMonth"
+  | "ordersHistory"
+  | "ordersMonth";
+
+type AchievementDefinition = {
+  id: string;
+  metric: AchievementMetric;
+  threshold: number;
+  badgeValue: string;
+  badgeLabel: "FATURADOS" | "PEDIDOS";
+  title: string;
+  qualifier: "Histórico" | "Em um único mês";
+};
+
+const ACHIEVEMENTS: AchievementDefinition[] = [
+  ...[
+    [50_000, "50K"],
+    [100_000, "100K"],
+    [200_000, "200K"],
+    [350_000, "350K"],
+    [500_000, "500K"],
+    [800_000, "800K"],
+    [1_000_000, "1M"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `revenue-history-${threshold}`,
+    metric: "revenueHistory" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "FATURADOS" as const,
+    title: `${badgeValue} faturados`,
+    qualifier: "Histórico" as const,
+  })),
+  ...[
+    [30_000, "30K"],
+    [50_000, "50K"],
+    [100_000, "100K"],
+    [150_000, "150K"],
+    [200_000, "200K"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `revenue-month-${threshold}`,
+    metric: "revenueMonth" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "FATURADOS" as const,
+    title: `${badgeValue} faturados`,
+    qualifier: "Em um único mês" as const,
+  })),
+  ...[
+    [500, "500"],
+    [1_000, "1000"],
+    [2_000, "2000"],
+    [3_500, "3500"],
+    [5_000, "5000"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `orders-history-${threshold}`,
+    metric: "ordersHistory" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "PEDIDOS" as const,
+    title: `${Number(threshold).toLocaleString("pt-BR")} pedidos`,
+    qualifier: "Histórico" as const,
+  })),
+  ...[
+    [100, "100"],
+    [150, "150"],
+    [300, "300"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `orders-month-${threshold}`,
+    metric: "ordersMonth" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "PEDIDOS" as const,
+    title: `${threshold} pedidos`,
+    qualifier: "Em um único mês" as const,
+  })),
+];
+
+function achievementMonthlyRows(d: D) {
+  const startMonth = "2026-06";
+  const currentMonth = today().slice(0, 7);
+  const months: string[] = [];
+  let cursor = startMonth;
+  while (cursor <= currentMonth && months.length < 120) {
+    months.push(cursor);
+    cursor = shiftMonthKey(cursor, 1);
+  }
+  return months.map((monthKey) => {
+    const legacy = Object.prototype.hasOwnProperty.call(LEGACY_REVENUE_2026, monthKey);
+    const monthSales = d.sales.filter(
+      (sale) =>
+        sale.status !== "cancelled" &&
+        !isNoCost(sale) &&
+        String(sale.date || "").startsWith(monthKey),
+    );
+    const operationalSales = monthSales.filter((sale) => !isHistoricalSale(sale));
+    return {
+      monthKey,
+      revenue: legacy
+        ? LEGACY_REVENUE_2026[monthKey]
+        : monthSales.reduce(
+            (sum, sale) => sum + Math.max(0, Number(sale.total) || 0),
+            0,
+          ),
+      orders: operationalSales.length,
+    };
+  });
+}
+
+function drawAchievementStar(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  outer: number,
+  inner: number,
+) {
+  ctx.beginPath();
+  for (let point = 0; point < 10; point += 1) {
+    const radius = point % 2 === 0 ? outer : inner;
+    const angle = -Math.PI / 2 + (Math.PI * point) / 5;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    if (point === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function downloadAchievementPlaque(achievement: AchievementDefinition) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1600;
+  canvas.height = 2000;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const gold = ctx.createLinearGradient(0, 0, 1600, 2000);
+  gold.addColorStop(0, "#8a5a16");
+  gold.addColorStop(0.28, "#ffd86a");
+  gold.addColorStop(0.52, "#b97816");
+  gold.addColorStop(0.75, "#ffe38a");
+  gold.addColorStop(1, "#7d4d10");
+
+  const panel = ctx.createLinearGradient(0, 0, 1600, 2000);
+  panel.addColorStop(0, "#050505");
+  panel.addColorStop(0.5, "#17130e");
+  panel.addColorStop(1, "#070707");
+  ctx.fillStyle = "#050505";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Moldura própria do arquivo de impressão.
+  ctx.fillStyle = "#111111";
+  ctx.fillRect(36, 36, 1528, 1928);
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 22;
+  ctx.strokeRect(82, 82, 1436, 1836);
+  ctx.strokeStyle = "#2c1c0b";
+  ctx.lineWidth = 10;
+  ctx.strokeRect(118, 118, 1364, 1764);
+  ctx.fillStyle = panel;
+  ctx.fillRect(132, 132, 1336, 1736);
+
+  // Facetas discretas no fundo.
+  ctx.globalAlpha = 0.32;
+  ctx.fillStyle = "#725018";
+  ctx.beginPath();
+  ctx.moveTo(132, 132);
+  ctx.lineTo(520, 132);
+  ctx.lineTo(260, 660);
+  ctx.lineTo(132, 760);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(1468, 260);
+  ctx.lineTo(1468, 900);
+  ctx.lineTo(1240, 710);
+  ctx.lineTo(1320, 380);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = gold;
+  ctx.shadowColor = "rgba(0,0,0,.75)";
+  ctx.shadowBlur = 22;
+  ctx.shadowOffsetY = 12;
+
+  // Logo oficial DAF: serif + SPLITS com traços laterais.
+  ctx.font = "700 210px Georgia, 'Times New Roman', serif";
+  ctx.fillText("DAF", 800, 390);
+  ctx.font = "600 72px Georgia, 'Times New Roman', serif";
+  ctx.fillText("S P L I T S", 800, 535);
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(310, 535);
+  ctx.lineTo(520, 535);
+  ctx.moveTo(1080, 535);
+  ctx.lineTo(1290, 535);
+  ctx.stroke();
+
+  const mainSize =
+    achievement.badgeValue.length >= 5
+      ? 360
+      : achievement.badgeValue.length === 4
+        ? 430
+        : 520;
+  ctx.font = `900 ${mainSize}px Arial, Helvetica, sans-serif`;
+  ctx.fillText(achievement.badgeValue, 800, 1005);
+  ctx.font = "900 150px Arial, Helvetica, sans-serif";
+  ctx.fillText(achievement.badgeLabel, 800, 1390);
+
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 4;
+  ctx.fillStyle = gold;
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(360, 1575);
+  ctx.lineTo(610, 1575);
+  ctx.moveTo(990, 1575);
+  ctx.lineTo(1240, 1575);
+  ctx.stroke();
+  drawAchievementStar(ctx, 705, 1575, 34, 15);
+  drawAchievementStar(ctx, 800, 1575, 52, 23);
+  drawAchievementStar(ctx, 895, 1575, 34, 15);
+
+  // Ramos minimalistas em dourado.
+  ctx.lineWidth = 9;
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(800 + side * 420, 1690);
+    ctx.quadraticCurveTo(
+      800 + side * 560,
+      1635,
+      800 + side * 610,
+      1500,
+    );
+    ctx.stroke();
+    for (let leaf = 0; leaf < 6; leaf += 1) {
+      const x = 800 + side * (455 + leaf * 24);
+      const y = 1668 - leaf * 29;
+      ctx.beginPath();
+      ctx.ellipse(x, y, 20, 45, side * -0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  ctx.shadowColor = "transparent";
+  const link = document.createElement("a");
+  const kind =
+    achievement.metric.includes("Month") ? "mensal" : "historico";
+  link.download = `DAF-${achievement.badgeValue}-${achievement.badgeLabel.toLowerCase()}-${kind}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+function AchievementBadge({
+  achievement,
+  unlocked,
+}: {
+  achievement: AchievementDefinition;
+  unlocked: boolean;
+}) {
+  return (
+    <div
+      className={
+        "achievementShield " +
+        (unlocked ? "unlocked" : "locked") +
+        (achievement.badgeValue.length >= 5 ? " compactValue" : "")
+      }
+      aria-hidden="true"
+    >
+      <div className="achievementShieldBrand">
+        <strong>DAF</strong>
+        <span><i />SPLITS<i /></span>
+      </div>
+      <b className="achievementShieldValue">{achievement.badgeValue}</b>
+      <span className="achievementShieldLabel">{achievement.badgeLabel}</span>
+    </div>
+  );
+}
+
+function Achievements({ d }: { d: D }) {
+  const rows = achievementMonthlyRows(d);
+  const historicalRevenue = rows.reduce((sum, row) => sum + row.revenue, 0);
+  const bestRevenueMonth = rows.reduce(
+    (best, row) => (row.revenue > best.revenue ? row : best),
+    { monthKey: "", revenue: 0, orders: 0 },
+  );
+  const operationalSales = d.sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      !isHistoricalSale(sale),
+  );
+  const historicalOrders = operationalSales.length;
+  const bestOrdersMonth = rows.reduce(
+    (best, row) => (row.orders > best.orders ? row : best),
+    { monthKey: "", revenue: 0, orders: 0 },
+  );
+
+  const currentValue = (achievement: AchievementDefinition) => {
+    switch (achievement.metric) {
+      case "revenueHistory":
+        return historicalRevenue;
+      case "revenueMonth":
+        return bestRevenueMonth.revenue;
+      case "ordersHistory":
+        return historicalOrders;
+      case "ordersMonth":
+        return bestOrdersMonth.orders;
+    }
+  };
+  const formatCurrent = (achievement: AchievementDefinition, value: number) =>
+    achievement.badgeLabel === "FATURADOS"
+      ? brl(value)
+      : `${Math.round(value).toLocaleString("pt-BR")} pedidos`;
+
+  const groups = [
+    ["Faturamento · histórico", "revenueHistory"],
+    ["Faturamento · em um único mês", "revenueMonth"],
+    ["Pedidos · histórico", "ordersHistory"],
+    ["Pedidos · em um único mês", "ordersMonth"],
+  ] as const;
+
+  return (
+    <div className="achievementsPage">
+      <section className="achievementsHero">
+        <div>
+          <span className="eyebrow">Marcos da DAF</span>
+          <h2>Conquistas</h2>
+          <p>
+            Os selos são liberados automaticamente com os dados do sistema.
+            Conquistas futuras continuam visíveis em preto e branco.
+          </p>
+        </div>
+        <div className="achievementsHeroStats">
+          <span>
+            <small>Faturamento histórico</small>
+            <b>{brl(historicalRevenue)}</b>
+          </span>
+          <span>
+            <small>Pedidos registrados</small>
+            <b>{historicalOrders.toLocaleString("pt-BR")}</b>
+          </span>
+        </div>
+      </section>
+
+      {groups.map(([heading, metric]) => (
+        <section className="achievementGroup" key={metric}>
+          <div className="achievementGroupHeading">
+            <h3>{heading}</h3>
+            <p>
+              {metric === "revenueMonth" && bestRevenueMonth.monthKey
+                ? `Melhor mês: ${periodMonthLabel(bestRevenueMonth.monthKey)} · ${brl(bestRevenueMonth.revenue)}`
+                : metric === "ordersMonth" && bestOrdersMonth.monthKey
+                  ? `Melhor mês: ${periodMonthLabel(bestOrdersMonth.monthKey)} · ${bestOrdersMonth.orders} pedidos`
+                  : "Progresso acumulado calculado automaticamente."}
+            </p>
+          </div>
+          <div className="achievementGrid">
+            {ACHIEVEMENTS.filter((item) => item.metric === metric).map(
+              (achievement) => {
+                const current = currentValue(achievement);
+                const unlocked = current >= achievement.threshold;
+                const progress = Math.max(
+                  0,
+                  Math.min(100, (current / achievement.threshold) * 100),
+                );
+                return (
+                  <article
+                    className={
+                      "achievementCard " + (unlocked ? "unlocked" : "locked")
+                    }
+                    key={achievement.id}
+                  >
+                    <AchievementBadge
+                      achievement={achievement}
+                      unlocked={unlocked}
+                    />
+                    <div className="achievementCardCopy">
+                      <strong>{achievement.title}</strong>
+                      <span>{achievement.qualifier}</span>
+                      <small>
+                        {unlocked
+                          ? "Conquista alcançada"
+                          : `${formatCurrent(achievement, current)} de ${formatCurrent(
+                              achievement,
+                              achievement.threshold,
+                            )}`}
+                      </small>
+                    </div>
+                    <div className="achievementProgress" aria-hidden="true">
+                      <i style={{ width: `${progress}%` }} />
+                    </div>
+                    <button
+                      type="button"
+                      className={unlocked ? "achievementDownload" : "achievementLocked"}
+                      disabled={!unlocked}
+                      onClick={() =>
+                        unlocked && downloadAchievementPlaque(achievement)
+                      }
+                    >
+                      {unlocked ? <Download /> : <Trophy />}
+                      {unlocked ? "Baixar PNG para emoldurar" : "Ainda não alcançada"}
+                    </button>
+                  </article>
+                );
+              },
+            )}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
 
 function RevenueHistoryModal({
   d,
