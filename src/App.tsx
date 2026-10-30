@@ -440,6 +440,18 @@ function readLocalUiSettings(): LocalUiSettings {
         : {}),
       ...(legacyGold ? { gold: legacyGold } : {}),
     };
+    const menuOrder = [
+      ...storedOrder,
+      ...DEFAULT_MENU_ORDER.filter((id) => !storedOrder.includes(id)),
+    ];
+    // Usuários que já tinham uma ordem salva recebem o novo menu exatamente
+    // abaixo de Financeiro. Depois disso, qualquer reordenação manual é respeitada.
+    if (!storedOrder.includes("achievements")) {
+      const currentIndex = menuOrder.indexOf("achievements");
+      if (currentIndex >= 0) menuOrder.splice(currentIndex, 1);
+      const financeIndex = menuOrder.indexOf("finance");
+      menuOrder.splice(financeIndex >= 0 ? financeIndex + 1 : menuOrder.length, 0, "achievements");
+    }
     return {
       appName:
         typeof stored?.appName === "string"
@@ -449,10 +461,7 @@ function readLocalUiSettings(): LocalUiSettings {
         typeof stored?.panelLabel === "string"
           ? stored.panelLabel
           : DEFAULT_LOCAL_UI_SETTINGS.panelLabel,
-      menuOrder: [
-        ...storedOrder,
-        ...DEFAULT_MENU_ORDER.filter((id) => !storedOrder.includes(id)),
-      ],
+      menuOrder,
       menuZoom: Math.max(
         80,
         Math.min(130, Number(stored?.menuZoom) || 100),
@@ -1229,6 +1238,16 @@ function System({ session }: { session: Session }) {
     );
     return catalogSnapshotPayload(items, persisted.catalogSettings);
   }
+  function reconcilePublicCatalog(current: FabioStateWriter) {
+    void current.publish().then((result) => {
+      if (!mounted.current || result.status === "published") return;
+      notify(
+        result.status === "stale"
+          ? "O catálogo aguarda a revisão atual e será reconciliado na próxima gravação."
+          : "Não foi possível atualizar o catálogo público. Os dados da gestão continuam salvos.",
+      );
+    });
+  }
   function exportDraft() {
     const url = URL.createObjectURL(new Blob([JSON.stringify({format:"daf-recovery-export-v1",userId:session.user.id,currentDraft:dataRef.current,pendingDrafts:recoveredDrafts.current}, null, 2)], {type:"application/json"}));
     const link = document.createElement("a"); link.href = url; link.download = "DAF-rascunho-nao-salvo.json"; link.click();
@@ -1249,6 +1268,7 @@ function System({ session }: { session: Session }) {
         const migrated = await current.save(normalized);
         normalized = normalizeData(migrated.saved.data);
       }
+      reconcilePublicCatalog(current);
       lastSynced.current = JSON.stringify(normalized);
       // The user explicitly chose the confirmed server state, so discard the
       // pending recovery records that caused this warning instead of leaving
@@ -1390,6 +1410,7 @@ function System({ session }: { session: Session }) {
           const migrated = await current.save(normalized);
           normalized = normalizeData(migrated.saved.data);
         }
+        reconcilePublicCatalog(current);
         lastSynced.current = JSON.stringify(normalized);
         blocked.current = pending.length > 0 || !current.snapshot.identitiesReady;
         setEditingBlocked(blocked.current);
@@ -11325,7 +11346,7 @@ function drawAchievementStar(
   ctx.fill();
 }
 
-function downloadAchievementPlaque(achievement: AchievementDefinition) {
+async function downloadAchievementPlaque(achievement: AchievementDefinition) {
   const canvas = document.createElement("canvas");
   canvas.width = 1600;
   canvas.height = 2000;
@@ -11384,19 +11405,26 @@ function downloadAchievementPlaque(achievement: AchievementDefinition) {
   ctx.shadowBlur = 22;
   ctx.shadowOffsetY = 12;
 
-  // Logo oficial DAF: serif + SPLITS com traços laterais.
-  ctx.font = "700 210px Georgia, 'Times New Roman', serif";
-  ctx.fillText("DAF", 800, 390);
-  ctx.font = "600 72px Georgia, 'Times New Roman', serif";
-  ctx.fillText("S P L I T S", 800, 535);
-  ctx.strokeStyle = gold;
-  ctx.lineWidth = 6;
-  ctx.beginPath();
-  ctx.moveTo(310, 535);
-  ctx.lineTo(520, 535);
-  ctx.moveTo(1080, 535);
-  ctx.lineTo(1290, 535);
-  ctx.stroke();
+  // Usa exatamente a marca oficial já incorporada ao Sistema DAF.
+  try {
+    const logo = new window.Image();
+    logo.src = LOGO;
+    await new Promise<void>((resolve, reject) => {
+      logo.onload = () => resolve();
+      logo.onerror = () => reject(new Error("LOGO_LOAD_FAILED"));
+      if (logo.complete && logo.naturalWidth) resolve();
+    });
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.drawImage(logo, 365, 220, 870, 535);
+    ctx.restore();
+  } catch {
+    // Fallback visual caso o navegador recuse decodificar a imagem embutida.
+    ctx.font = "700 210px Georgia, 'Times New Roman', serif";
+    ctx.fillText("DAF", 800, 390);
+    ctx.font = "600 72px Georgia, 'Times New Roman', serif";
+    ctx.fillText("S P L I T S", 800, 535);
+  }
 
   const mainSize =
     achievement.badgeValue.length >= 5
@@ -11470,10 +11498,7 @@ function AchievementBadge({
       }
       aria-hidden="true"
     >
-      <div className="achievementShieldBrand">
-        <strong>DAF</strong>
-        <span><i />SPLITS<i /></span>
-      </div>
+      <img className="achievementShieldLogo" src={LOGO} alt="DAF Splits" />
       <b className="achievementShieldValue">{achievement.badgeValue}</b>
       <span className="achievementShieldLabel">{achievement.badgeLabel}</span>
     </div>
@@ -11597,9 +11622,9 @@ function Achievements({ d }: { d: D }) {
                       type="button"
                       className={unlocked ? "achievementDownload" : "achievementLocked"}
                       disabled={!unlocked}
-                      onClick={() =>
-                        unlocked && downloadAchievementPlaque(achievement)
-                      }
+                      onClick={() => {
+                        if (unlocked) void downloadAchievementPlaque(achievement);
+                      }}
                     >
                       {unlocked ? <Download /> : <Trophy />}
                       {unlocked ? "Baixar PNG para emoldurar" : "Ainda não alcançada"}
