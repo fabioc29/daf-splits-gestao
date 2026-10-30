@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Award, Download, Lock, Sparkles, Trophy } from "lucide-react";
 
 type AchievementSale = {
@@ -427,7 +428,7 @@ export function AchievementsPage({
                       {
                         "--achievement-a": colors[0],
                         "--achievement-b": colors[1],
-                      } as React.CSSProperties
+                      } as CSSProperties
                     }
                     onClick={() =>
                       achievement.unlocked
