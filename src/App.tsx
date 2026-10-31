@@ -11798,7 +11798,7 @@ function AchievementDetailModal({
           <button type="button" className="secondary" onClick={close}>
             Fechar
           </button>
-          {unlocked ? (
+          {unlocked && Boolean(APPROVED_ACHIEVEMENT_PLAQUES[`${achievement.metric}:${achievement.threshold}`]) ? (
             <button
               type="button"
               className="primary achievementDownloadModal"
