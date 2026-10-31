@@ -11621,6 +11621,18 @@ async function downloadAchievementPlaque(achievement: AchievementDefinition) {
   link.click();
 }
 
+const REVENUE_BADGE_PNGS: Record<string, string> = {
+  "30K": "/achievements/faturados-30k.png",
+  "50K": "/achievements/faturados-50k.png",
+  "100K": "/achievements/faturados-100k.png",
+  "150K": "/achievements/faturados-150k.png",
+  "200K": "/achievements/faturados-200k.png",
+  "350K": "/achievements/faturados-350k.png",
+  "500K": "/achievements/faturados-500k.png",
+  "800K": "/achievements/faturados-800k.png",
+  "1M": "/achievements/faturados-1m.png",
+};
+
 function AchievementBadge({
   achievement,
   unlocked,
@@ -11630,6 +11642,34 @@ function AchievementBadge({
   unlocked: boolean;
   large?: boolean;
 }) {
+  // Os selos de faturamento são arquivos PNG aprovados pelo usuário.
+  // Não recriamos o desenho por HTML/CSS: apenas aplicamos o estado bloqueado.
+  const revenueBadgePng =
+    achievement.badgeLabel === "FATURADOS"
+      ? REVENUE_BADGE_PNGS[achievement.badgeValue]
+      : undefined;
+
+  if (revenueBadgePng) {
+    return (
+      <div
+        className={[
+          "achievementBadgeArt",
+          "achievementBadgePng",
+          unlocked ? "unlocked" : "locked",
+          large ? "large" : "",
+        ].filter(Boolean).join(" ")}
+        aria-hidden="true"
+      >
+        <img
+          src={revenueBadgePng}
+          alt=""
+          loading={large ? "eager" : "lazy"}
+          draggable={false}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className={[
