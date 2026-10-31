@@ -11460,7 +11460,43 @@ function drawPlaqueLeaf(
   ctx.restore();
 }
 
+const APPROVED_ACHIEVEMENT_PLAQUES: Record<string, string> = {
+  "revenueHistory:100000": "/achievements/plaques/faturados-100k.png",
+  "revenueHistory:200000": "/achievements/plaques/faturados-200k.png",
+  "revenueHistory:350000": "/achievements/plaques/faturados-350k.png",
+  "revenueHistory:500000": "/achievements/plaques/faturados-500k.png",
+  "revenueHistory:800000": "/achievements/plaques/faturados-800k.png",
+  "revenueHistory:1000000": "/achievements/plaques/faturados-1m.png",
+  "ordersHistory:1000": "/achievements/plaques/pedidos-1000.png",
+  "ordersHistory:2000": "/achievements/plaques/pedidos-2000.png",
+  "ordersHistory:3500": "/achievements/plaques/pedidos-3500.png",
+  "ordersHistory:5000": "/achievements/plaques/pedidos-5000.png",
+};
+
 async function downloadAchievementPlaque(achievement: AchievementDefinition) {
+  // Apenas as conquistas históricas explicitamente aprovadas usam artes PNG.
+  // Mantém o renderizador atual como fallback para assets ainda não publicados.
+  const approvedFile = APPROVED_ACHIEVEMENT_PLAQUES[`${achievement.metric}:${achievement.threshold}`];
+  if (approvedFile) {
+    try {
+      const response = await fetch(approvedFile);
+      if (response.ok && response.headers.get("content-type")?.includes("image/png")) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `DAF-${achievement.badgeValue}-${achievement.badgeLabel.toLowerCase()}-historico.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return;
+      }
+    } catch {
+      // Usa a arte anterior caso o arquivo não esteja disponível.
+    }
+  }
+
   const canvas = document.createElement("canvas");
   canvas.width = 1600;
   canvas.height = 2000;
