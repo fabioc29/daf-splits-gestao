@@ -11298,6 +11298,7 @@ type AchievementDefinition = {
 
 const ACHIEVEMENTS: AchievementDefinition[] = [
   ...[
+    [50_000, "50K"],
     [100_000, "100K"],
     [200_000, "200K"],
     [350_000, "350K"],
@@ -11314,6 +11315,22 @@ const ACHIEVEMENTS: AchievementDefinition[] = [
     qualifier: "Histórico" as const,
   })),
   ...[
+    [30_000, "30K"],
+    [50_000, "50K"],
+    [100_000, "100K"],
+    [150_000, "150K"],
+    [200_000, "200K"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `revenue-month-${threshold}`,
+    metric: "revenueMonth" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "FATURADOS" as const,
+    title: `${badgeValue} faturados`,
+    qualifier: "Em um único mês" as const,
+  })),
+  ...[
+    [500, "500"],
     [1_000, "1000"],
     [2_000, "2000"],
     [3_500, "3500"],
@@ -11326,6 +11343,19 @@ const ACHIEVEMENTS: AchievementDefinition[] = [
     badgeLabel: "PEDIDOS" as const,
     title: `${Number(threshold).toLocaleString("pt-BR")} pedidos`,
     qualifier: "Histórico" as const,
+  })),
+  ...[
+    [100, "100"],
+    [150, "150"],
+    [300, "300"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `orders-month-${threshold}`,
+    metric: "ordersMonth" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "PEDIDOS" as const,
+    title: `${threshold} pedidos`,
+    qualifier: "Em um único mês" as const,
   })),
 ];
 
