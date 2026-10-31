@@ -11633,6 +11633,17 @@ const REVENUE_BADGE_PNGS: Record<string, string> = {
   "1M": "/achievements/faturados-1m.png",
 };
 
+const ORDER_BADGE_PNGS: Record<string, string> = {
+  "100": "/achievements/pedidos-100.png",
+  "150": "/achievements/pedidos-150.png",
+  "300": "/achievements/pedidos-300.png",
+  "500": "/achievements/pedidos-500.png",
+  "1000": "/achievements/pedidos-1000.png",
+  "2000": "/achievements/pedidos-2000.png",
+  "3500": "/achievements/pedidos-3500.png",
+  "5000": "/achievements/pedidos-5000.png",
+};
+
 function AchievementBadge({
   achievement,
   unlocked,
@@ -11642,14 +11653,14 @@ function AchievementBadge({
   unlocked: boolean;
   large?: boolean;
 }) {
-  // Os selos de faturamento são arquivos PNG aprovados pelo usuário.
-  // Não recriamos o desenho por HTML/CSS: apenas aplicamos o estado bloqueado.
-  const revenueBadgePng =
+  // Os selos de faturamento e pedidos usam os PNGs aprovados,
+  // preservando a arte. Somente o estado bloqueado recebe o filtro visual.
+  const approvedBadgePng =
     achievement.badgeLabel === "FATURADOS"
       ? REVENUE_BADGE_PNGS[achievement.badgeValue]
-      : undefined;
+      : ORDER_BADGE_PNGS[achievement.badgeValue];
 
-  if (revenueBadgePng) {
+  if (approvedBadgePng) {
     return (
       <div
         className={[
@@ -11661,7 +11672,7 @@ function AchievementBadge({
         aria-hidden="true"
       >
         <img
-          src={revenueBadgePng}
+          src={approvedBadgePng}
           alt=""
           loading={large ? "eager" : "lazy"}
           draggable={false}
