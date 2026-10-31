@@ -14092,3 +14092,564 @@ main > header {
     grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
+
+
+/* =========================================================
+   Conquistas DAF
+   ========================================================= */
+.contentPage-achievements {
+  overflow: auto;
+}
+.achievementsPage {
+  padding: 2px 0 28px;
+}
+.achievementGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+.achievementCard {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  justify-items: stretch;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    background .18s ease;
+}
+.achievementCard:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--gold) 48%, var(--line));
+  box-shadow: 0 15px 34px rgba(0,0,0,.2);
+}
+.achievementCard:focus-visible {
+  outline: 2px solid color-mix(in srgb, #e7b438 75%, white);
+  outline-offset: 2px;
+}
+.achievementCard.unlocked {
+  border-color: color-mix(in srgb, #c89523 58%, var(--line));
+  background:
+    radial-gradient(circle at 50% 0, rgba(214,164,47,.08), transparent 48%),
+    linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+}
+.achievementCard.locked {
+  border-color: color-mix(in srgb, var(--line) 88%, transparent);
+}
+.achievementCardCopy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.achievementCardCopy strong {
+  font-size: 13px;
+  line-height: 1.22;
+  color: var(--text);
+}
+.achievementCardCopy small {
+  font-size: 11px;
+  line-height: 1.25;
+  color: color-mix(in srgb, #d5a532 76%, var(--text));
+}
+.achievementCard.locked .achievementCardCopy small {
+  color: var(--muted);
+}
+.achievementCardCopy em {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.25;
+  color: var(--muted);
+  font-style: normal;
+}
+.achievementCard.unlocked .achievementCardCopy em {
+  color: color-mix(in srgb, #e0ad30 76%, var(--text));
+}
+
+.achievementBadgeArt {
+  position: relative;
+  width: min(100%, 148px);
+  aspect-ratio: .88;
+  margin: 0 auto;
+  transition: filter .2s ease, opacity .2s ease, transform .2s ease;
+}
+.achievementBadgeArt.large {
+  width: min(100%, 300px);
+}
+.achievementBadgeArt.achievementBadgePng {
+  overflow: visible;
+  background: transparent;
+}
+.achievementBadgePng img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.achievementBadgeArt.locked {
+  filter: grayscale(1) saturate(0) brightness(.52) contrast(.9) blur(2.2px);
+  opacity: .78;
+  transform: scale(.97);
+}
+.achievementBadgeOuter,
+.achievementBadgeInner {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(
+    50% 0,
+    84% 7%,
+    96% 22%,
+    100% 50%,
+    92% 79%,
+    72% 94%,
+    50% 100%,
+    28% 94%,
+    8% 79%,
+    0 50%,
+    4% 22%,
+    16% 7%
+  );
+}
+.achievementBadgeOuter {
+  padding: 5px;
+  background:
+    linear-gradient(145deg,
+      #3e2504 0%,
+      #bf7c13 8%,
+      #ffe68b 20%,
+      #9a5c09 34%,
+      #f3bd38 49%,
+      #fff0a7 58%,
+      #a8650b 72%,
+      #f0b62d 87%,
+      #5a3305 100%);
+  filter: drop-shadow(0 8px 8px rgba(0,0,0,.48));
+}
+.achievementBadgeOuter::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  z-index: 0;
+  clip-path: inherit;
+  background: #080808;
+}
+.achievementBadgeInner {
+  inset: 9px;
+  z-index: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 13% 8% 11%;
+  background:
+    radial-gradient(circle at 76% 21%, rgba(251,198,64,.2), transparent 17%),
+    linear-gradient(134deg, rgba(255,255,255,.07), transparent 22%),
+    linear-gradient(36deg, #050505 0 31%, #17130c 31% 48%, #080808 48% 67%, #211608 67% 76%, #050505 76% 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,219,105,.34),
+    inset 0 0 28px rgba(0,0,0,.75);
+}
+.achievementBadgeInner::before,
+.achievementBadgeInner::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(135deg, #a9680b, #ffe177 48%, #9b5e08);
+  box-shadow: 0 0 12px rgba(255,190,51,.25);
+}
+.achievementBadgeInner::before {
+  width: 72%;
+  height: 8%;
+  left: -18%;
+  top: 15%;
+  transform: rotate(-35deg);
+}
+.achievementBadgeInner::after {
+  width: 70%;
+  height: 8%;
+  right: -22%;
+  bottom: 16%;
+  transform: rotate(-35deg);
+}
+.achievementBadgeFacet {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .72;
+}
+.achievementBadgeFacet.facetA {
+  width: 48%;
+  height: 48%;
+  top: 3%;
+  left: 5%;
+  background: linear-gradient(135deg, rgba(255,213,104,.15), rgba(255,255,255,.025));
+  clip-path: polygon(0 0, 100% 0, 34% 100%, 0 60%);
+}
+.achievementBadgeFacet.facetB {
+  width: 44%;
+  height: 42%;
+  right: 2%;
+  top: 12%;
+  background: linear-gradient(225deg, rgba(224,158,37,.18), rgba(255,255,255,.02));
+  clip-path: polygon(100% 0, 100% 100%, 20% 62%, 0 22%);
+}
+.achievementBadgeFacet.facetC {
+  width: 56%;
+  height: 32%;
+  left: 19%;
+  bottom: 2%;
+  background: linear-gradient(35deg, rgba(214,146,26,.15), transparent 70%);
+  clip-path: polygon(0 100%, 28% 0, 100% 35%, 72% 100%);
+}
+.achievementBadgeLogo,
+.achievementBadgeValue,
+.achievementBadgeLabel,
+.achievementBadgeOrnament,
+.achievementBadgeSparkle {
+  position: relative;
+  z-index: 3;
+}
+.achievementBadgeLogo {
+  width: 66%;
+  height: auto;
+  object-fit: contain;
+  margin: -3% auto 0;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.8));
+}
+.achievementBadgeValue {
+  max-width: 100%;
+  margin-top: -1%;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(41px, 4.2vw, 63px);
+  font-weight: 950;
+  line-height: .88;
+  letter-spacing: -.075em;
+  white-space: nowrap;
+  background: linear-gradient(
+    180deg,
+    #fff3ac 0%,
+    #ffd45a 22%,
+    #ad6308 54%,
+    #ffe278 74%,
+    #8d4f06 100%
+  );
+  -webkit-background-clip: text;
+  color: transparent;
+  filter:
+    drop-shadow(0 4px 1px #2d1701)
+    drop-shadow(0 0 4px rgba(255,203,64,.34));
+}
+.achievementBadgeArt.compactValue .achievementBadgeValue {
+  font-size: clamp(32px, 3.5vw, 50px);
+}
+.achievementBadgeLabel {
+  margin-top: 5%;
+  color: #f5efe3;
+  font-size: clamp(8px, .9vw, 12px);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: .025em;
+  text-shadow: 0 2px 2px #000;
+}
+.achievementBadgeOrnament {
+  width: 74%;
+  margin-top: 7%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: #e4ad2e;
+  font-size: 7px;
+  line-height: 1;
+}
+.achievementBadgeOrnament strong {
+  font-size: 11px;
+}
+.achievementBadgeOrnament i {
+  display: block;
+  height: 1px;
+  flex: 1;
+  background: linear-gradient(90deg, transparent, #e4ad2e);
+}
+.achievementBadgeOrnament i:last-child {
+  background: linear-gradient(90deg, #e4ad2e, transparent);
+}
+.achievementBadgeSparkle {
+  position: absolute;
+  color: #fff0a5;
+  line-height: 1;
+  text-shadow: 0 0 7px #f4b92f;
+  pointer-events: none;
+}
+.achievementBadgeSparkle.sparkleA {
+  left: 12%;
+  top: 24%;
+  font-size: 12px;
+}
+.achievementBadgeSparkle.sparkleB {
+  right: 9%;
+  top: 42%;
+  font-size: 9px;
+}
+.achievementBadgeSparkle.sparkleC {
+  left: 17%;
+  bottom: 24%;
+  font-size: 7px;
+}
+.achievementBadgeArt.large .achievementBadgeValue {
+  font-size: 112px;
+}
+.achievementBadgeArt.large.compactValue .achievementBadgeValue {
+  font-size: 86px;
+}
+.achievementBadgeArt.large .achievementBadgeLabel {
+  font-size: 19px;
+}
+.achievementBadgeArt.large .achievementBadgeOrnament {
+  font-size: 11px;
+}
+.achievementBadgeArt.large .achievementBadgeOrnament strong {
+  font-size: 17px;
+}
+
+.achievementDetailOverlay {
+  z-index: 4200;
+}
+.achievementDetailDialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(850px, calc(100vh - 28px));
+  overflow: auto;
+}
+.achievementDetailBody {
+  display: grid;
+  grid-template-columns: minmax(230px, 310px) 1fr;
+  gap: 28px;
+  align-items: center;
+  padding: 22px 24px;
+}
+.achievementDetailInfo {
+  display: grid;
+  gap: 15px;
+}
+.achievementDetailInfo > div {
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-2);
+}
+.achievementDetailInfo small {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .09em;
+}
+.achievementDetailInfo p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.45;
+}
+.achievementStatus {
+  width: fit-content;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 850;
+}
+.achievementStatus svg {
+  width: 15px;
+  height: 15px;
+}
+.achievementStatus.unlocked {
+  background: rgba(205,154,33,.14);
+  border: 1px solid rgba(221,171,49,.35);
+  color: #e5b33a;
+}
+.achievementStatus.locked {
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.achievementDetailFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.achievementDownloadModal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.achievementDownloadModal svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* =========================================================
+   Espelho do catálogo dentro de Estoque
+   ========================================================= */
+.stockCatalogMirrorButton.active {
+  border-color: color-mix(in srgb, var(--gold) 62%, var(--line));
+  color: color-mix(in srgb, var(--gold) 82%, var(--text));
+}
+.stockCatalogMirror {
+  margin-bottom: 18px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--line));
+  border-radius: 18px;
+  background: var(--panel);
+}
+.stockCatalogMirrorHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.stockCatalogMirrorHead > div:first-child {
+  min-width: 0;
+}
+.stockCatalogMirrorHead small {
+  color: color-mix(in srgb, var(--gold) 78%, var(--text));
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .12em;
+}
+.stockCatalogMirrorHead h3 {
+  margin: 3px 0 3px;
+  font-size: 17px;
+}
+.stockCatalogMirrorHead p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.stockCatalogMirrorActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.stockCatalogMirrorActions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.stockCatalogMirrorActions svg {
+  width: 15px;
+  height: 15px;
+}
+.stockCatalogMirrorViewport {
+  max-height: min(760px, 72vh);
+  overflow: auto;
+  background: #010101;
+}
+.stockCatalogMirrorViewport .catalogAdminArea {
+  min-height: 0;
+}
+.stockCatalogMirrorViewport .catalogExperience.embedded {
+  min-height: auto;
+}
+
+@media (max-width: 900px) {
+  .achievementGrid {
+    grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+    gap: 10px;
+  }
+  .achievementDetailBody {
+    grid-template-columns: 1fr;
+  }
+  .achievementBadgeArt.large {
+    width: min(100%, 270px);
+  }
+  .stockCatalogMirrorHead {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .stockCatalogMirrorActions {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 560px) {
+  .achievementGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .achievementCard {
+    padding: 8px;
+    border-radius: 14px;
+  }
+  .achievementBadgeArt {
+    width: min(100%, 126px);
+  }
+  .achievementBadgeValue {
+    font-size: 39px;
+  }
+  .achievementBadgeArt.compactValue .achievementBadgeValue {
+    font-size: 31px;
+  }
+  .achievementCardCopy strong {
+    font-size: 12px;
+  }
+  .achievementCardCopy small,
+  .achievementCardCopy em {
+    font-size: 9px;
+  }
+  .achievementDetailDialog {
+    width: calc(100vw - 18px);
+  }
+  .achievementDetailBody {
+    padding: 16px;
+    gap: 18px;
+  }
+  .achievementBadgeArt.large {
+    width: min(100%, 235px);
+  }
+  .achievementBadgeArt.large .achievementBadgeValue {
+    font-size: 88px;
+  }
+  .achievementBadgeArt.large.compactValue .achievementBadgeValue {
+    font-size: 70px;
+  }
+  .achievementDetailFooter {
+    flex-direction: column-reverse;
+  }
+  .achievementDetailFooter button {
+    width: 100%;
+    justify-content: center;
+  }
+  .stockHeadActions {
+    flex-wrap: wrap;
+  }
+  .stockCatalogMirrorActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .stockCatalogMirrorActions button {
+    width: 100%;
+    justify-content: center;
+  }
+}

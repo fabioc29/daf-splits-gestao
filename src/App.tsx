@@ -51,11 +51,21 @@ import {
   ArrowUp,
   ArrowDown,
   Image as ImageIcon,
+  Trophy,
+  Download,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
-import { catalogSettingsForPersistence, DEFAULT_CATALOG_SETTINGS, type CatalogSettings } from "./Catalog";
+import {
+  CatalogAdminPreview,
+  catalogItemsFromProducts,
+  catalogSettingsForPersistence,
+  catalogSnapshotPayload,
+  DEFAULT_CATALOG_SETTINGS,
+  enrichCatalogItemsWithImages,
+  type CatalogSettings,
+} from "./Catalog";
 
 type BottleHistoryEntry = {
   number: number;
@@ -262,6 +272,7 @@ const DEFAULT_MENU_ORDER = [
   "stock",
   "registrations",
   "finance",
+  "achievements",
   "settings",
 ];
 
@@ -430,6 +441,18 @@ function readLocalUiSettings(): LocalUiSettings {
         : {}),
       ...(legacyGold ? { gold: legacyGold } : {}),
     };
+    const menuOrder = [
+      ...storedOrder,
+      ...DEFAULT_MENU_ORDER.filter((id) => !storedOrder.includes(id)),
+    ];
+    // Usuários que já tinham uma ordem salva recebem o novo menu exatamente
+    // abaixo de Financeiro. Depois disso, qualquer reordenação manual é respeitada.
+    if (!storedOrder.includes("achievements")) {
+      const currentIndex = menuOrder.indexOf("achievements");
+      if (currentIndex >= 0) menuOrder.splice(currentIndex, 1);
+      const financeIndex = menuOrder.indexOf("finance");
+      menuOrder.splice(financeIndex >= 0 ? financeIndex + 1 : menuOrder.length, 0, "achievements");
+    }
     return {
       appName:
         typeof stored?.appName === "string"
@@ -439,10 +462,7 @@ function readLocalUiSettings(): LocalUiSettings {
         typeof stored?.panelLabel === "string"
           ? stored.panelLabel
           : DEFAULT_LOCAL_UI_SETTINGS.panelLabel,
-      menuOrder: [
-        ...storedOrder,
-        ...DEFAULT_MENU_ORDER.filter((id) => !storedOrder.includes(id)),
-      ],
+      menuOrder,
       menuZoom: Math.max(
         80,
         Math.min(130, Number(stored?.menuZoom) || 100),
@@ -1140,6 +1160,7 @@ const nav = [
   ["stock", "Estoque", Box],
   ["registrations", "Cadastros", Users],
   ["finance", "Financeiro", Wallet],
+  ["achievements", "Conquistas", Trophy],
   ["settings", "Configurações", Settings],
   ["crm", "Integração CRM", Cloud],
 ] as const;
@@ -1198,6 +1219,36 @@ function System({ session }: { session: Session }) {
     catch { blockEditing("O rascunho está apenas na memória: o armazenamento local falhou. Exporte-o antes de fechar e carregue o estado salvo para continuar."); setDataState(next); return; }
     setDataState(next);
   }
+  function fallbackCatalog(persisted: D) {
+    return catalogSnapshotPayload(
+      catalogItemsFromProducts(
+        persisted.products,
+        persisted.catalogSettings?.manualImages,
+      ),
+      persisted.catalogSettings,
+    );
+  }
+  async function buildCatalog(persisted: D, signal?: AbortSignal) {
+    const items = await enrichCatalogItemsWithImages(
+      catalogItemsFromProducts(
+        persisted.products,
+        persisted.catalogSettings?.manualImages,
+      ),
+      signal,
+      persisted.catalogSettings?.productOrder === "mostRated",
+    );
+    return catalogSnapshotPayload(items, persisted.catalogSettings);
+  }
+  function reconcilePublicCatalog(current: FabioStateWriter) {
+    void current.publish().then((result) => {
+      if (!mounted.current || result.status === "published") return;
+      notify(
+        result.status === "stale"
+          ? "O catálogo aguarda a revisão atual e será reconciliado na próxima gravação."
+          : "Não foi possível atualizar o catálogo público. Os dados da gestão continuam salvos.",
+      );
+    });
+  }
   function exportDraft() {
     const url = URL.createObjectURL(new Blob([JSON.stringify({format:"daf-recovery-export-v1",userId:session.user.id,currentDraft:dataRef.current,pendingDrafts:recoveredDrafts.current}, null, 2)], {type:"application/json"}));
     const link = document.createElement("a"); link.href = url; link.download = "DAF-rascunho-nao-salvo.json"; link.click();
@@ -1208,7 +1259,7 @@ function System({ session }: { session: Session }) {
     const version = saveVersion.current;
     try {
       if (writer.current?.pending) throw Error("Aguarde a gravação em andamento.");
-      const current = await FabioStateWriter.open(supabase);
+      const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
       if (!mounted.current || version !== saveVersion.current) { current.dispose(); return; }
       writer.current?.dispose(); writer.current = current;
       let normalized = normalizeData(current.snapshot.data);
@@ -1218,6 +1269,7 @@ function System({ session }: { session: Session }) {
         const migrated = await current.save(normalized);
         normalized = normalizeData(migrated.saved.data);
       }
+      reconcilePublicCatalog(current);
       lastSynced.current = JSON.stringify(normalized);
       // The user explicitly chose the confirmed server state, so discard the
       // pending recovery records that caused this warning instead of leaving
@@ -1332,7 +1384,7 @@ function System({ session }: { session: Session }) {
     mounted.current = true;
     (async () => {
       try {
-        const current = await FabioStateWriter.open(supabase);
+        const current = await FabioStateWriter.open(supabase, buildCatalog, fallbackCatalog);
         if (!active) { current.dispose(); return; }
         writer.current = current;
         recovery.current = new LocalRecovery(session.user.id);
@@ -1359,6 +1411,7 @@ function System({ session }: { session: Session }) {
           const migrated = await current.save(normalized);
           normalized = normalizeData(migrated.saved.data);
         }
+        reconcilePublicCatalog(current);
         lastSynced.current = JSON.stringify(normalized);
         blocked.current = pending.length > 0 || !current.snapshot.identitiesReady;
         setEditingBlocked(blocked.current);
@@ -1394,10 +1447,18 @@ function System({ session }: { session: Session }) {
     if (serialized === lastSynced.current || blocked.current || !writer.current) return;
     const version = saveVersion.current;
     setSync("loading");
-    writer.current.save(data).then(({saved}) => {
+    writer.current.save(data).then(({saved, publication}) => {
       if (!mounted.current) return;
       const normalized = normalizeData(saved.data);
       lastSynced.current = JSON.stringify(normalized);
+      void publication?.then((result) => {
+        if (!mounted.current || result.status === "published") return;
+        notify(
+          result.status === "stale"
+            ? "Dados salvos. O catálogo será reconciliado na próxima gravação da revisão atual."
+            : "Dados salvos, mas o catálogo público não pôde ser atualizado.",
+        );
+      });
       if (version === saveVersion.current) {
         // A browser cache failure cannot invalidate an acknowledged database commit.
         setDataState(normalized); setSync("saved"); setSaveNotice("");
@@ -1983,6 +2044,8 @@ const action =
             />
           ) : page === "finance-pricing" ? (
             <PricingCalculator d={data} notify={notify} />
+          ) : page === "achievements" ? (
+            <Achievements d={data} />
           ) : page === "settings" ? (
             <SettingsPage
               theme={theme}
@@ -3694,29 +3757,32 @@ function HealthGauge({
 }
 
 function OrderSummaryChart({ sales }: { sales: V[] }) {
-  const directOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && !isMarketplaceSale(sale),
+  const activeSales = sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      !isHistoricalSale(sale),
+  );
+  const directOrders = activeSales.filter((sale) => !isMarketplaceSale(sale)).length;
+  const tiktokOrders = activeSales.filter(
+    (sale) => sale.marketplace === "TikTok Shop",
   ).length;
-  const tiktokOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && sale.marketplace === "TikTok Shop",
-  ).length;
-  const shopeeOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && sale.marketplace === "Shopee",
+  const shopeeOrders = activeSales.filter(
+    (sale) => sale.marketplace === "Shopee",
   ).length;
   const cancelledOrders = sales.filter((sale) => sale.status === "cancelled").length;
-  const total = directOrders + tiktokOrders + shopeeOrders + cancelledOrders;
+  const total = directOrders + tiktokOrders + shopeeOrders;
   const pct = (value: number) => (total ? Math.round((value / total) * 100) : 0);
   const segments = [
     { label: "Venda direta", value: directOrders, color: "var(--chart-order-direct)" },
     { label: "TikTok Shop", value: tiktokOrders, color: "var(--chart-order-tiktok)" },
     { label: "Shopee", value: shopeeOrders, color: "var(--chart-order-shopee)" },
-    { label: "Cancelados", value: cancelledOrders, color: "var(--chart-order-cancelled)" },
   ];
   return (
     <div className="panel dashboardMetricPanel orderOriginSummary">
       <div className="dashboardMiniHeader">
         <h2>Resumo dos pedidos</h2>
-        <p>Distribuição dos pedidos no período.</p>
+        <p>Distribuição dos pedidos válidos no período.</p>
       </div>
 
       <div className="dashboardMiniVisual">
@@ -3742,10 +3808,12 @@ function OrderSummaryChart({ sales }: { sales: V[] }) {
           <span className="orderOriginText"><strong>Shopee</strong><small>{pct(shopeeOrders)}%</small></span>
           <b>{shopeeOrders} pedido{shopeeOrders === 1 ? "" : "s"}</b>
         </p>
-        <p className="cancelled">
-          <span className="orderOriginText"><strong>Cancelados</strong><small>{pct(cancelledOrders)}%</small></span>
-          <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
-        </p>
+        {cancelledOrders ? (
+          <p className="cancelled">
+            <span className="orderOriginText"><strong>Cancelados</strong><small>fora do total</small></span>
+            <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -8812,6 +8880,7 @@ function Stock({
   openPendingPerfumes: () => void;
 }) {
   const [apcOnly, setApcOnly] = useState(false),
+    [catalogMirrorOpen, setCatalogMirrorOpen] = useState(false),
     [category, setCategory] = useState("Todos"),
     [brand, setBrand] = useState("Todas"),
     [query, setQuery] = useState(""),
@@ -8971,6 +9040,16 @@ function Stock({
           {view !== "supplies" ? (
             <button
               type="button"
+              className={"secondary stockCatalogMirrorButton" + (catalogMirrorOpen ? " active" : "")}
+              onClick={() => setCatalogMirrorOpen((current) => !current)}
+            >
+              <PackageOpen />
+              {catalogMirrorOpen ? "Fechar espelho" : "Espelho do catálogo"}
+            </button>
+          ) : null}
+          {view !== "supplies" ? (
+            <button
+              type="button"
               className="secondary stockPendingAction"
               onClick={openPendingPerfumes}
             >
@@ -8992,6 +9071,58 @@ function Stock({
           </button>
         </div>
       </div>
+      {view !== "supplies" && catalogMirrorOpen ? (
+        <section className="stockCatalogMirror">
+          <div className="stockCatalogMirrorHead">
+            <div>
+              <small>ESPELHO DO CATÁLOGO</small>
+              <h3>Prévia do catálogo público</h3>
+              <p>Confira no Estoque como os perfumes e os ml disponíveis aparecem para o cliente.</p>
+            </div>
+            <div className="stockCatalogMirrorActions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => window.dispatchEvent(new CustomEvent("daf:catalog-edit"))}
+              >
+                <Palette /> Editar catálogo
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => window.dispatchEvent(new CustomEvent("daf:catalog-images"))}
+              >
+                <ImageIcon /> Imagens
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  window.open(
+                    import.meta.env.VITE_PUBLIC_CATALOG_URL || "https://daf-splits-catalogo.vercel.app",
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
+                }
+              >
+                <PackageOpen /> Abrir catálogo público
+              </button>
+            </div>
+          </div>
+          <div className="stockCatalogMirrorViewport">
+            <CatalogAdminPreview
+              products={d.products}
+              settings={d.catalogSettings}
+              onSettingsChange={(catalogSettings) =>
+                set((current: D) => ({
+                  ...current,
+                  catalogSettings: catalogSettingsForPersistence(catalogSettings),
+                }))
+              }
+            />
+          </div>
+        </section>
+      ) : null}
       {view !== "supplies" ? (
         <>
           <div className="stockSummaryRow">
@@ -11147,6 +11278,596 @@ const LEGACY_REVENUE_2026: Record<string, number> = {
   "2026-07": 8047.21,
   "2026-08": 13013.03,
 };
+
+
+type AchievementMetric =
+  | "revenueHistory"
+  | "revenueMonth"
+  | "ordersHistory"
+  | "ordersMonth";
+
+type AchievementDefinition = {
+  id: string;
+  metric: AchievementMetric;
+  threshold: number;
+  badgeValue: string;
+  badgeLabel: "FATURADOS" | "PEDIDOS";
+  title: string;
+  qualifier: "Histórico" | "Em um único mês";
+};
+
+const ACHIEVEMENTS: AchievementDefinition[] = [
+  ...[
+    [50_000, "50K"],
+    [100_000, "100K"],
+    [200_000, "200K"],
+    [350_000, "350K"],
+    [500_000, "500K"],
+    [800_000, "800K"],
+    [1_000_000, "1M"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `revenue-history-${threshold}`,
+    metric: "revenueHistory" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "FATURADOS" as const,
+    title: `${badgeValue} faturados`,
+    qualifier: "Histórico" as const,
+  })),
+  ...[
+    [30_000, "30K"],
+    [50_000, "50K"],
+    [100_000, "100K"],
+    [150_000, "150K"],
+    [200_000, "200K"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `revenue-month-${threshold}`,
+    metric: "revenueMonth" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "FATURADOS" as const,
+    title: `${badgeValue} faturados`,
+    qualifier: "Em um único mês" as const,
+  })),
+  ...[
+    [500, "500"],
+    [1_000, "1000"],
+    [2_000, "2000"],
+    [3_500, "3500"],
+    [5_000, "5000"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `orders-history-${threshold}`,
+    metric: "ordersHistory" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "PEDIDOS" as const,
+    title: `${Number(threshold).toLocaleString("pt-BR")} pedidos`,
+    qualifier: "Histórico" as const,
+  })),
+  ...[
+    [100, "100"],
+    [150, "150"],
+    [300, "300"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `orders-month-${threshold}`,
+    metric: "ordersMonth" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "PEDIDOS" as const,
+    title: `${threshold} pedidos`,
+    qualifier: "Em um único mês" as const,
+  })),
+];
+
+function achievementMonthlyRows(d: D) {
+  const startMonth = "2026-06";
+  const currentMonth = today().slice(0, 7);
+  const months: string[] = [];
+  let cursor = startMonth;
+  while (cursor <= currentMonth && months.length < 120) {
+    months.push(cursor);
+    cursor = shiftMonthKey(cursor, 1);
+  }
+  return months.map((monthKey) => {
+    const legacy = Object.prototype.hasOwnProperty.call(LEGACY_REVENUE_2026, monthKey);
+    const monthSales = d.sales.filter(
+      (sale) =>
+        sale.status !== "cancelled" &&
+        !isNoCost(sale) &&
+        String(sale.date || "").startsWith(monthKey),
+    );
+    const operationalSales = monthSales.filter((sale) => !isHistoricalSale(sale));
+    return {
+      revenue: legacy
+        ? LEGACY_REVENUE_2026[monthKey]
+        : monthSales.reduce(
+            (sum, sale) => sum + Math.max(0, Number(sale.total) || 0),
+            0,
+          ),
+      orders: operationalSales.length,
+    };
+  });
+}
+
+function achievementValue(
+  achievement: AchievementDefinition,
+  metrics: {
+    historicalRevenue: number;
+    bestRevenueMonth: number;
+    historicalOrders: number;
+    bestOrdersMonth: number;
+  },
+) {
+  switch (achievement.metric) {
+    case "revenueHistory":
+      return metrics.historicalRevenue;
+    case "revenueMonth":
+      return metrics.bestRevenueMonth;
+    case "ordersHistory":
+      return metrics.historicalOrders;
+    case "ordersMonth":
+      return metrics.bestOrdersMonth;
+  }
+}
+
+function achievementRule(achievement: AchievementDefinition) {
+  if (achievement.metric === "revenueHistory") {
+    return `Alcançar ${brl(achievement.threshold)} em faturamento acumulado pela DAF.`;
+  }
+  if (achievement.metric === "revenueMonth") {
+    return `Alcançar ${brl(achievement.threshold)} em faturamento dentro de um único mês.`;
+  }
+  if (achievement.metric === "ordersHistory") {
+    return `Registrar ${achievement.threshold.toLocaleString("pt-BR")} pedidos válidos ao longo da história da DAF.`;
+  }
+  return `Registrar ${achievement.threshold.toLocaleString("pt-BR")} pedidos válidos dentro de um único mês.`;
+}
+
+function drawPlaqueStar(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  outer: number,
+  inner: number,
+) {
+  ctx.beginPath();
+  for (let point = 0; point < 10; point += 1) {
+    const radius = point % 2 === 0 ? outer : inner;
+    const angle = -Math.PI / 2 + (Math.PI * point) / 5;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    if (point === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawPlaqueLeaf(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angle: number,
+  width: number,
+  height: number,
+) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, width, height, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+const APPROVED_ACHIEVEMENT_PLAQUES: Record<string, string> = {
+  "revenueHistory:100000": "/achievements/plaques/faturados-100k.png",
+  "revenueHistory:200000": "/achievements/plaques/faturados-200k.png",
+  "revenueHistory:350000": "/achievements/plaques/faturados-350k.png",
+  "revenueHistory:500000": "/achievements/plaques/faturados-500k.png",
+  "revenueHistory:800000": "/achievements/plaques/faturados-800k.png",
+  "revenueHistory:1000000": "/achievements/plaques/faturados-1m.png",
+  "ordersHistory:1000": "/achievements/plaques/pedidos-1000.png",
+  "ordersHistory:2000": "/achievements/plaques/pedidos-2000.png",
+  "ordersHistory:3500": "/achievements/plaques/pedidos-3500.png",
+  "ordersHistory:5000": "/achievements/plaques/pedidos-5000.png",
+};
+
+async function downloadAchievementPlaque(achievement: AchievementDefinition) {
+  // Apenas as conquistas históricas explicitamente aprovadas usam artes PNG.
+  // Mantém o renderizador atual como fallback para assets ainda não publicados.
+  const approvedFile = APPROVED_ACHIEVEMENT_PLAQUES[`${achievement.metric}:${achievement.threshold}`];
+  if (approvedFile) {
+    try {
+      const response = await fetch(approvedFile);
+      if (response.ok && response.headers.get("content-type")?.includes("image/png")) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `DAF-${achievement.badgeValue}-${achievement.badgeLabel.toLowerCase()}-historico.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return;
+      }
+    } catch {
+      // Usa a arte anterior caso o arquivo não esteja disponível.
+    }
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 1600;
+  canvas.height = 2000;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const gold = ctx.createLinearGradient(0, 0, 1600, 2000);
+  gold.addColorStop(0, "#764608");
+  gold.addColorStop(0.18, "#e6a72d");
+  gold.addColorStop(0.37, "#fff0a0");
+  gold.addColorStop(0.53, "#c77a10");
+  gold.addColorStop(0.72, "#ffd760");
+  gold.addColorStop(1, "#6e4208");
+
+  const innerGold = ctx.createLinearGradient(180, 80, 1320, 1840);
+  innerGold.addColorStop(0, "#8a5511");
+  innerGold.addColorStop(0.33, "#f6c94f");
+  innerGold.addColorStop(0.58, "#fff0a0");
+  innerGold.addColorStop(0.74, "#9e6110");
+  innerGold.addColorStop(1, "#ffe17a");
+
+  const background = ctx.createLinearGradient(0, 0, 1600, 2000);
+  background.addColorStop(0, "#070707");
+  background.addColorStop(0.46, "#191611");
+  background.addColorStop(1, "#040404");
+  ctx.fillStyle = "#020202";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Moldura premium da arte emoldurável.
+  ctx.fillStyle = "#0b0b0b";
+  ctx.fillRect(36, 36, 1528, 1928);
+  ctx.strokeStyle = "#272727";
+  ctx.lineWidth = 36;
+  ctx.strokeRect(58, 58, 1484, 1884);
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 18;
+  ctx.strokeRect(92, 92, 1416, 1816);
+  ctx.strokeStyle = "#4b2d08";
+  ctx.lineWidth = 8;
+  ctx.strokeRect(119, 119, 1362, 1762);
+  ctx.fillStyle = background;
+  ctx.fillRect(132, 132, 1336, 1736);
+
+  const facets: Array<Array<[number, number]>> = [
+    [[132,132],[630,132],[380,610],[132,760]],
+    [[1468,132],[1110,132],[1310,525],[1468,710]],
+    [[132,1868],[132,1510],[445,1660],[620,1868]],
+    [[1468,1868],[1468,1480],[1185,1650],[995,1868]],
+    [[610,132],[1050,132],[900,520],[470,680]],
+  ];
+  facets.forEach((points,index) => {
+    ctx.beginPath();
+    points.forEach(([x,y],i) => i ? ctx.lineTo(x,y) : ctx.moveTo(x,y));
+    ctx.closePath();
+    ctx.fillStyle = index % 2 ? "rgba(213,151,39,.15)" : "rgba(255,255,255,.035)";
+    ctx.fill();
+    ctx.strokeStyle = index % 2 ? "rgba(230,174,55,.28)" : "rgba(255,255,255,.055)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = gold;
+  ctx.beginPath();
+  ctx.moveTo(132,132); ctx.lineTo(520,132); ctx.lineTo(270,510); ctx.lineTo(132,620); ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(1468,1320); ctx.lineTo(1468,1868); ctx.lineTo(1105,1868); ctx.lineTo(1375,1435); ctx.closePath(); ctx.fill();
+
+  try {
+    const logo = new window.Image();
+    logo.src = LOGO;
+    await new Promise<void>((resolve, reject) => {
+      logo.onload = () => resolve();
+      logo.onerror = () => reject(new Error("LOGO_LOAD_FAILED"));
+      if (logo.complete && logo.naturalWidth) resolve();
+    });
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.shadowColor = "rgba(0,0,0,.72)";
+    ctx.shadowBlur = 18;
+    ctx.drawImage(logo, 420, 205, 760, 535);
+    ctx.restore();
+  } catch {
+    ctx.textAlign = "center";
+    ctx.fillStyle = gold;
+    ctx.font = "700 190px Georgia, 'Times New Roman', serif";
+    ctx.fillText("DAF", 800, 420);
+    ctx.font = "600 62px Georgia, 'Times New Roman', serif";
+    ctx.fillText("— S P L I T S —", 800, 545);
+  }
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(0,0,0,.92)";
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetY = 16;
+
+  const mainSize =
+    achievement.badgeValue.length >= 5
+      ? 345
+      : achievement.badgeValue.length === 4
+        ? 405
+        : 510;
+  ctx.font = `950 ${mainSize}px Arial, Helvetica, sans-serif`;
+  ctx.fillStyle = innerGold;
+  ctx.strokeStyle = "#6f3d05";
+  ctx.lineWidth = 7;
+  ctx.strokeText(achievement.badgeValue, 800, 1030);
+  ctx.fillText(achievement.badgeValue, 800, 1030);
+
+  ctx.font = "950 145px Arial, Helvetica, sans-serif";
+  ctx.fillStyle = "#f7f1e5";
+  ctx.strokeStyle = "rgba(0,0,0,.72)";
+  ctx.lineWidth = 6;
+  ctx.strokeText(achievement.badgeLabel, 800, 1390);
+  ctx.fillText(achievement.badgeLabel, 800, 1390);
+
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 5;
+  ctx.fillStyle = gold;
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(365,1565); ctx.lineTo(610,1565);
+  ctx.moveTo(990,1565); ctx.lineTo(1235,1565);
+  ctx.stroke();
+  drawPlaqueStar(ctx,705,1565,33,14);
+  drawPlaqueStar(ctx,800,1565,54,23);
+  drawPlaqueStar(ctx,895,1565,33,14);
+
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(800 + side * 420, 1695);
+    ctx.quadraticCurveTo(800 + side * 560, 1640, 800 + side * 610, 1495);
+    ctx.stroke();
+    for (let leaf = 0; leaf < 7; leaf += 1) {
+      const x = 800 + side * (450 + leaf * 24);
+      const y = 1680 - leaf * 27;
+      drawPlaqueLeaf(ctx, x, y, side * -0.7, 17, 43);
+    }
+  }
+
+  ctx.shadowColor = "transparent";
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 13;
+  ctx.beginPath();
+  ctx.moveTo(410,1780); ctx.lineTo(800,1885); ctx.lineTo(1190,1780);
+  ctx.stroke();
+  ctx.strokeStyle = "#8b5610";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(470,1810); ctx.lineTo(800,1900); ctx.lineTo(1130,1810);
+  ctx.stroke();
+
+  const link = document.createElement("a");
+  const kind = achievement.metric.includes("Month") ? "mensal" : "historico";
+  link.download = `DAF-${achievement.badgeValue}-${achievement.badgeLabel.toLowerCase()}-${kind}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+const REVENUE_BADGE_PNGS: Record<string, string> = {
+  "30K": "/achievements/faturados-30k.png",
+  "50K": "/achievements/faturados-50k.png",
+  "100K": "/achievements/faturados-100k.png",
+  "150K": "/achievements/faturados-150k.png",
+  "200K": "/achievements/faturados-200k.png",
+  "350K": "/achievements/faturados-350k.png",
+  "500K": "/achievements/faturados-500k.png",
+  "800K": "/achievements/faturados-800k.png",
+  "1M": "/achievements/faturados-1m.png",
+};
+
+const ORDER_BADGE_PNGS: Record<string, string> = {
+  "100": "/achievements/pedidos-100.png",
+  "150": "/achievements/pedidos-150.png",
+  "300": "/achievements/pedidos-300.png",
+  "500": "/achievements/pedidos-500.png",
+  "1000": "/achievements/pedidos-1000.png",
+  "2000": "/achievements/pedidos-2000.png",
+  "3500": "/achievements/pedidos-3500.png",
+  "5000": "/achievements/pedidos-5000.png",
+};
+
+function AchievementBadge({
+  achievement,
+  unlocked,
+  large = false,
+}: {
+  achievement: AchievementDefinition;
+  unlocked: boolean;
+  large?: boolean;
+}) {
+  // Os selos de faturamento e pedidos usam os PNGs aprovados,
+  // preservando a arte. Somente o estado bloqueado recebe o filtro visual.
+  const approvedBadgePng =
+    achievement.badgeLabel === "FATURADOS"
+      ? REVENUE_BADGE_PNGS[achievement.badgeValue]
+      : ORDER_BADGE_PNGS[achievement.badgeValue];
+
+  if (approvedBadgePng) {
+    return (
+      <div
+        className={[
+          "achievementBadgeArt",
+          "achievementBadgePng",
+          unlocked ? "unlocked" : "locked",
+          large ? "large" : "",
+        ].filter(Boolean).join(" ")}
+        aria-hidden="true"
+      >
+        <img
+          src={approvedBadgePng}
+          alt=""
+          loading={large ? "eager" : "lazy"}
+          draggable={false}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={[
+        "achievementBadgeArt",
+        unlocked ? "unlocked" : "locked",
+        large ? "large" : "",
+        achievement.badgeValue.length >= 5 ? "compactValue" : "",
+      ].filter(Boolean).join(" ")}
+      aria-hidden="true"
+    >
+      <div className="achievementBadgeOuter">
+        <div className="achievementBadgeInner">
+          <span className="achievementBadgeFacet facetA" />
+          <span className="achievementBadgeFacet facetB" />
+          <span className="achievementBadgeFacet facetC" />
+          <span className="achievementBadgeSparkle sparkleA">✦</span>
+          <span className="achievementBadgeSparkle sparkleB">✦</span>
+          <span className="achievementBadgeSparkle sparkleC">✦</span>
+          <img className="achievementBadgeLogo" src={LOGO} alt="" />
+          <b className="achievementBadgeValue">{achievement.badgeValue}</b>
+          <span className="achievementBadgeLabel">{achievement.badgeLabel}</span>
+          <span className="achievementBadgeOrnament">
+            <i />
+            <b>★</b>
+            <strong>★</strong>
+            <b>★</b>
+            <i />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AchievementDetailModal({
+  achievement,
+  unlocked,
+  close,
+}: {
+  achievement: AchievementDefinition;
+  unlocked: boolean;
+  close: () => void;
+}) {
+  return (
+    <div className="overlay achievementDetailOverlay" onMouseDown={close}>
+      <div
+        className="systemDialog achievementDetailDialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <small>CONQUISTA DAF</small>
+            <h2>{achievement.title}</h2>
+          </div>
+          <button type="button" onClick={close} aria-label="Fechar conquista">
+            <X />
+          </button>
+        </header>
+
+        <div className="achievementDetailBody">
+          <AchievementBadge achievement={achievement} unlocked={unlocked} large />
+          <div className="achievementDetailInfo">
+            <span className={unlocked ? "achievementStatus unlocked" : "achievementStatus locked"}>
+              {unlocked ? <Check /> : <Trophy />}
+              {unlocked ? "Conquista alcançada" : "Ainda não alcançada"}
+            </span>
+            <div>
+              <small>REGRA</small>
+              <p>{achievementRule(achievement)}</p>
+            </div>
+            <div>
+              <small>TIPO</small>
+              <p>{achievement.qualifier}</p>
+            </div>
+          </div>
+        </div>
+
+        <footer className="achievementDetailFooter">
+          <button type="button" className="secondary" onClick={close}>
+            Fechar
+          </button>
+          {unlocked && Boolean(APPROVED_ACHIEVEMENT_PLAQUES[`${achievement.metric}:${achievement.threshold}`]) ? (
+            <button
+              type="button"
+              className="primary achievementDownloadModal"
+              onClick={() => void downloadAchievementPlaque(achievement)}
+            >
+              <Download />
+              Baixar PNG para emoldurar
+            </button>
+          ) : null}
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function Achievements({ d }: { d: D }) {
+  const [selectedAchievement, setSelectedAchievement] =
+    useState<AchievementDefinition | null>(null);
+
+  const rows = achievementMonthlyRows(d);
+  const metrics = {
+    historicalRevenue: rows.reduce((sum, row) => sum + row.revenue, 0),
+    bestRevenueMonth: rows.reduce((best, row) => Math.max(best, row.revenue), 0),
+    historicalOrders: d.sales.filter(
+      (sale) =>
+        sale.status !== "cancelled" &&
+        !isNoCost(sale) &&
+        !isHistoricalSale(sale),
+    ).length,
+    bestOrdersMonth: rows.reduce((best, row) => Math.max(best, row.orders), 0),
+  };
+
+  return (
+    <div className="achievementsPage">
+      <div className="achievementGrid">
+        {ACHIEVEMENTS.map((achievement) => {
+          const unlocked =
+            achievementValue(achievement, metrics) >= achievement.threshold;
+          return (
+            <button
+              type="button"
+              className={"achievementCard " + (unlocked ? "unlocked" : "locked")}
+              key={achievement.id}
+              onClick={() => setSelectedAchievement(achievement)}
+            >
+              <AchievementBadge achievement={achievement} unlocked={unlocked} />
+              <span className="achievementCardCopy">
+                <strong>{achievement.title}</strong>
+                <small>{achievement.qualifier}</small>
+                <em>{unlocked ? "Conquista alcançada" : "Conquista bloqueada"}</em>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {selectedAchievement ? (
+        <AchievementDetailModal
+          achievement={selectedAchievement}
+          unlocked={
+            achievementValue(selectedAchievement, metrics) >=
+            selectedAchievement.threshold
+          }
+          close={() => setSelectedAchievement(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 function RevenueHistoryModal({
   d,
