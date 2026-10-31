@@ -58,6 +58,7 @@ import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from
 import { captureReport } from "./report";
 import { isSupabaseConfigured, supabase } from "./supabase";
 import {
+  CatalogAdminPreview,
   catalogItemsFromProducts,
   catalogSettingsForPersistence,
   catalogSnapshotPayload,
@@ -8879,6 +8880,7 @@ function Stock({
   openPendingPerfumes: () => void;
 }) {
   const [apcOnly, setApcOnly] = useState(false),
+    [catalogMirrorOpen, setCatalogMirrorOpen] = useState(false),
     [category, setCategory] = useState("Todos"),
     [brand, setBrand] = useState("Todas"),
     [query, setQuery] = useState(""),
@@ -9038,6 +9040,16 @@ function Stock({
           {view !== "supplies" ? (
             <button
               type="button"
+              className={"secondary stockCatalogMirrorButton" + (catalogMirrorOpen ? " active" : "")}
+              onClick={() => setCatalogMirrorOpen((current) => !current)}
+            >
+              <PackageOpen />
+              {catalogMirrorOpen ? "Fechar espelho" : "Espelho do catálogo"}
+            </button>
+          ) : null}
+          {view !== "supplies" ? (
+            <button
+              type="button"
               className="secondary stockPendingAction"
               onClick={openPendingPerfumes}
             >
@@ -9059,6 +9071,58 @@ function Stock({
           </button>
         </div>
       </div>
+      {view !== "supplies" && catalogMirrorOpen ? (
+        <section className="stockCatalogMirror">
+          <div className="stockCatalogMirrorHead">
+            <div>
+              <small>ESPELHO DO CATÁLOGO</small>
+              <h3>Prévia do catálogo público</h3>
+              <p>Confira no Estoque como os perfumes e os ml disponíveis aparecem para o cliente.</p>
+            </div>
+            <div className="stockCatalogMirrorActions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => window.dispatchEvent(new CustomEvent("daf:catalog-edit"))}
+              >
+                <Palette /> Editar catálogo
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => window.dispatchEvent(new CustomEvent("daf:catalog-images"))}
+              >
+                <ImageIcon /> Imagens
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  window.open(
+                    import.meta.env.VITE_PUBLIC_CATALOG_URL || "https://daf-splits-catalogo.vercel.app",
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
+                }
+              >
+                <PackageOpen /> Abrir catálogo público
+              </button>
+            </div>
+          </div>
+          <div className="stockCatalogMirrorViewport">
+            <CatalogAdminPreview
+              products={d.products}
+              settings={d.catalogSettings}
+              onSettingsChange={(catalogSettings) =>
+                set((current: D) => ({
+                  ...current,
+                  catalogSettings: catalogSettingsForPersistence(catalogSettings),
+                }))
+              }
+            />
+          </div>
+        </section>
+      ) : null}
       {view !== "supplies" ? (
         <>
           <div className="stockSummaryRow">
@@ -11314,7 +11378,6 @@ function achievementMonthlyRows(d: D) {
     );
     const operationalSales = monthSales.filter((sale) => !isHistoricalSale(sale));
     return {
-      monthKey,
       revenue: legacy
         ? LEGACY_REVENUE_2026[monthKey]
         : monthSales.reduce(
@@ -11326,7 +11389,41 @@ function achievementMonthlyRows(d: D) {
   });
 }
 
-function drawAchievementStar(
+function achievementValue(
+  achievement: AchievementDefinition,
+  metrics: {
+    historicalRevenue: number;
+    bestRevenueMonth: number;
+    historicalOrders: number;
+    bestOrdersMonth: number;
+  },
+) {
+  switch (achievement.metric) {
+    case "revenueHistory":
+      return metrics.historicalRevenue;
+    case "revenueMonth":
+      return metrics.bestRevenueMonth;
+    case "ordersHistory":
+      return metrics.historicalOrders;
+    case "ordersMonth":
+      return metrics.bestOrdersMonth;
+  }
+}
+
+function achievementRule(achievement: AchievementDefinition) {
+  if (achievement.metric === "revenueHistory") {
+    return `Alcançar ${brl(achievement.threshold)} em faturamento acumulado pela DAF.`;
+  }
+  if (achievement.metric === "revenueMonth") {
+    return `Alcançar ${brl(achievement.threshold)} em faturamento dentro de um único mês.`;
+  }
+  if (achievement.metric === "ordersHistory") {
+    return `Registrar ${achievement.threshold.toLocaleString("pt-BR")} pedidos válidos ao longo da história da DAF.`;
+  }
+  return `Registrar ${achievement.threshold.toLocaleString("pt-BR")} pedidos válidos dentro de um único mês.`;
+}
+
+function drawPlaqueStar(
   ctx: CanvasRenderingContext2D,
   cx: number,
   cy: number,
@@ -11346,6 +11443,23 @@ function drawAchievementStar(
   ctx.fill();
 }
 
+function drawPlaqueLeaf(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angle: number,
+  width: number,
+  height: number,
+) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, width, height, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 async function downloadAchievementPlaque(achievement: AchievementDefinition) {
   const canvas = document.createElement("canvas");
   canvas.width = 1600;
@@ -11354,58 +11468,66 @@ async function downloadAchievementPlaque(achievement: AchievementDefinition) {
   if (!ctx) return;
 
   const gold = ctx.createLinearGradient(0, 0, 1600, 2000);
-  gold.addColorStop(0, "#8a5a16");
-  gold.addColorStop(0.28, "#ffd86a");
-  gold.addColorStop(0.52, "#b97816");
-  gold.addColorStop(0.75, "#ffe38a");
-  gold.addColorStop(1, "#7d4d10");
+  gold.addColorStop(0, "#764608");
+  gold.addColorStop(0.18, "#e6a72d");
+  gold.addColorStop(0.37, "#fff0a0");
+  gold.addColorStop(0.53, "#c77a10");
+  gold.addColorStop(0.72, "#ffd760");
+  gold.addColorStop(1, "#6e4208");
 
-  const panel = ctx.createLinearGradient(0, 0, 1600, 2000);
-  panel.addColorStop(0, "#050505");
-  panel.addColorStop(0.5, "#17130e");
-  panel.addColorStop(1, "#070707");
-  ctx.fillStyle = "#050505";
+  const innerGold = ctx.createLinearGradient(180, 80, 1320, 1840);
+  innerGold.addColorStop(0, "#8a5511");
+  innerGold.addColorStop(0.33, "#f6c94f");
+  innerGold.addColorStop(0.58, "#fff0a0");
+  innerGold.addColorStop(0.74, "#9e6110");
+  innerGold.addColorStop(1, "#ffe17a");
+
+  const background = ctx.createLinearGradient(0, 0, 1600, 2000);
+  background.addColorStop(0, "#070707");
+  background.addColorStop(0.46, "#191611");
+  background.addColorStop(1, "#040404");
+  ctx.fillStyle = "#020202";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Moldura própria do arquivo de impressão.
-  ctx.fillStyle = "#111111";
+  // Moldura premium da arte emoldurável.
+  ctx.fillStyle = "#0b0b0b";
   ctx.fillRect(36, 36, 1528, 1928);
+  ctx.strokeStyle = "#272727";
+  ctx.lineWidth = 36;
+  ctx.strokeRect(58, 58, 1484, 1884);
   ctx.strokeStyle = gold;
-  ctx.lineWidth = 22;
-  ctx.strokeRect(82, 82, 1436, 1836);
-  ctx.strokeStyle = "#2c1c0b";
-  ctx.lineWidth = 10;
-  ctx.strokeRect(118, 118, 1364, 1764);
-  ctx.fillStyle = panel;
+  ctx.lineWidth = 18;
+  ctx.strokeRect(92, 92, 1416, 1816);
+  ctx.strokeStyle = "#4b2d08";
+  ctx.lineWidth = 8;
+  ctx.strokeRect(119, 119, 1362, 1762);
+  ctx.fillStyle = background;
   ctx.fillRect(132, 132, 1336, 1736);
 
-  // Facetas discretas no fundo.
-  ctx.globalAlpha = 0.32;
-  ctx.fillStyle = "#725018";
-  ctx.beginPath();
-  ctx.moveTo(132, 132);
-  ctx.lineTo(520, 132);
-  ctx.lineTo(260, 660);
-  ctx.lineTo(132, 760);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(1468, 260);
-  ctx.lineTo(1468, 900);
-  ctx.lineTo(1240, 710);
-  ctx.lineTo(1320, 380);
-  ctx.closePath();
-  ctx.fill();
-  ctx.globalAlpha = 1;
+  const facets: Array<Array<[number, number]>> = [
+    [[132,132],[630,132],[380,610],[132,760]],
+    [[1468,132],[1110,132],[1310,525],[1468,710]],
+    [[132,1868],[132,1510],[445,1660],[620,1868]],
+    [[1468,1868],[1468,1480],[1185,1650],[995,1868]],
+    [[610,132],[1050,132],[900,520],[470,680]],
+  ];
+  facets.forEach((points,index) => {
+    ctx.beginPath();
+    points.forEach(([x,y],i) => i ? ctx.lineTo(x,y) : ctx.moveTo(x,y));
+    ctx.closePath();
+    ctx.fillStyle = index % 2 ? "rgba(213,151,39,.15)" : "rgba(255,255,255,.035)";
+    ctx.fill();
+    ctx.strokeStyle = index % 2 ? "rgba(230,174,55,.28)" : "rgba(255,255,255,.055)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  });
 
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
   ctx.fillStyle = gold;
-  ctx.shadowColor = "rgba(0,0,0,.75)";
-  ctx.shadowBlur = 22;
-  ctx.shadowOffsetY = 12;
+  ctx.beginPath();
+  ctx.moveTo(132,132); ctx.lineTo(520,132); ctx.lineTo(270,510); ctx.lineTo(132,620); ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(1468,1320); ctx.lineTo(1468,1868); ctx.lineTo(1105,1868); ctx.lineTo(1375,1435); ctx.closePath(); ctx.fill();
 
-  // Usa exatamente a marca oficial já incorporada ao Sistema DAF.
   try {
     const logo = new window.Image();
     logo.src = LOGO;
@@ -11416,67 +11538,84 @@ async function downloadAchievementPlaque(achievement: AchievementDefinition) {
     });
     ctx.save();
     ctx.globalCompositeOperation = "screen";
-    ctx.drawImage(logo, 365, 220, 870, 535);
+    ctx.shadowColor = "rgba(0,0,0,.72)";
+    ctx.shadowBlur = 18;
+    ctx.drawImage(logo, 420, 205, 760, 535);
     ctx.restore();
   } catch {
-    // Fallback visual caso o navegador recuse decodificar a imagem embutida.
-    ctx.font = "700 210px Georgia, 'Times New Roman', serif";
-    ctx.fillText("DAF", 800, 390);
-    ctx.font = "600 72px Georgia, 'Times New Roman', serif";
-    ctx.fillText("S P L I T S", 800, 535);
+    ctx.textAlign = "center";
+    ctx.fillStyle = gold;
+    ctx.font = "700 190px Georgia, 'Times New Roman', serif";
+    ctx.fillText("DAF", 800, 420);
+    ctx.font = "600 62px Georgia, 'Times New Roman', serif";
+    ctx.fillText("— S P L I T S —", 800, 545);
   }
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(0,0,0,.92)";
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetY = 16;
 
   const mainSize =
     achievement.badgeValue.length >= 5
-      ? 360
+      ? 345
       : achievement.badgeValue.length === 4
-        ? 430
-        : 520;
-  ctx.font = `900 ${mainSize}px Arial, Helvetica, sans-serif`;
-  ctx.fillText(achievement.badgeValue, 800, 1005);
-  ctx.font = "900 150px Arial, Helvetica, sans-serif";
+        ? 405
+        : 510;
+  ctx.font = `950 ${mainSize}px Arial, Helvetica, sans-serif`;
+  ctx.fillStyle = innerGold;
+  ctx.strokeStyle = "#6f3d05";
+  ctx.lineWidth = 7;
+  ctx.strokeText(achievement.badgeValue, 800, 1030);
+  ctx.fillText(achievement.badgeValue, 800, 1030);
+
+  ctx.font = "950 145px Arial, Helvetica, sans-serif";
+  ctx.fillStyle = "#f7f1e5";
+  ctx.strokeStyle = "rgba(0,0,0,.72)";
+  ctx.lineWidth = 6;
+  ctx.strokeText(achievement.badgeLabel, 800, 1390);
   ctx.fillText(achievement.badgeLabel, 800, 1390);
 
-  ctx.shadowBlur = 8;
-  ctx.shadowOffsetY = 4;
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 5;
   ctx.fillStyle = gold;
   ctx.strokeStyle = gold;
   ctx.lineWidth = 6;
   ctx.beginPath();
-  ctx.moveTo(360, 1575);
-  ctx.lineTo(610, 1575);
-  ctx.moveTo(990, 1575);
-  ctx.lineTo(1240, 1575);
+  ctx.moveTo(365,1565); ctx.lineTo(610,1565);
+  ctx.moveTo(990,1565); ctx.lineTo(1235,1565);
   ctx.stroke();
-  drawAchievementStar(ctx, 705, 1575, 34, 15);
-  drawAchievementStar(ctx, 800, 1575, 52, 23);
-  drawAchievementStar(ctx, 895, 1575, 34, 15);
+  drawPlaqueStar(ctx,705,1565,33,14);
+  drawPlaqueStar(ctx,800,1565,54,23);
+  drawPlaqueStar(ctx,895,1565,33,14);
 
-  // Ramos minimalistas em dourado.
-  ctx.lineWidth = 9;
   for (const side of [-1, 1]) {
     ctx.beginPath();
-    ctx.moveTo(800 + side * 420, 1690);
-    ctx.quadraticCurveTo(
-      800 + side * 560,
-      1635,
-      800 + side * 610,
-      1500,
-    );
+    ctx.moveTo(800 + side * 420, 1695);
+    ctx.quadraticCurveTo(800 + side * 560, 1640, 800 + side * 610, 1495);
     ctx.stroke();
-    for (let leaf = 0; leaf < 6; leaf += 1) {
-      const x = 800 + side * (455 + leaf * 24);
-      const y = 1668 - leaf * 29;
-      ctx.beginPath();
-      ctx.ellipse(x, y, 20, 45, side * -0.7, 0, Math.PI * 2);
-      ctx.fill();
+    for (let leaf = 0; leaf < 7; leaf += 1) {
+      const x = 800 + side * (450 + leaf * 24);
+      const y = 1680 - leaf * 27;
+      drawPlaqueLeaf(ctx, x, y, side * -0.7, 17, 43);
     }
   }
 
   ctx.shadowColor = "transparent";
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 13;
+  ctx.beginPath();
+  ctx.moveTo(410,1780); ctx.lineTo(800,1885); ctx.lineTo(1190,1780);
+  ctx.stroke();
+  ctx.strokeStyle = "#8b5610";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(470,1810); ctx.lineTo(800,1900); ctx.lineTo(1130,1810);
+  ctx.stroke();
+
   const link = document.createElement("a");
-  const kind =
-    achievement.metric.includes("Month") ? "mensal" : "historico";
+  const kind = achievement.metric.includes("Month") ? "mensal" : "historico";
   link.download = `DAF-${achievement.badgeValue}-${achievement.badgeLabel.toLowerCase()}-${kind}.png`;
   link.href = canvas.toDataURL("image/png");
   link.click();
@@ -11485,157 +11624,160 @@ async function downloadAchievementPlaque(achievement: AchievementDefinition) {
 function AchievementBadge({
   achievement,
   unlocked,
+  large = false,
 }: {
   achievement: AchievementDefinition;
   unlocked: boolean;
+  large?: boolean;
 }) {
   return (
     <div
-      className={
-        "achievementShield " +
-        (unlocked ? "unlocked" : "locked") +
-        (achievement.badgeValue.length >= 5 ? " compactValue" : "")
-      }
+      className={[
+        "achievementBadgeArt",
+        unlocked ? "unlocked" : "locked",
+        large ? "large" : "",
+        achievement.badgeValue.length >= 5 ? "compactValue" : "",
+      ].filter(Boolean).join(" ")}
       aria-hidden="true"
     >
-      <img className="achievementShieldLogo" src={LOGO} alt="DAF Splits" />
-      <b className="achievementShieldValue">{achievement.badgeValue}</b>
-      <span className="achievementShieldLabel">{achievement.badgeLabel}</span>
+      <div className="achievementBadgeOuter">
+        <div className="achievementBadgeInner">
+          <span className="achievementBadgeFacet facetA" />
+          <span className="achievementBadgeFacet facetB" />
+          <span className="achievementBadgeFacet facetC" />
+          <span className="achievementBadgeSparkle sparkleA">✦</span>
+          <span className="achievementBadgeSparkle sparkleB">✦</span>
+          <span className="achievementBadgeSparkle sparkleC">✦</span>
+          <img className="achievementBadgeLogo" src={LOGO} alt="" />
+          <b className="achievementBadgeValue">{achievement.badgeValue}</b>
+          <span className="achievementBadgeLabel">{achievement.badgeLabel}</span>
+          <span className="achievementBadgeOrnament">
+            <i />
+            <b>★</b>
+            <strong>★</strong>
+            <b>★</b>
+            <i />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AchievementDetailModal({
+  achievement,
+  unlocked,
+  close,
+}: {
+  achievement: AchievementDefinition;
+  unlocked: boolean;
+  close: () => void;
+}) {
+  return (
+    <div className="overlay achievementDetailOverlay" onMouseDown={close}>
+      <div
+        className="systemDialog achievementDetailDialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <small>CONQUISTA DAF</small>
+            <h2>{achievement.title}</h2>
+          </div>
+          <button type="button" onClick={close} aria-label="Fechar conquista">
+            <X />
+          </button>
+        </header>
+
+        <div className="achievementDetailBody">
+          <AchievementBadge achievement={achievement} unlocked={unlocked} large />
+          <div className="achievementDetailInfo">
+            <span className={unlocked ? "achievementStatus unlocked" : "achievementStatus locked"}>
+              {unlocked ? <Check /> : <Trophy />}
+              {unlocked ? "Conquista alcançada" : "Ainda não alcançada"}
+            </span>
+            <div>
+              <small>REGRA</small>
+              <p>{achievementRule(achievement)}</p>
+            </div>
+            <div>
+              <small>TIPO</small>
+              <p>{achievement.qualifier}</p>
+            </div>
+          </div>
+        </div>
+
+        <footer className="achievementDetailFooter">
+          <button type="button" className="secondary" onClick={close}>
+            Fechar
+          </button>
+          {unlocked ? (
+            <button
+              type="button"
+              className="primary achievementDownloadModal"
+              onClick={() => void downloadAchievementPlaque(achievement)}
+            >
+              <Download />
+              Baixar PNG para emoldurar
+            </button>
+          ) : null}
+        </footer>
+      </div>
     </div>
   );
 }
 
 function Achievements({ d }: { d: D }) {
+  const [selectedAchievement, setSelectedAchievement] =
+    useState<AchievementDefinition | null>(null);
+
   const rows = achievementMonthlyRows(d);
-  const historicalRevenue = rows.reduce((sum, row) => sum + row.revenue, 0);
-  const bestRevenueMonth = rows.reduce(
-    (best, row) => (row.revenue > best.revenue ? row : best),
-    { monthKey: "", revenue: 0, orders: 0 },
-  );
-  const operationalSales = d.sales.filter(
-    (sale) =>
-      sale.status !== "cancelled" &&
-      !isNoCost(sale) &&
-      !isHistoricalSale(sale),
-  );
-  const historicalOrders = operationalSales.length;
-  const bestOrdersMonth = rows.reduce(
-    (best, row) => (row.orders > best.orders ? row : best),
-    { monthKey: "", revenue: 0, orders: 0 },
-  );
-
-  const currentValue = (achievement: AchievementDefinition) => {
-    switch (achievement.metric) {
-      case "revenueHistory":
-        return historicalRevenue;
-      case "revenueMonth":
-        return bestRevenueMonth.revenue;
-      case "ordersHistory":
-        return historicalOrders;
-      case "ordersMonth":
-        return bestOrdersMonth.orders;
-    }
+  const metrics = {
+    historicalRevenue: rows.reduce((sum, row) => sum + row.revenue, 0),
+    bestRevenueMonth: rows.reduce((best, row) => Math.max(best, row.revenue), 0),
+    historicalOrders: d.sales.filter(
+      (sale) =>
+        sale.status !== "cancelled" &&
+        !isNoCost(sale) &&
+        !isHistoricalSale(sale),
+    ).length,
+    bestOrdersMonth: rows.reduce((best, row) => Math.max(best, row.orders), 0),
   };
-  const formatCurrent = (achievement: AchievementDefinition, value: number) =>
-    achievement.badgeLabel === "FATURADOS"
-      ? brl(value)
-      : `${Math.round(value).toLocaleString("pt-BR")} pedidos`;
-
-  const groups = [
-    ["Faturamento · histórico", "revenueHistory"],
-    ["Faturamento · em um único mês", "revenueMonth"],
-    ["Pedidos · histórico", "ordersHistory"],
-    ["Pedidos · em um único mês", "ordersMonth"],
-  ] as const;
 
   return (
     <div className="achievementsPage">
-      <section className="achievementsHero">
-        <div>
-          <span className="eyebrow">Marcos da DAF</span>
-          <h2>Conquistas</h2>
-          <p>
-            Os selos são liberados automaticamente com os dados do sistema.
-            Conquistas futuras continuam visíveis em preto e branco.
-          </p>
-        </div>
-        <div className="achievementsHeroStats">
-          <span>
-            <small>Faturamento histórico</small>
-            <b>{brl(historicalRevenue)}</b>
-          </span>
-          <span>
-            <small>Pedidos registrados</small>
-            <b>{historicalOrders.toLocaleString("pt-BR")}</b>
-          </span>
-        </div>
-      </section>
+      <div className="achievementGrid">
+        {ACHIEVEMENTS.map((achievement) => {
+          const unlocked =
+            achievementValue(achievement, metrics) >= achievement.threshold;
+          return (
+            <button
+              type="button"
+              className={"achievementCard " + (unlocked ? "unlocked" : "locked")}
+              key={achievement.id}
+              onClick={() => setSelectedAchievement(achievement)}
+            >
+              <AchievementBadge achievement={achievement} unlocked={unlocked} />
+              <span className="achievementCardCopy">
+                <strong>{achievement.title}</strong>
+                <small>{achievement.qualifier}</small>
+                <em>{unlocked ? "Conquista alcançada" : "Conquista bloqueada"}</em>
+              </span>
+            </button>
+          );
+        })}
+      </div>
 
-      {groups.map(([heading, metric]) => (
-        <section className="achievementGroup" key={metric}>
-          <div className="achievementGroupHeading">
-            <h3>{heading}</h3>
-            <p>
-              {metric === "revenueMonth" && bestRevenueMonth.monthKey
-                ? `Melhor mês: ${periodMonthLabel(bestRevenueMonth.monthKey)} · ${brl(bestRevenueMonth.revenue)}`
-                : metric === "ordersMonth" && bestOrdersMonth.monthKey
-                  ? `Melhor mês: ${periodMonthLabel(bestOrdersMonth.monthKey)} · ${bestOrdersMonth.orders} pedidos`
-                  : "Progresso acumulado calculado automaticamente."}
-            </p>
-          </div>
-          <div className="achievementGrid">
-            {ACHIEVEMENTS.filter((item) => item.metric === metric).map(
-              (achievement) => {
-                const current = currentValue(achievement);
-                const unlocked = current >= achievement.threshold;
-                const progress = Math.max(
-                  0,
-                  Math.min(100, (current / achievement.threshold) * 100),
-                );
-                return (
-                  <article
-                    className={
-                      "achievementCard " + (unlocked ? "unlocked" : "locked")
-                    }
-                    key={achievement.id}
-                  >
-                    <AchievementBadge
-                      achievement={achievement}
-                      unlocked={unlocked}
-                    />
-                    <div className="achievementCardCopy">
-                      <strong>{achievement.title}</strong>
-                      <span>{achievement.qualifier}</span>
-                      <small>
-                        {unlocked
-                          ? "Conquista alcançada"
-                          : `${formatCurrent(achievement, current)} de ${formatCurrent(
-                              achievement,
-                              achievement.threshold,
-                            )}`}
-                      </small>
-                    </div>
-                    <div className="achievementProgress" aria-hidden="true">
-                      <i style={{ width: `${progress}%` }} />
-                    </div>
-                    <button
-                      type="button"
-                      className={unlocked ? "achievementDownload" : "achievementLocked"}
-                      disabled={!unlocked}
-                      onClick={() => {
-                        if (unlocked) void downloadAchievementPlaque(achievement);
-                      }}
-                    >
-                      {unlocked ? <Download /> : <Trophy />}
-                      {unlocked ? "Baixar PNG para emoldurar" : "Ainda não alcançada"}
-                    </button>
-                  </article>
-                );
-              },
-            )}
-          </div>
-        </section>
-      ))}
+      {selectedAchievement ? (
+        <AchievementDetailModal
+          achievement={selectedAchievement}
+          unlocked={
+            achievementValue(selectedAchievement, metrics) >=
+            selectedAchievement.threshold
+          }
+          close={() => setSelectedAchievement(null)}
+        />
+      ) : null}
     </div>
   );
 }
