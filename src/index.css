@@ -12633,3 +12633,2023 @@ main > header {
     width: 100%;
   }
 }
+
+
+/* DAF — entrada de perfumes comprados e fila de pendências */
+.stockPendingAction {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.stockPendingAction svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pendingPerfumesCount {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--warning);
+  color: #111;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.purchaseArrivalBadge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.purchaseArrivalBadge.pending {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--line));
+  background: color-mix(in srgb, var(--warning) 12%, var(--panel));
+  color: var(--warning);
+}
+
+.purchaseArrivalBadge.received {
+  border-color: color-mix(in srgb, var(--success) 55%, var(--line));
+  background: color-mix(in srgb, var(--success) 10%, var(--panel));
+  color: var(--success);
+}
+
+.perfumeArrivalDialog {
+  width: min(520px, calc(100vw - 28px));
+}
+
+.perfumeArrivalContent {
+  padding: 22px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.perfumeArrivalContent > svg {
+  width: 46px;
+  height: 46px;
+  padding: 11px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.perfumeArrivalContent > div {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.perfumeArrivalContent strong {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.perfumeArrivalContent p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.perfumeArrivalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+.perfumeArrivalActions .primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pendingPerfumesDialog {
+  width: min(760px, calc(100vw - 28px));
+  max-height: min(760px, calc(100dvh - 34px));
+}
+
+.pendingPerfumesHint {
+  margin: 0;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.pendingPerfumesList {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px 20px;
+  display: grid;
+  gap: 11px;
+}
+
+.pendingPerfumeCard {
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  padding: 14px;
+  background: var(--panel-2);
+  display: grid;
+  gap: 12px;
+}
+
+.pendingPerfumeMain {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pendingPerfumeMain > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.pendingPerfumeMain small {
+  color: var(--accent);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.pendingPerfumeMain strong {
+  color: var(--text);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.pendingPerfumeMain span:not(.purchaseArrivalBadge) {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.pendingPerfumeMeta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.pendingPerfumeMeta b {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.pendingPerfumeArrivedButton {
+  width: fit-content;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pendingPerfumesEmpty {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.pendingPerfumesEmpty > svg {
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.pendingPerfumesEmpty strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.pendingPerfumesEmpty span {
+  font-size: 10px;
+}
+
+@media (max-width: 700px) {
+  .pendingPerfumeMain {
+    display: grid;
+  }
+
+  .pendingPerfumeMeta {
+    grid-template-columns: 1fr;
+  }
+
+  .pendingPerfumeArrivedButton,
+  .perfumeArrivalActions button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .perfumeArrivalActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.pendingPerfumesFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 18px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.pendingPerfumesFooter .secondary {
+  width: auto;
+}
+
+
+/* =========================================================
+   DAF — melhorias 29/10: pendências, vendas, dashboard e equipe
+   ========================================================= */
+
+/* O box de perfumes pendentes cabe sempre na viewport e rola só a lista. */
+.pendingPerfumesDialog {
+  width: min(900px, calc(100vw - 32px)) !important;
+  height: min(720px, calc(100dvh - 32px));
+  max-height: calc(100dvh - 32px) !important;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden !important;
+  gap: 0 !important;
+  padding: 0 !important;
+}
+.pendingPerfumesDialog > header {
+  flex: 0 0 auto;
+  padding: 24px 30px 20px;
+}
+.pendingPerfumesHint {
+  flex: 0 0 auto;
+  padding: 18px 30px !important;
+}
+.pendingPerfumesList {
+  flex: 1 1 auto;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  padding: 18px 30px 22px !important;
+  scrollbar-gutter: stable;
+}
+.pendingPerfumeCard {
+  flex: 0 0 auto;
+}
+.pendingPerfumesFooter {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  padding: 14px 30px 20px !important;
+  background: var(--panel);
+}
+
+/* A tabela de vendas não captura a rolagem vertical da página. */
+.salesTablePanel {
+  overflow: visible !important;
+}
+.salesTablePanel .recordsTableScroll {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  overscroll-behavior-x: contain !important;
+  overscroll-behavior-y: auto !important;
+  touch-action: pan-x pan-y;
+}
+
+/* Seletor próprio de cliente no lançamento de vendas. */
+.saleClientSelectionBlock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  position: relative;
+}
+.saleClientSelector {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.saleClientSelectorLabel {
+  color: #647185;
+  font-size: 11px;
+  font-weight: 800;
+}
+.saleClientSelectorButton {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid #cfd5dd;
+  border-radius: 10px;
+  background: #fff;
+  color: #172233;
+  padding: 8px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+.saleClientSelectorButton.open {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.saleClientSelectorButton > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.saleClientSelectorButton b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saleClientSelectorButton small {
+  color: #778296;
+  font-size: 9px;
+}
+.saleClientSelectorButton svg {
+  width: 16px;
+  flex: 0 0 auto;
+}
+.saleClientSelectorPopover {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 7px);
+  left: 0;
+  right: 0;
+  min-width: min(520px, calc(100vw - 80px));
+  max-height: 360px;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 10px;
+  box-shadow: 0 22px 56px rgb(0 0 0 / 35%);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.saleClientSelectorSearch {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input);
+  padding: 0 10px;
+  display: flex !important;
+  align-items: center;
+  grid-template-columns: none !important;
+  gap: 8px !important;
+}
+.saleClientSelectorSearch svg {
+  width: 15px;
+  color: var(--muted);
+}
+.saleClientSelectorSearch input {
+  flex: 1;
+  min-width: 0;
+  height: 40px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  outline: 0;
+}
+.saleClientSelectorResults {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 5px;
+}
+.saleClientSelectorResults > button {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+.saleClientSelectorResults > button:hover,
+.saleClientSelectorResults > button.selected {
+  border-color: var(--line-strong);
+  background: var(--hover);
+}
+.saleClientSelectorResults > button > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.saleClientSelectorResults small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.saleClientSelectorResults svg {
+  width: 16px;
+  color: var(--success);
+}
+.saleClientCreateInside,
+.saleNewClientButton {
+  justify-content: center;
+}
+.saleNewClientButton {
+  min-height: 48px;
+  color: var(--accent) !important;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line)) !important;
+}
+.saleClientError {
+  grid-column: 1 / -1;
+  color: #d64b57;
+  font-size: 10px;
+  font-weight: 800;
+}
+.saleNewClientDialog {
+  width: min(820px, calc(100vw - 32px)) !important;
+}
+.saleLeadSourcePicker {
+  display: grid;
+  gap: 7px;
+}
+.saleLeadSourcePicker > span {
+  color: #647185;
+  font-size: 11px;
+  font-weight: 800;
+}
+.saleLeadSourcePicker > div {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.saleLeadSourcePicker button {
+  min-height: 38px;
+  border: 1px solid #cfd5dd;
+  border-radius: 9px;
+  background: #fff;
+  color: #334155;
+  padding: 0 13px;
+  font-weight: 800;
+}
+.saleLeadSourcePicker button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  color: var(--accent-strong);
+}
+.saleNewClientActions,
+.teamEditorActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+.sellerPromptDialog {
+  width: min(580px, calc(100vw - 32px)) !important;
+}
+.sellerPromptList {
+  display: grid;
+  gap: 8px;
+}
+.sellerPromptList > button {
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+.sellerPromptList > button:hover {
+  border-color: var(--accent);
+  background: var(--hover);
+}
+.sellerPromptList > button span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.sellerPromptList small {
+  color: var(--muted);
+  font-size: 9px;
+}
+.sellerPromptList svg {
+  width: 16px;
+  color: var(--muted);
+}
+
+/* Dashboard: categoria + região na mesma linha; rankings em uma nova linha. */
+.dashboardLowerGrid .categories .dashboardMiniLegend {
+  padding-top: 16px !important;
+}
+.regionLegend {
+  grid-auto-rows: 38px !important;
+  gap: 5px !important;
+  padding-top: 4px !important;
+}
+.dashboardLowerGrid .regionLegend > div {
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 6px 9px !important;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.regionLegend > div > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.regionLegend > div > span > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.regionLegend strong,
+.regionLegend b {
+  font-size: 9.5px;
+}
+.regionLegend small {
+  color: var(--muted);
+  font-size: 8px;
+}
+.dashboardRankingGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+.dashboardRankingGrid > .panel {
+  min-width: 0;
+  min-height: 470px;
+  height: 470px;
+  padding: 18px;
+  overflow: hidden;
+}
+.dashboardRankingGrid .leadRankingPanel {
+  display: grid;
+  grid-template-rows: 82px minmax(0, 1fr) 30px;
+  gap: 10px;
+}
+.dashboardRankingGrid .leadRankingHead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 132px;
+  gap: 10px;
+  align-items: start;
+}
+.dashboardRankingGrid .leadRankingHead h2,
+.partnerRankingPanel .dashboardMiniHeader h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.dashboardRankingGrid .leadRankingHead p,
+.partnerRankingPanel .dashboardMiniHeader p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.dashboardRankingGrid .leadRankingBody {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 46px minmax(0, 1fr);
+  gap: 10px;
+}
+.dashboardRankingGrid .leadRankingList,
+.partnerRankingList {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding-right: 4px;
+}
+.dashboardRankingGrid .leadRankingList > div,
+.partnerRankingList > div {
+  min-height: 70px;
+}
+.partnerRankingPanel {
+  display: grid;
+  grid-template-rows: 72px 46px minmax(0, 1fr);
+  gap: 10px;
+}
+.partnerRankingPanel .groupRankingMetricButtons {
+  margin: 0;
+  height: 42px;
+}
+.partnerRankingPanel .groupRankingMetricButtons button {
+  min-height: 42px;
+}
+
+/* Sócios e funcionários. */
+.teamSummaryGrid {
+  display: grid;
+  grid-template-columns: minmax(180px, .7fr) minmax(180px, .7fr) minmax(220px, 1fr);
+  gap: 14px;
+  align-items: stretch;
+}
+.teamSummaryCard {
+  display: grid;
+  gap: 5px;
+}
+.teamSummaryCard span,
+.teamSummaryCard small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.teamSummaryCard b {
+  color: var(--text);
+  font-size: 24px;
+}
+.teamNewButton {
+  min-height: 100%;
+  justify-content: center;
+  gap: 8px;
+}
+.teamMembersGrid {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.teamMemberCard {
+  display: grid;
+  gap: 13px;
+}
+.teamMemberHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.teamRoleBadge {
+  width: fit-content;
+  min-height: 25px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.teamRoleBadge.partner {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.teamRoleBadge.employee {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 50%, var(--line));
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+}
+.teamMemberCard h3 {
+  margin: 0;
+  color: var(--text);
+}
+.teamMemberFacts {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.teamMemberFacts > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+.teamMemberFacts > b {
+  color: var(--text);
+  font-size: 22px;
+}
+.teamMemberFacts.employee {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+}
+.teamMemberFacts.employee > span {
+  display: grid;
+  gap: 4px;
+}
+.teamMemberFacts.employee small {
+  color: var(--muted);
+  font-size: 8px;
+}
+.teamMemberFacts.employee b {
+  color: var(--text);
+  font-size: 12px;
+}
+.teamEditorDialog {
+  width: min(620px, calc(100vw - 32px)) !important;
+}
+.teamRoleSelector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.teamRoleSelector button {
+  min-height: 43px;
+  border: 1px solid #cfd5dd;
+  border-radius: 10px;
+  background: #fff;
+  color: #334155;
+  font-weight: 850;
+}
+.teamRoleSelector button.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, white);
+  color: var(--accent-strong);
+}
+.teamEditorDialog label > small {
+  color: #778296;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+@media (max-width: 1100px) {
+  .dashboardRankingGrid,
+  .teamMembersGrid {
+    grid-template-columns: 1fr;
+  }
+  .dashboardRankingGrid > .panel {
+    height: auto;
+    min-height: 450px;
+  }
+}
+@media (max-width: 760px) {
+  .saleClientSelectionBlock,
+  .teamSummaryGrid {
+    grid-template-columns: 1fr;
+  }
+  .saleClientSelectorPopover {
+    min-width: 100%;
+  }
+  .saleNewClientButton {
+    width: 100%;
+  }
+  .teamMemberFacts.employee {
+    grid-template-columns: 1fr;
+  }
+  .saleNewClientActions,
+  .teamEditorActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .saleNewClientActions button,
+  .teamEditorActions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+
+.pendingArrivalConfirmDialog,
+.pendingArrivalWarningDialog {
+  width: min(560px, calc(100vw - 32px)) !important;
+}
+
+.pendingArrivalConfirmContent {
+  padding: 8px 0 4px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: start;
+  gap: 13px;
+}
+
+.pendingArrivalConfirmContent > svg {
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border-radius: 13px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pendingArrivalConfirmContent > div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.pendingArrivalConfirmContent strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
+.pendingArrivalConfirmContent p,
+.pendingArrivalWarningText {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.pendingArrivalConfirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
+@media (max-width: 560px) {
+  .pendingArrivalConfirmActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .pendingArrivalConfirmActions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+
+/* DAF — ajuste final dos rankings e desempenho do lançamento de vendas */
+.dashboardRankingGrid > .panel {
+  height: 570px !important;
+  min-height: 570px !important;
+}
+
+.partnerRankingList {
+  overflow-y: visible !important;
+  padding-right: 0 !important;
+}
+
+.partnerRankingPanel {
+  overflow: hidden !important;
+}
+
+.saleProductSearch {
+  position: relative;
+  min-width: 0;
+}
+
+.saleProductSearchControl {
+  min-height: 46px;
+  border: 1px solid #cfd5dd;
+  border-radius: 10px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+}
+
+.saleProductSearchControl:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.saleProductSearchControl > svg {
+  width: 15px;
+  height: 15px;
+  color: #778296;
+  flex: 0 0 auto;
+}
+
+.saleProductSearchControl > input {
+  width: 100%;
+  min-width: 0;
+  height: 44px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: #172233 !important;
+  box-shadow: none !important;
+}
+
+.saleProductSearchPopover {
+  position: absolute;
+  z-index: 90;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 7px;
+  box-shadow: 0 18px 44px rgb(0 0 0 / 30%);
+}
+
+.saleProductSearchPopover > button {
+  width: 100%;
+  min-height: 50px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+}
+
+.saleProductSearchPopover > button:hover {
+  border-color: var(--line-strong);
+  background: var(--hover);
+}
+
+.saleProductSearchPopover > button > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.saleProductSearchPopover b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.saleProductSearchPopover small {
+  color: var(--muted);
+  font-size: 8.5px;
+}
+
+.saleProductSearchPopover em {
+  flex: 0 0 auto;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.saleProductSearchPopover em.available {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+}
+
+.saleProductSearchPopover em.unavailable {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
+.saleProductSearchPopover .empty,
+.saleProductSearchHint {
+  margin: 0;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+@media (max-width: 1100px) {
+  .dashboardRankingGrid > .panel {
+    height: 570px !important;
+    min-height: 570px !important;
+  }
+}
+
+
+/* DAF — histórico de faturamento e legibilidade dos rankings */
+.revenueHistoryButton {
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.revenueHistoryButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.revenueHistoryDialog {
+  width: min(760px, calc(100vw - 32px)) !important;
+  max-height: min(760px, calc(100dvh - 32px)) !important;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+.revenueHistoryDialog > header {
+  flex: 0 0 auto;
+  padding: 24px 28px 20px;
+}
+
+.revenueHistoryDialog > header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.revenueHistorySummary {
+  flex: 0 0 auto;
+  padding: 16px 28px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.revenueHistorySummary > div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 13px;
+  display: grid;
+  gap: 5px;
+}
+
+.revenueHistorySummary span,
+.revenueHistorySummary small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.revenueHistorySummary b {
+  color: var(--text);
+  font-size: 18px;
+}
+
+.revenueHistoryList {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 28px 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.revenueHistoryRow {
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel-2);
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.revenueHistoryRow > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.revenueHistoryRow strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.revenueHistoryRow small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.revenueHistoryRow > b {
+  color: var(--text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.revenueHistoryFooter {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 28px 20px;
+  border-top: 1px solid var(--line);
+}
+
+/* Aumenta a leitura dos dois rankings sem alterar o tamanho dos cards. */
+.dashboardRankingGrid .dashboardMiniHeader h2,
+.dashboardRankingGrid .leadRankingHead h2 {
+  font-size: 19px !important;
+}
+
+.dashboardRankingGrid .dashboardMiniHeader p,
+.dashboardRankingGrid .leadRankingHead p {
+  font-size: 11.5px !important;
+  line-height: 1.4;
+}
+
+.dashboardRankingGrid .groupRankingMetricButtons button {
+  font-size: 11.5px !important;
+}
+
+.dashboardRankingGrid .leadRankPosition {
+  font-size: 11px !important;
+}
+
+.dashboardRankingGrid .leadRankContent strong {
+  font-size: 12.5px !important;
+}
+
+.dashboardRankingGrid .leadRankContent b {
+  font-size: 11.5px !important;
+}
+
+.dashboardRankingGrid .leadRankContent small,
+.dashboardRankingGrid .leadRankingReset {
+  font-size: 10.5px !important;
+  line-height: 1.35;
+}
+
+.dashboardRankingGrid .leadRankingHead > button {
+  font-size: 10.5px !important;
+}
+
+@media (max-width: 760px) {
+  .revenueHistorySummary {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* DAF — drill-down de regiões e histórico de faturamento simplificado */
+.regionSalesPanel {
+  position: relative;
+}
+
+.regionSalesHeader {
+  display: flex !important;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.regionSalesHeader > div {
+  min-width: 0;
+}
+
+.regionBackButton {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+}
+
+.regionBackButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.regionLegendButton,
+.regionLegendStaticRow {
+  min-height: 38px !important;
+  height: 38px !important;
+  padding: 6px 9px !important;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.regionLegendButton {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+
+.regionLegendButton:hover {
+  border-color: var(--accent);
+  background: var(--hover);
+  transform: translateY(-1px);
+}
+
+.regionLegendButton > span,
+.regionLegendStaticRow > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+}
+
+.regionLegendButton > span > i,
+.regionLegendStaticRow > span > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.regionLegendButton > b,
+.regionLegendStaticRow > b {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.regionLegendButton > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.regionMarketplaceNote {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 8.5px;
+  line-height: 1.35;
+}
+
+.unidentifiedRegionDialog {
+  width: min(820px, calc(100vw - 32px)) !important;
+  max-height: min(760px, calc(100dvh - 32px)) !important;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+.unidentifiedRegionDialog > header {
+  flex: 0 0 auto;
+  padding: 24px 28px 20px;
+}
+
+.unidentifiedRegionDialog > header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.unidentifiedRegionList {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 28px 20px;
+  display: grid;
+  gap: 9px;
+}
+
+.unidentifiedRegionSale {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-2);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.unidentifiedRegionSaleMain {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.unidentifiedRegionSaleMain > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.unidentifiedRegionSaleMain strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.unidentifiedRegionSaleMain small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.unidentifiedRegionSaleMain > button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unidentifiedRegionSaleMain > button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.unidentifiedStateGrid {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.unidentifiedStateGrid button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.unidentifiedStateGrid button:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  color: var(--accent);
+}
+
+.unidentifiedRegionNoClient {
+  color: var(--warning);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.unidentifiedRegionEmpty {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.unidentifiedRegionEmpty > svg {
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  border-radius: 50%;
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.unidentifiedRegionEmpty strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.unidentifiedRegionEmpty span {
+  font-size: 9px;
+}
+
+.unidentifiedRegionFooter {
+  flex: 0 0 auto;
+  padding: 14px 28px 20px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.revenueHistorySummary {
+  display: none !important;
+}
+
+.revenueHistoryTotal {
+  flex: 0 0 auto;
+  min-height: 142px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  text-align: center;
+  padding: 20px;
+}
+
+.revenueHistoryTotal b {
+  color: var(--text);
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 500;
+  letter-spacing: -.03em;
+  line-height: 1;
+}
+
+.revenueHistoryTotal span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .regionSalesHeader {
+    display: grid !important;
+  }
+
+  .regionBackButton {
+    width: fit-content;
+  }
+
+  .unidentifiedRegionSaleMain {
+    display: grid;
+  }
+
+  .unidentifiedRegionSaleMain > button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .unidentifiedStateGrid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+
+/* =========================================================
+   Conquistas DAF
+   ========================================================= */
+.contentPage-achievements {
+  overflow: auto;
+}
+.achievementsPage {
+  padding: 2px 0 28px;
+}
+.achievementGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+.achievementCard {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  justify-items: stretch;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    background .18s ease;
+}
+.achievementCard:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--gold) 48%, var(--line));
+  box-shadow: 0 15px 34px rgba(0,0,0,.2);
+}
+.achievementCard:focus-visible {
+  outline: 2px solid color-mix(in srgb, #e7b438 75%, white);
+  outline-offset: 2px;
+}
+.achievementCard.unlocked {
+  border-color: color-mix(in srgb, #c89523 58%, var(--line));
+  background:
+    radial-gradient(circle at 50% 0, rgba(214,164,47,.08), transparent 48%),
+    linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+}
+.achievementCard.locked {
+  border-color: color-mix(in srgb, var(--line) 88%, transparent);
+}
+.achievementCardCopy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.achievementCardCopy strong {
+  font-size: 13px;
+  line-height: 1.22;
+  color: var(--text);
+}
+.achievementCardCopy small {
+  font-size: 11px;
+  line-height: 1.25;
+  color: color-mix(in srgb, #d5a532 76%, var(--text));
+}
+.achievementCard.locked .achievementCardCopy small {
+  color: var(--muted);
+}
+.achievementCardCopy em {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.25;
+  color: var(--muted);
+  font-style: normal;
+}
+.achievementCard.unlocked .achievementCardCopy em {
+  color: color-mix(in srgb, #e0ad30 76%, var(--text));
+}
+
+.achievementBadgeArt {
+  position: relative;
+  width: min(100%, 148px);
+  aspect-ratio: .88;
+  margin: 0 auto;
+  transition: filter .2s ease, opacity .2s ease, transform .2s ease;
+}
+.achievementBadgeArt.large {
+  width: min(100%, 300px);
+}
+.achievementBadgeArt.achievementBadgePng {
+  overflow: visible;
+  background: transparent;
+}
+.achievementBadgePng img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.achievementBadgeArt.locked {
+  filter: grayscale(1) saturate(0) brightness(.52) contrast(.9) blur(2.2px);
+  opacity: .78;
+  transform: scale(.97);
+}
+.achievementBadgeOuter,
+.achievementBadgeInner {
+  position: absolute;
+  inset: 0;
+  clip-path: polygon(
+    50% 0,
+    84% 7%,
+    96% 22%,
+    100% 50%,
+    92% 79%,
+    72% 94%,
+    50% 100%,
+    28% 94%,
+    8% 79%,
+    0 50%,
+    4% 22%,
+    16% 7%
+  );
+}
+.achievementBadgeOuter {
+  padding: 5px;
+  background:
+    linear-gradient(145deg,
+      #3e2504 0%,
+      #bf7c13 8%,
+      #ffe68b 20%,
+      #9a5c09 34%,
+      #f3bd38 49%,
+      #fff0a7 58%,
+      #a8650b 72%,
+      #f0b62d 87%,
+      #5a3305 100%);
+  filter: drop-shadow(0 8px 8px rgba(0,0,0,.48));
+}
+.achievementBadgeOuter::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  z-index: 0;
+  clip-path: inherit;
+  background: #080808;
+}
+.achievementBadgeInner {
+  inset: 9px;
+  z-index: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 13% 8% 11%;
+  background:
+    radial-gradient(circle at 76% 21%, rgba(251,198,64,.2), transparent 17%),
+    linear-gradient(134deg, rgba(255,255,255,.07), transparent 22%),
+    linear-gradient(36deg, #050505 0 31%, #17130c 31% 48%, #080808 48% 67%, #211608 67% 76%, #050505 76% 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,219,105,.34),
+    inset 0 0 28px rgba(0,0,0,.75);
+}
+.achievementBadgeInner::before,
+.achievementBadgeInner::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(135deg, #a9680b, #ffe177 48%, #9b5e08);
+  box-shadow: 0 0 12px rgba(255,190,51,.25);
+}
+.achievementBadgeInner::before {
+  width: 72%;
+  height: 8%;
+  left: -18%;
+  top: 15%;
+  transform: rotate(-35deg);
+}
+.achievementBadgeInner::after {
+  width: 70%;
+  height: 8%;
+  right: -22%;
+  bottom: 16%;
+  transform: rotate(-35deg);
+}
+.achievementBadgeFacet {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  opacity: .72;
+}
+.achievementBadgeFacet.facetA {
+  width: 48%;
+  height: 48%;
+  top: 3%;
+  left: 5%;
+  background: linear-gradient(135deg, rgba(255,213,104,.15), rgba(255,255,255,.025));
+  clip-path: polygon(0 0, 100% 0, 34% 100%, 0 60%);
+}
+.achievementBadgeFacet.facetB {
+  width: 44%;
+  height: 42%;
+  right: 2%;
+  top: 12%;
+  background: linear-gradient(225deg, rgba(224,158,37,.18), rgba(255,255,255,.02));
+  clip-path: polygon(100% 0, 100% 100%, 20% 62%, 0 22%);
+}
+.achievementBadgeFacet.facetC {
+  width: 56%;
+  height: 32%;
+  left: 19%;
+  bottom: 2%;
+  background: linear-gradient(35deg, rgba(214,146,26,.15), transparent 70%);
+  clip-path: polygon(0 100%, 28% 0, 100% 35%, 72% 100%);
+}
+.achievementBadgeLogo,
+.achievementBadgeValue,
+.achievementBadgeLabel,
+.achievementBadgeOrnament,
+.achievementBadgeSparkle {
+  position: relative;
+  z-index: 3;
+}
+.achievementBadgeLogo {
+  width: 66%;
+  height: auto;
+  object-fit: contain;
+  margin: -3% auto 0;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.8));
+}
+.achievementBadgeValue {
+  max-width: 100%;
+  margin-top: -1%;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(41px, 4.2vw, 63px);
+  font-weight: 950;
+  line-height: .88;
+  letter-spacing: -.075em;
+  white-space: nowrap;
+  background: linear-gradient(
+    180deg,
+    #fff3ac 0%,
+    #ffd45a 22%,
+    #ad6308 54%,
+    #ffe278 74%,
+    #8d4f06 100%
+  );
+  -webkit-background-clip: text;
+  color: transparent;
+  filter:
+    drop-shadow(0 4px 1px #2d1701)
+    drop-shadow(0 0 4px rgba(255,203,64,.34));
+}
+.achievementBadgeArt.compactValue .achievementBadgeValue {
+  font-size: clamp(32px, 3.5vw, 50px);
+}
+.achievementBadgeLabel {
+  margin-top: 5%;
+  color: #f5efe3;
+  font-size: clamp(8px, .9vw, 12px);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: .025em;
+  text-shadow: 0 2px 2px #000;
+}
+.achievementBadgeOrnament {
+  width: 74%;
+  margin-top: 7%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: #e4ad2e;
+  font-size: 7px;
+  line-height: 1;
+}
+.achievementBadgeOrnament strong {
+  font-size: 11px;
+}
+.achievementBadgeOrnament i {
+  display: block;
+  height: 1px;
+  flex: 1;
+  background: linear-gradient(90deg, transparent, #e4ad2e);
+}
+.achievementBadgeOrnament i:last-child {
+  background: linear-gradient(90deg, #e4ad2e, transparent);
+}
+.achievementBadgeSparkle {
+  position: absolute;
+  color: #fff0a5;
+  line-height: 1;
+  text-shadow: 0 0 7px #f4b92f;
+  pointer-events: none;
+}
+.achievementBadgeSparkle.sparkleA {
+  left: 12%;
+  top: 24%;
+  font-size: 12px;
+}
+.achievementBadgeSparkle.sparkleB {
+  right: 9%;
+  top: 42%;
+  font-size: 9px;
+}
+.achievementBadgeSparkle.sparkleC {
+  left: 17%;
+  bottom: 24%;
+  font-size: 7px;
+}
+.achievementBadgeArt.large .achievementBadgeValue {
+  font-size: 112px;
+}
+.achievementBadgeArt.large.compactValue .achievementBadgeValue {
+  font-size: 86px;
+}
+.achievementBadgeArt.large .achievementBadgeLabel {
+  font-size: 19px;
+}
+.achievementBadgeArt.large .achievementBadgeOrnament {
+  font-size: 11px;
+}
+.achievementBadgeArt.large .achievementBadgeOrnament strong {
+  font-size: 17px;
+}
+
+.achievementDetailOverlay {
+  z-index: 4200;
+}
+.achievementDetailDialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(850px, calc(100vh - 28px));
+  overflow: auto;
+}
+.achievementDetailBody {
+  display: grid;
+  grid-template-columns: minmax(230px, 310px) 1fr;
+  gap: 28px;
+  align-items: center;
+  padding: 22px 24px;
+}
+.achievementDetailInfo {
+  display: grid;
+  gap: 15px;
+}
+.achievementDetailInfo > div {
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel-2);
+}
+.achievementDetailInfo small {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .09em;
+}
+.achievementDetailInfo p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.45;
+}
+.achievementStatus {
+  width: fit-content;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 850;
+}
+.achievementStatus svg {
+  width: 15px;
+  height: 15px;
+}
+.achievementStatus.unlocked {
+  background: rgba(205,154,33,.14);
+  border: 1px solid rgba(221,171,49,.35);
+  color: #e5b33a;
+}
+.achievementStatus.locked {
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.achievementDetailFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.achievementDownloadModal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.achievementDownloadModal svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* =========================================================
+   Espelho do catálogo dentro de Estoque
+   ========================================================= */
+.stockCatalogMirrorButton.active {
+  border-color: color-mix(in srgb, var(--gold) 62%, var(--line));
+  color: color-mix(in srgb, var(--gold) 82%, var(--text));
+}
+.stockCatalogMirror {
+  margin-bottom: 18px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--line));
+  border-radius: 18px;
+  background: var(--panel);
+}
+.stockCatalogMirrorHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+.stockCatalogMirrorHead > div:first-child {
+  min-width: 0;
+}
+.stockCatalogMirrorHead small {
+  color: color-mix(in srgb, var(--gold) 78%, var(--text));
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .12em;
+}
+.stockCatalogMirrorHead h3 {
+  margin: 3px 0 3px;
+  font-size: 17px;
+}
+.stockCatalogMirrorHead p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+.stockCatalogMirrorActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.stockCatalogMirrorActions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.stockCatalogMirrorActions svg {
+  width: 15px;
+  height: 15px;
+}
+.stockCatalogMirrorViewport {
+  max-height: min(760px, 72vh);
+  overflow: auto;
+  background: #010101;
+}
+.stockCatalogMirrorViewport .catalogAdminArea {
+  min-height: 0;
+}
+.stockCatalogMirrorViewport .catalogExperience.embedded {
+  min-height: auto;
+}
+
+@media (max-width: 900px) {
+  .achievementGrid {
+    grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+    gap: 10px;
+  }
+  .achievementDetailBody {
+    grid-template-columns: 1fr;
+  }
+  .achievementBadgeArt.large {
+    width: min(100%, 270px);
+  }
+  .stockCatalogMirrorHead {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .stockCatalogMirrorActions {
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 560px) {
+  .achievementGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .achievementCard {
+    padding: 8px;
+    border-radius: 14px;
+  }
+  .achievementBadgeArt {
+    width: min(100%, 126px);
+  }
+  .achievementBadgeValue {
+    font-size: 39px;
+  }
+  .achievementBadgeArt.compactValue .achievementBadgeValue {
+    font-size: 31px;
+  }
+  .achievementCardCopy strong {
+    font-size: 12px;
+  }
+  .achievementCardCopy small,
+  .achievementCardCopy em {
+    font-size: 9px;
+  }
+  .achievementDetailDialog {
+    width: calc(100vw - 18px);
+  }
+  .achievementDetailBody {
+    padding: 16px;
+    gap: 18px;
+  }
+  .achievementBadgeArt.large {
+    width: min(100%, 235px);
+  }
+  .achievementBadgeArt.large .achievementBadgeValue {
+    font-size: 88px;
+  }
+  .achievementBadgeArt.large.compactValue .achievementBadgeValue {
+    font-size: 70px;
+  }
+  .achievementDetailFooter {
+    flex-direction: column-reverse;
+  }
+  .achievementDetailFooter button {
+    width: 100%;
+    justify-content: center;
+  }
+  .stockHeadActions {
+    flex-wrap: wrap;
+  }
+  .stockCatalogMirrorActions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .stockCatalogMirrorActions button {
+    width: 100%;
+    justify-content: center;
+  }
+}

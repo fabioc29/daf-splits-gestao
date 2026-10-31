@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { readState, newIdentities, StateConflict } from "./crm/state-persistence";
-import { FabioStateWriter, committedCatalogCache, PUBLISHED_CATALOG_KEY } from "./crm/fabio-persistence";
+import { FabioStateWriter } from "./crm/fabio-persistence";
 import { LocalRecovery, optionalLocalGet, optionalLocalSet, optionalLocalRemove } from "./crm/local-recovery";
 import { CRMFeedPanel } from "./crm/CRMFeedPanel";
 import {
@@ -51,6 +51,8 @@ import {
   ArrowUp,
   ArrowDown,
   Image as ImageIcon,
+  Trophy,
+  Download,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
@@ -58,11 +60,10 @@ import { isSupabaseConfigured, supabase } from "./supabase";
 import {
   CatalogAdminPreview,
   catalogItemsFromProducts,
-  enrichCatalogItemsWithImages,
-  catalogSnapshotPayload,
   catalogSettingsForPersistence,
+  catalogSnapshotPayload,
   DEFAULT_CATALOG_SETTINGS,
-  normalizeCatalogSettings,
+  enrichCatalogItemsWithImages,
   type CatalogSettings,
 } from "./Catalog";
 
@@ -185,6 +186,7 @@ type V = SourceIdentity & {
   };
   historical?: boolean;
   description?: string;
+  sellerId?: number;
 };
 type B = {
   id: number;
@@ -202,7 +204,34 @@ type B = {
   dueDate?: string;
   installment?: number;
   installments?: Installment[];
+  arrivalStatus?: "pending" | "received";
+  receivedAt?: string;
+  productId?: number;
+  perfumeBrand?: string;
+  perfumeName?: string;
+  perfumeCategory?: string;
+  perfumeGender?: string;
+  perfumeApc?: boolean;
 };
+type TeamMemberRole = "partner" | "employee";
+type TeamMember = {
+  id: number;
+  name: string;
+  role: TeamMemberRole;
+  equityPercent?: number;
+  salary?: number;
+  commissionPercent?: number;
+  position?: string;
+  active?: boolean;
+};
+
+const DEFAULT_TEAM_MEMBERS: TeamMember[] = [
+  { id: 1001, name: "Fábio Cardoso Cruz", role: "partner", equityPercent: 31.66, active: true },
+  { id: 1002, name: "Davi Cesar Ferreira Costa", role: "partner", equityPercent: 31.66, active: true },
+  { id: 1003, name: "Agnaldo Tavares Junior", role: "partner", equityPercent: 31.66, active: true },
+  { id: 1004, name: "Gabriel Rodrigo dos Santos Miguel", role: "partner", equityPercent: 5, active: true },
+];
+
 type SupplierType =
   | "Fornecedor de perfumes"
   | "Fornecedor de suprimentos/insumos"
@@ -230,6 +259,7 @@ type D = {
   marketplacePayoutDays?: { "TikTok Shop": number; Shopee: number };
   catalogSettings: CatalogSettings;
   dashboardSupplyReportIds: number[];
+  teamMembers: TeamMember[];
 };
 type Modal = { type: string; id?: number } | null;
 
@@ -242,6 +272,7 @@ const DEFAULT_MENU_ORDER = [
   "stock",
   "registrations",
   "finance",
+  "achievements",
   "settings",
 ];
 
@@ -410,6 +441,18 @@ function readLocalUiSettings(): LocalUiSettings {
         : {}),
       ...(legacyGold ? { gold: legacyGold } : {}),
     };
+    const menuOrder = [
+      ...storedOrder,
+      ...DEFAULT_MENU_ORDER.filter((id) => !storedOrder.includes(id)),
+    ];
+    // Usuários que já tinham uma ordem salva recebem o novo menu exatamente
+    // abaixo de Financeiro. Depois disso, qualquer reordenação manual é respeitada.
+    if (!storedOrder.includes("achievements")) {
+      const currentIndex = menuOrder.indexOf("achievements");
+      if (currentIndex >= 0) menuOrder.splice(currentIndex, 1);
+      const financeIndex = menuOrder.indexOf("finance");
+      menuOrder.splice(financeIndex >= 0 ? financeIndex + 1 : menuOrder.length, 0, "achievements");
+    }
     return {
       appName:
         typeof stored?.appName === "string"
@@ -419,10 +462,7 @@ function readLocalUiSettings(): LocalUiSettings {
         typeof stored?.panelLabel === "string"
           ? stored.panelLabel
           : DEFAULT_LOCAL_UI_SETTINGS.panelLabel,
-      menuOrder: [
-        ...storedOrder,
-        ...DEFAULT_MENU_ORDER.filter((id) => !storedOrder.includes(id)),
-      ],
+      menuOrder,
       menuZoom: Math.max(
         80,
         Math.min(130, Number(stored?.menuZoom) || 100),
@@ -453,11 +493,85 @@ const blank: D = {
   marketplacePayoutDays: { "TikTok Shop": 9, Shopee: 7 },
   catalogSettings: { ...DEFAULT_CATALOG_SETTINGS },
   dashboardSupplyReportIds: [],
+  teamMembers: DEFAULT_TEAM_MEMBERS.map((member) => ({ ...member })),
 };
 const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const parseDecimal = (value: unknown) =>
   Number(String(value ?? "").trim().replace(",", ".")) || 0;
+
+function normalizeSearchValue(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function smartSearchMatch(query: unknown, ...values: unknown[]) {
+  const rawQuery = String(query ?? "").trim();
+  if (!rawQuery) return true;
+  const normalizedQuery = normalizeSearchValue(rawQuery);
+  const normalizedTarget = normalizeSearchValue(values.filter(Boolean).join(" "));
+  const tokens = normalizedQuery.split(" ").filter(Boolean);
+  const textMatch = tokens.every((token) => normalizedTarget.includes(token));
+  if (textMatch) return true;
+  const queryDigits = rawQuery.replace(/\D/g, "");
+  if (queryDigits.length >= 3) {
+    const targetDigits = values.join(" ").replace(/\D/g, "");
+    if (targetDigits.includes(queryDigits)) return true;
+  }
+  return false;
+}
+
+function rebalancePartnerEquity(
+  members: TeamMember[],
+  editedId: number,
+  requestedPercent: number,
+) {
+  const partners = members.filter((member) => member.role === "partner");
+  const edited = partners.find((member) => member.id === editedId);
+  if (!edited) return members;
+  const percent = Math.max(0, Math.min(100, Number(requestedPercent) || 0));
+  const others = partners.filter((member) => member.id !== editedId);
+  if (!others.length) {
+    return members.map((member) =>
+      member.id === editedId ? { ...member, equityPercent: 100 } : member,
+    );
+  }
+  const remaining = Math.max(0, 100 - percent);
+  const currentOtherTotal = others.reduce(
+    (sum, member) => sum + Math.max(0, Number(member.equityPercent) || 0),
+    0,
+  );
+  let distributed = 0;
+  const nextValues = new Map<number, number>();
+  others.forEach((member, index) => {
+    const next =
+      index === others.length - 1
+        ? Math.max(0, Number((remaining - distributed).toFixed(2)))
+        : Number(
+            (
+              currentOtherTotal > 0
+                ? remaining *
+                  (Math.max(0, Number(member.equityPercent) || 0) /
+                    currentOtherTotal)
+                : remaining / others.length
+            ).toFixed(2),
+          );
+    distributed += next;
+    nextValues.set(member.id, next);
+  });
+  return members.map((member) =>
+    member.id === editedId
+      ? { ...member, equityPercent: Number(percent.toFixed(2)) }
+      : nextValues.has(member.id)
+        ? { ...member, equityPercent: nextValues.get(member.id) }
+        : member,
+  );
+}
 
 function parseBottleMarker(value: unknown) {
   const original = String(value || "").trim();
@@ -485,6 +599,146 @@ function perfumeIdentity(brand: unknown, name: unknown) {
     .replace(/[^a-z0-9]+/g, " ")
     .trim()
     .replace(/\s+/g, " ");
+}
+
+function pendingPerfumePurchases(d: D) {
+  return d.purchases
+    .filter(
+      (purchase) =>
+        purchase.type === "Perfume" && purchase.arrivalStatus === "pending",
+    )
+    .sort(
+      (a, b) =>
+        String(b.date || "").localeCompare(String(a.date || "")) ||
+        Number(b.id) - Number(a.id),
+    );
+}
+
+function receivePerfumePurchase(
+  state: D,
+  purchaseId: number,
+  receivedAt = today(),
+): D {
+  const purchase = state.purchases.find((item) => item.id === purchaseId);
+  if (
+    !purchase ||
+    purchase.type !== "Perfume" ||
+    purchase.arrivalStatus === "received"
+  ) {
+    return state;
+  }
+
+  const brand = String(purchase.perfumeBrand || "").trim();
+  const name = parseBottleMarker(purchase.perfumeName || "").name.trim();
+  const qty = Math.max(1, Math.round(Number(purchase.qty) || 1));
+  const mlPerBottle = Math.max(0, Number(purchase.mlPerBottle) || 0);
+  const volume = qty * mlPerBottle;
+  if (!brand || !name || volume <= 0) return state;
+
+  const matchingProducts = state.products.filter(
+    (product) =>
+      perfumeIdentity(product.brand, product.name) ===
+      perfumeIdentity(brand, name),
+  );
+  if (matchingProducts.length > 1) {
+    window.alert(
+      "Há mais de um cadastro para este perfume. A chegada não foi lançada para evitar somar o estoque no item errado.",
+    );
+    return state;
+  }
+
+  const existing = matchingProducts[0];
+  const startingBottleNumber = Math.max(
+    0,
+    Number(existing?.bottleNumber) || 0,
+  );
+  const bottleNumbers = Array.from(
+    { length: qty },
+    (_, index) => startingBottleNumber + index + 1,
+  );
+  const newBottleHistory = bottleNumbers.map((number) => ({
+    number,
+    date: receivedAt,
+    purchaseId,
+    ml: mlPerBottle,
+  }));
+
+  const productId =
+    existing?.id ||
+    Math.max(
+      Date.now(),
+      state.products.reduce(
+        (max, product) => Math.max(max, Number(product.id) || 0),
+        0,
+      ) + 1,
+    );
+
+  const products = existing
+    ? state.products.map((product) =>
+        product.id === existing.id
+          ? {
+              ...product,
+              name: parseBottleMarker(product.name).name,
+              stock: product.stock + volume,
+              cost:
+                (product.cost * product.stock + Number(purchase.total || 0)) /
+                (product.stock + volume || 1),
+              apc: purchase.perfumeApc ? 1 : Math.min(1, product.apc),
+              bottleNumber:
+                bottleNumbers[bottleNumbers.length - 1] ||
+                product.bottleNumber ||
+                1,
+              bottleHistory: [
+                ...(product.bottleHistory ||
+                  normalizeBottleHistory(
+                    product,
+                    product.bottleNumber || 1,
+                  )),
+                ...newBottleHistory,
+              ],
+            }
+          : product,
+      )
+    : [
+        ...state.products,
+        {
+          id: productId,
+          brand,
+          name,
+          category: String(purchase.perfumeCategory || "Designer"),
+          gender: String(purchase.perfumeGender || "Unissex"),
+          stock: volume,
+          min: 0,
+          cost: Number(purchase.total || 0) / (volume || 1),
+          apc: purchase.perfumeApc ? 1 : 0,
+          bottleNumber: bottleNumbers[bottleNumbers.length - 1] || qty,
+          bottleHistory: newBottleHistory,
+        },
+      ];
+
+  const brands = state.brands.some(
+    (item) =>
+      item.localeCompare(brand, "pt-BR", { sensitivity: "base" }) === 0,
+  )
+    ? state.brands
+    : [...state.brands, brand];
+
+  return {
+    ...state,
+    products,
+    brands,
+    purchases: state.purchases.map((item) =>
+      item.id === purchaseId
+        ? {
+            ...item,
+            arrivalStatus: "received",
+            receivedAt,
+            productId,
+            bottleNumbers,
+          }
+        : item,
+    ),
+  };
 }
 
 function productDisplayName(product: P) {
@@ -629,6 +883,45 @@ const BRAZIL_STATES = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT",
   "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO",
   "RR", "SC", "SP", "SE", "TO",
+];
+
+type BrazilRegion =
+  | "Norte"
+  | "Nordeste"
+  | "Centro-Oeste"
+  | "Sudeste"
+  | "Sul"
+  | "Não informado";
+
+function brazilRegion(state: unknown): BrazilRegion {
+  const uf = String(state || "").trim().toUpperCase();
+  if (["AC", "AP", "AM", "PA", "RO", "RR", "TO"].includes(uf)) return "Norte";
+  if (["AL", "BA", "CE", "MA", "PB", "PE", "PI", "RN", "SE"].includes(uf))
+    return "Nordeste";
+  if (["DF", "GO", "MT", "MS"].includes(uf)) return "Centro-Oeste";
+  if (["ES", "MG", "RJ", "SP"].includes(uf)) return "Sudeste";
+  if (["PR", "RS", "SC"].includes(uf)) return "Sul";
+  return "Não informado";
+}
+
+const BRAZIL_REGION_STATES: Record<Exclude<BrazilRegion, "Não informado">, string[]> = {
+  Norte: ["AC", "AP", "AM", "PA", "RO", "RR", "TO"],
+  Nordeste: ["AL", "BA", "CE", "MA", "PB", "PE", "PI", "RN", "SE"],
+  "Centro-Oeste": ["DF", "GO", "MT", "MS"],
+  Sudeste: ["ES", "MG", "RJ", "SP"],
+  Sul: ["PR", "RS", "SC"],
+};
+
+const REGION_STATE_COLORS = [
+  "#7186ff",
+  "#54c7d4",
+  "#32bf8a",
+  "#f2b84b",
+  "#8b5cf6",
+  "#ef6670",
+  "#4ba3ff",
+  "#d76de8",
+  "#76c85a",
 ];
 const isMarketplaceSale = (sale: V) =>
   sale.channel === "marketplace" || Boolean(sale.marketplace);
@@ -867,6 +1160,7 @@ const nav = [
   ["stock", "Estoque", Box],
   ["registrations", "Cadastros", Users],
   ["finance", "Financeiro", Wallet],
+  ["achievements", "Conquistas", Trophy],
   ["settings", "Configurações", Settings],
   ["crm", "Integração CRM", Cloud],
 ] as const;
@@ -910,7 +1204,6 @@ function System({ session }: { session: Session }) {
   const blocked = useRef(false);
   const mounted = useRef(true);
   const [saveNotice, setSaveNotice] = useState("");
-  const [catalogNotice, setCatalogNotice] = useState("");
   const recovery = useRef<LocalRecovery | null>(null);
   const recoveredDrafts = useRef<unknown[]>([]);
   const [editingBlocked, setEditingBlocked] = useState(true);
@@ -926,16 +1219,15 @@ function System({ session }: { session: Session }) {
     catch { blockEditing("O rascunho está apenas na memória: o armazenamento local falhou. Exporte-o antes de fechar e carregue o estado salvo para continuar."); setDataState(next); return; }
     setDataState(next);
   }
-  function recordPublication(publication: Awaited<ReturnType<FabioStateWriter["publish"]>>) {
-    const cache = committedCatalogCache(publication);
-    if (cache && !optionalLocalSet(PUBLISHED_CATALOG_KEY, cache)) {
-      setCatalogNotice("Dados e catálogo confirmados no servidor; o cache local do catálogo está indisponível."); return;
-    }
-    setCatalogNotice(publication.status === "published" ? "" : publication.status === "stale"
-      ? "O catálogo aguarda a revisão atual. Outra sessão salvou durante a publicação."
-      : "Dados salvos; o catálogo ainda não foi publicado. Tente publicar novamente após conferir a revisão.");
+  function fallbackCatalog(persisted: D) {
+    return catalogSnapshotPayload(
+      catalogItemsFromProducts(
+        persisted.products,
+        persisted.catalogSettings?.manualImages,
+      ),
+      persisted.catalogSettings,
+    );
   }
-  function fallbackCatalog(persisted: D) { return catalogSnapshotPayload(catalogItemsFromProducts(persisted.products, persisted.catalogSettings?.manualImages), persisted.catalogSettings); }
   async function buildCatalog(persisted: D, signal?: AbortSignal) {
     const items = await enrichCatalogItemsWithImages(
       catalogItemsFromProducts(
@@ -946,6 +1238,16 @@ function System({ session }: { session: Session }) {
       persisted.catalogSettings?.productOrder === "mostRated",
     );
     return catalogSnapshotPayload(items, persisted.catalogSettings);
+  }
+  function reconcilePublicCatalog(current: FabioStateWriter) {
+    void current.publish().then((result) => {
+      if (!mounted.current || result.status === "published") return;
+      notify(
+        result.status === "stale"
+          ? "O catálogo aguarda a revisão atual e será reconciliado na próxima gravação."
+          : "Não foi possível atualizar o catálogo público. Os dados da gestão continuam salvos.",
+      );
+    });
   }
   function exportDraft() {
     const url = URL.createObjectURL(new Blob([JSON.stringify({format:"daf-recovery-export-v1",userId:session.user.id,currentDraft:dataRef.current,pendingDrafts:recoveredDrafts.current}, null, 2)], {type:"application/json"}));
@@ -961,25 +1263,13 @@ function System({ session }: { session: Session }) {
       if (!mounted.current || version !== saveVersion.current) { current.dispose(); return; }
       writer.current?.dispose(); writer.current = current;
       let normalized = normalizeData(current.snapshot.data);
-      const catalogSettingsNeedTransportMigration =
-        JSON.stringify(current.snapshot.data?.catalogSettings || {}) !==
-        JSON.stringify(normalized.catalogSettings);
-      if (
-        current.snapshot.identitiesReady &&
-        (
-          (
-            Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
-            normalized.hacivatBottleCorrectionVersion === 1
-          ) ||
-          catalogSettingsNeedTransportMigration
-        )
-      ) {
+      if (current.snapshot.identitiesReady &&
+          Number(current.snapshot.data?.hacivatBottleCorrectionVersion || 0) < 1 &&
+          normalized.hacivatBottleCorrectionVersion === 1) {
         const migrated = await current.save(normalized);
         normalized = normalizeData(migrated.saved.data);
-        void migrated.publication.then((publication) => {
-          if (mounted.current) recordPublication(publication);
-        });
       }
+      reconcilePublicCatalog(current);
       lastSynced.current = JSON.stringify(normalized);
       // The user explicitly chose the confirmed server state, so discard the
       // pending recovery records that caused this warning instead of leaving
@@ -1120,10 +1410,8 @@ function System({ session }: { session: Session }) {
         ) {
           const migrated = await current.save(normalized);
           normalized = normalizeData(migrated.saved.data);
-          void migrated.publication.then((publication) => {
-            if (mounted.current) recordPublication(publication);
-          });
         }
+        reconcilePublicCatalog(current);
         lastSynced.current = JSON.stringify(normalized);
         blocked.current = pending.length > 0 || !current.snapshot.identitiesReady;
         setEditingBlocked(blocked.current);
@@ -1163,13 +1451,20 @@ function System({ session }: { session: Session }) {
       if (!mounted.current) return;
       const normalized = normalizeData(saved.data);
       lastSynced.current = JSON.stringify(normalized);
+      void publication?.then((result) => {
+        if (!mounted.current || result.status === "published") return;
+        notify(
+          result.status === "stale"
+            ? "Dados salvos. O catálogo será reconciliado na próxima gravação da revisão atual."
+            : "Dados salvos, mas o catálogo público não pôde ser atualizado.",
+        );
+      });
       if (version === saveVersion.current) {
         // A browser cache failure cannot invalidate an acknowledged database commit.
         setDataState(normalized); setSync("saved"); setSaveNotice("");
         try { recovery.current?.clear(); }
         catch { blockEditing("Gravação confirmada no banco. A recuperação local falhou; novas edições estão bloqueadas. Exporte e carregue o estado salvo."); }
       }
-      void publication.then(result => { if (mounted.current) recordPublication(result); });
     }).catch(error => {
       if (!mounted.current) return;
       blockEditing(error instanceof StateConflict
@@ -1262,6 +1557,7 @@ function System({ session }: { session: Session }) {
   }
   return overdue ? "overdue" : dueToday ? "today" : null;
 })();
+const pendingPerfumeCount = pendingPerfumePurchases(data).length;
 const action =
   page === "sales"
       ? ["Nova venda", "sale"]
@@ -1275,9 +1571,9 @@ const action =
             ? ["Cadastrar venda antiga", "oldSale"]
             : null;
   const stockSectionActive =
-    page === "stock" || page === "stock-supplies" || page === "catalog";
+    page === "stock" || page === "stock-supplies";
   const registrationsSectionActive =
-    page === "clients" || page === "suppliers" || page === "brands";
+    page === "clients" || page === "suppliers" || page === "brands" || page === "team";
   const financeSectionActive =
     page === "finance" ||
     page === "receivables" ||
@@ -1298,15 +1594,15 @@ const action =
       ? "Estoque de perfumes"
       : page === "stock-supplies"
         ? "Estoque de insumos"
-        : page === "catalog"
-          ? "Catálogo"
-          : page === "clients"
+        : page === "clients"
             ? "Clientes"
             : page === "suppliers"
               ? "Fornecedores"
               : page === "brands"
                 ? "Marcas"
-                : page === "receivables"
+                : page === "team"
+                  ? "Sócios/Funcionários"
+                  : page === "receivables"
             ? "Vendas a receber"
             : page === "payables"
               ? "Compras a pagar"
@@ -1377,12 +1673,6 @@ const action =
                       >
                         Insumos
                       </button>
-                      <button
-                        className={page === "catalog" ? "on" : ""}
-                        onClick={() => setPage("catalog")}
-                      >
-                        Catálogo
-                      </button>
                     </div>
                   ) : null}
                 </div>
@@ -1423,6 +1713,12 @@ const action =
                         onClick={() => setPage("suppliers")}
                       >
                         Fornecedores
+                      </button>
+                      <button
+                        className={page === "team" ? "on" : ""}
+                        onClick={() => setPage("team")}
+                      >
+                        Sócios/Funcionários
                       </button>
                       <button
                         className={page === "brands" ? "on" : ""}
@@ -1616,7 +1912,15 @@ const action =
             <h1>{pageTitle}</h1>
           </div>
           <div className="headerActions">
-            {page === "dashboard" || page === "finance" ? (
+            {page === "finance" ? (
+              <button
+                className="secondary revenueHistoryButton"
+                onClick={() => setModal({ type: "revenueHistory" })}
+              >
+                <BarChart3 /> Histórico de faturamento
+              </button>
+            ) : null}
+                        {page === "dashboard" || page === "finance" ? (
               <button
                 className="secondary reportButton"
                 onClick={() =>
@@ -1647,54 +1951,6 @@ const action =
                 <ReceiptText /> Relatório
               </button>
             ) : null}
-            {page === "catalog" ? (
-              <button
-                className="secondary"
-                disabled={!ready || sync !== "saved"}
-                onClick={async () => {
-                  if (writer.current && !writer.current.pending && !blocked.current) {
-                    const publication = await writer.current.publish();
-                    if (mounted.current) recordPublication(publication);
-                  }
-                }}
-              >
-                <Cloud /> Publicar revisão salva
-              </button>
-            ) : null}
-            {page === "catalog" ? (
-              <button
-                className="secondary catalogHeaderEditButton"
-                onClick={() =>
-                  window.dispatchEvent(new CustomEvent("daf:catalog-edit"))
-                }
-              >
-                <Palette /> Editar
-              </button>
-            ) : null}
-            {page === "catalog" ? (
-              <button
-                className="secondary catalogHeaderImagesButton"
-                onClick={() =>
-                  window.dispatchEvent(new CustomEvent("daf:catalog-images"))
-                }
-              >
-                <ImageIcon /> Imagens
-              </button>
-            ) : null}
-            {page === "catalog" ? (
-              <button
-                className="secondary catalogPublicButton"
-                onClick={() =>
-                  window.open(
-                    import.meta.env.VITE_PUBLIC_CATALOG_URL || "/catalogo",
-                    "_blank",
-                    "noopener,noreferrer",
-                  )
-                }
-              >
-                <PackageOpen /> Abrir catálogo público
-              </button>
-            ) : null}
             {action ? (
               <button
                 className="primary"
@@ -1709,7 +1965,6 @@ const action =
         </header>
         <section className={"content contentPage-" + page}>
           {saveNotice && <div className="card" role="alert"><p>{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button></div>}
-          {catalogNotice && <div className="card" role="status"><p>{catalogNotice}</p><button disabled={sync !== "saved" || !ready} onClick={async () => { if (writer.current && !writer.current.pending && !blocked.current) recordPublication(await writer.current.publish()); }}>Publicar catálogo da revisão salva</button></div>}
           <div inert={editingBlocked} style={{display:"contents"}}>
           {page === "crm" ? (
             <CRMFeedPanel userId={session.user.id} synced={ready && sync === "saved" && !blocked.current} />
@@ -1752,17 +2007,8 @@ const action =
               editSupply={(id) => setModal({ type: "supplyEdit", id })}
               edit={(id) => setModal({ type: "product", id })}
               notify={notify}
-            />
-          ) : page === "catalog" ? (
-            <CatalogAdminPreview
-              products={data.products}
-              settings={data.catalogSettings}
-              onSettingsChange={(catalogSettings) =>
-                setData((current) => ({
-                  ...current,
-                  catalogSettings: catalogSettingsForPersistence(catalogSettings),
-                }))
-              }
+              pendingPerfumeCount={pendingPerfumeCount}
+              openPendingPerfumes={() => setModal({ type: "pendingPerfumes" })}
             />
           ) : page === "purchases" ? (
             <Purchases
@@ -1787,6 +2033,8 @@ const action =
               edit={(id) => setModal({ type: "supplier", id })}
               notify={notify}
             />
+          ) : page === "team" ? (
+            <TeamMembers d={data} set={setData} notify={notify} />
           ) : page === "brands" ? (
             <BrandManager
               d={data}
@@ -1796,6 +2044,8 @@ const action =
             />
           ) : page === "finance-pricing" ? (
             <PricingCalculator d={data} notify={notify} />
+          ) : page === "achievements" ? (
+            <Achievements d={data} />
           ) : page === "settings" ? (
             <SettingsPage
               theme={theme}
@@ -1811,7 +2061,16 @@ const action =
         </section>
       </main>
       <div inert={editingBlocked} style={{display:"contents"}}>
-      {modal?.type === "supplyEdit" || modal?.type === "purchaseEdit" ? (
+      {modal?.type === "revenueHistory" ? (
+        <RevenueHistoryModal d={data} close={() => setModal(null)} />
+      ) : modal?.type === "pendingPerfumes" ? (
+        <PendingPerfumes
+          d={data}
+          set={setData}
+          close={() => setModal(null)}
+          notify={notify}
+        />
+      ) : modal?.type === "supplyEdit" || modal?.type === "purchaseEdit" ? (
         <InventoryEdit
           modal={modal}
           d={data}
@@ -2206,6 +2465,16 @@ function normalizeData(stored: any): D {
       dueDate: installments[0]?.date,
       installment: installments[0]?.amount,
       installments,
+      arrivalStatus:
+        purchase.type === "Perfume"
+          ? purchase.arrivalStatus === "pending"
+            ? "pending"
+            : "received"
+          : undefined,
+      perfumeApc:
+        purchase.type === "Perfume"
+          ? Boolean(purchase.perfumeApc)
+          : undefined,
     };
   });
   const normalizedClients = (merged.clients || []).map((client: C) => ({
@@ -2248,6 +2517,7 @@ function normalizeData(stored: any): D {
       payment: marketplaceSale ? "À prazo" : s.payment,
       sent: Boolean(s.sent),
       status: s.status || "active",
+      sellerId: Number(s.sellerId) || undefined,
       expenses: Number(s.expenses || 0),
       supplyOverrides: Object.fromEntries(
         Object.entries(s.supplyOverrides || {}).map(([name, qty]) => [
@@ -2385,6 +2655,30 @@ function normalizeData(stored: any): D {
     });
   }
   normalizedSupplies = normalizedSupplies.map(activateNextSupplyLot);
+  const normalizedTeamMembers: TeamMember[] =
+    Array.isArray(merged.teamMembers) && merged.teamMembers.length
+      ? merged.teamMembers.map((member: TeamMember) => ({
+          id: Number(member.id) || Date.now(),
+          name: String(member.name || "").trim(),
+          role: member.role === "employee" ? "employee" : "partner",
+          equityPercent:
+            member.role === "employee"
+              ? undefined
+              : Math.max(0, Number(member.equityPercent) || 0),
+          salary:
+            member.role === "employee"
+              ? Math.max(0, Number(member.salary) || 0)
+              : undefined,
+          commissionPercent:
+            member.role === "employee"
+              ? Math.max(0, Number(member.commissionPercent) || 0)
+              : undefined,
+          position:
+            member.role === "employee" ? String(member.position || "") : undefined,
+          active: member.active !== false,
+        }))
+      : DEFAULT_TEAM_MEMBERS.map((member) => ({ ...member }));
+
   return {
     ...merged,
     products,
@@ -2409,6 +2703,7 @@ function normalizeData(stored: any): D {
     supplierDates,
     brands,
     sales: normalizedSales,
+    teamMembers: normalizedTeamMembers,
   };
 }
 function readLocal(): D {
@@ -3462,29 +3757,32 @@ function HealthGauge({
 }
 
 function OrderSummaryChart({ sales }: { sales: V[] }) {
-  const directOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && !isMarketplaceSale(sale),
+  const activeSales = sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      !isHistoricalSale(sale),
+  );
+  const directOrders = activeSales.filter((sale) => !isMarketplaceSale(sale)).length;
+  const tiktokOrders = activeSales.filter(
+    (sale) => sale.marketplace === "TikTok Shop",
   ).length;
-  const tiktokOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && sale.marketplace === "TikTok Shop",
-  ).length;
-  const shopeeOrders = sales.filter(
-    (sale) => sale.status !== "cancelled" && sale.marketplace === "Shopee",
+  const shopeeOrders = activeSales.filter(
+    (sale) => sale.marketplace === "Shopee",
   ).length;
   const cancelledOrders = sales.filter((sale) => sale.status === "cancelled").length;
-  const total = directOrders + tiktokOrders + shopeeOrders + cancelledOrders;
+  const total = directOrders + tiktokOrders + shopeeOrders;
   const pct = (value: number) => (total ? Math.round((value / total) * 100) : 0);
   const segments = [
     { label: "Venda direta", value: directOrders, color: "var(--chart-order-direct)" },
     { label: "TikTok Shop", value: tiktokOrders, color: "var(--chart-order-tiktok)" },
     { label: "Shopee", value: shopeeOrders, color: "var(--chart-order-shopee)" },
-    { label: "Cancelados", value: cancelledOrders, color: "var(--chart-order-cancelled)" },
   ];
   return (
     <div className="panel dashboardMetricPanel orderOriginSummary">
       <div className="dashboardMiniHeader">
         <h2>Resumo dos pedidos</h2>
-        <p>Distribuição dos pedidos no período.</p>
+        <p>Distribuição dos pedidos válidos no período.</p>
       </div>
 
       <div className="dashboardMiniVisual">
@@ -3510,10 +3808,12 @@ function OrderSummaryChart({ sales }: { sales: V[] }) {
           <span className="orderOriginText"><strong>Shopee</strong><small>{pct(shopeeOrders)}%</small></span>
           <b>{shopeeOrders} pedido{shopeeOrders === 1 ? "" : "s"}</b>
         </p>
-        <p className="cancelled">
-          <span className="orderOriginText"><strong>Cancelados</strong><small>{pct(cancelledOrders)}%</small></span>
-          <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
-        </p>
+        {cancelledOrders ? (
+          <p className="cancelled">
+            <span className="orderOriginText"><strong>Cancelados</strong><small>fora do total</small></span>
+            <b>{cancelledOrders} pedido{cancelledOrders === 1 ? "" : "s"}</b>
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -3583,6 +3883,425 @@ function CategoryChart({ d, sales }: { d: D; sales: V[] }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function RegionChart({
+  d,
+  set,
+  sales,
+}: {
+  d: D;
+  set: any;
+  sales: V[];
+}) {
+  const [selectedRegion, setSelectedRegion] = useState<
+    Exclude<BrazilRegion, "Não informado"> | null
+  >(null);
+  const [unidentifiedOpen, setUnidentifiedOpen] = useState(false);
+  const [editingSaleId, setEditingSaleId] = useState<number | null>(null);
+
+  const regionColors: Record<BrazilRegion, string> = {
+    Norte: "var(--success)",
+    Nordeste: "var(--warning)",
+    "Centro-Oeste": "var(--cyan)",
+    Sudeste: "var(--accent)",
+    Sul: "#8b5cf6",
+    "Não informado": "var(--muted)",
+  };
+
+  const directSales = sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      !isMarketplaceSale(sale),
+  );
+
+  function saleState(sale: V) {
+    const client = d.clients.find((item) => item.id === sale.clientId);
+    return (
+      client?.state ||
+      client?.addresses?.find((address) => address.state)?.state ||
+      ""
+    )
+      .trim()
+      .toUpperCase();
+  }
+
+  const regions: BrazilRegion[] = [
+    "Norte",
+    "Nordeste",
+    "Centro-Oeste",
+    "Sudeste",
+    "Sul",
+    "Não informado",
+  ];
+
+  const rows = regions
+    .map((region) => {
+      const regionSales = directSales.filter(
+        (sale) => brazilRegion(saleState(sale)) === region,
+      );
+      const revenue = regionSales.reduce(
+        (sum, sale) => sum + Math.max(0, Number(sale.total) || 0),
+        0,
+      );
+      return { region, revenue, orders: regionSales.length, sales: regionSales };
+    })
+    .sort(
+      (a, b) =>
+        b.revenue - a.revenue ||
+        b.orders - a.orders ||
+        regions.indexOf(a.region) - regions.indexOf(b.region),
+    );
+
+  const total = rows.reduce((sum, item) => sum + item.revenue, 0);
+  const unidentifiedSales =
+    rows.find((item) => item.region === "Não informado")?.sales || [];
+
+  const selectedRegionRow = selectedRegion
+    ? rows.find((item) => item.region === selectedRegion)
+    : undefined;
+
+  const stateRows = selectedRegion
+    ? BRAZIL_REGION_STATES[selectedRegion]
+        .map((state, index) => {
+          const stateSales = directSales.filter(
+            (sale) => saleState(sale) === state,
+          );
+          const revenue = stateSales.reduce(
+            (sum, sale) => sum + Math.max(0, Number(sale.total) || 0),
+            0,
+          );
+          return {
+            state,
+            revenue,
+            orders: stateSales.length,
+            color: REGION_STATE_COLORS[index % REGION_STATE_COLORS.length],
+          };
+        })
+        .sort((a, b) => b.revenue - a.revenue || b.orders - a.orders)
+    : [];
+
+  const selectedTotal = stateRows.reduce((sum, item) => sum + item.revenue, 0);
+
+  function chooseRegion(region: BrazilRegion) {
+    if (region === "Não informado") {
+      setEditingSaleId(null);
+      setUnidentifiedOpen(true);
+      return;
+    }
+    setSelectedRegion(region);
+  }
+
+  function updateClientState(sale: V, nextState: string) {
+    if (!sale.clientId) return;
+    set((current: D) => ({
+      ...current,
+      clients: current.clients.map((client) => {
+        if (client.id !== sale.clientId) return client;
+        const addresses = (client.addresses || []).length
+          ? client.addresses.map((address, index) =>
+              index === 0 ? { ...address, state: nextState } : address,
+            )
+          : client.addresses;
+        return {
+          ...client,
+          state: nextState,
+          addresses,
+        };
+      }),
+    }));
+    setEditingSaleId(null);
+  }
+
+  return (
+    <>
+      <div className="panel dashboardMetricPanel regionSalesPanel">
+        <div className="dashboardMiniHeader regionSalesHeader">
+          <div>
+            <h2>
+              {selectedRegion
+                ? `Vendas — ${selectedRegion}`
+                : "Vendas por região"}
+            </h2>
+            <p>
+              {selectedRegion
+                ? "Participação dos estados dentro da região selecionada."
+                : "Distribuição do faturamento pelas regiões do Brasil."}
+            </p>
+          </div>
+          {selectedRegion ? (
+            <button
+              type="button"
+              className="secondary regionBackButton"
+              onClick={() => setSelectedRegion(null)}
+            >
+              <ChevronLeft /> Voltar às regiões
+            </button>
+          ) : null}
+        </div>
+
+        <div className="dashboardMiniVisual">
+          <InteractiveDonutChart
+            segments={
+              selectedRegion
+                ? stateRows.map((item) => ({
+                    label: item.state,
+                    value: item.revenue,
+                    color: item.color,
+                  }))
+                : rows.map((item) => ({
+                    label: item.region,
+                    value: item.revenue,
+                    color: regionColors[item.region],
+                  }))
+            }
+            centerTop={selectedRegion ? selectedRegion : "Faturamento"}
+            centerBottom={brl(selectedRegion ? selectedTotal : total)}
+            className="sideInteractiveDonut"
+            infoPrefix={selectedRegion ? "Estado" : "Região"}
+          />
+        </div>
+
+        <div className="dashboardMiniLegend regionLegend">
+          {(selectedRegion ? stateRows : rows).map((item) => {
+            const isState = "state" in item;
+            const label = isState ? item.state : item.region;
+            const value = item.revenue;
+            const comparisonTotal = selectedRegion ? selectedTotal : total;
+            const percentage = comparisonTotal
+              ? Math.round((value / comparisonTotal) * 100)
+              : 0;
+            const color = isState ? item.color : regionColors[item.region];
+            return selectedRegion ? (
+              <div key={label} className="regionLegendStaticRow">
+                <span>
+                  <i style={{ background: color }} />
+                  <strong>{label}</strong>
+                  <small>{percentage}%</small>
+                </span>
+                <b>{brl(value)}</b>
+              </div>
+            ) : (
+              <button
+                type="button"
+                key={label}
+                className="regionLegendButton"
+                onClick={() => chooseRegion(item.region)}
+              >
+                <span>
+                  <i style={{ background: color }} />
+                  <strong>{label}</strong>
+                  <small>{percentage}%</small>
+                </span>
+                <b>{brl(value)}</b>
+                <ChevronRight />
+              </button>
+            );
+          })}
+        </div>
+
+        <small className="regionMarketplaceNote">
+          * Não considera vendas de TikTok Shop e Shopee.
+        </small>
+      </div>
+
+      {unidentifiedOpen ? (
+        <div className="overlay">
+          <div className="systemDialog unidentifiedRegionDialog">
+            <header>
+              <div>
+                <small>VENDAS POR REGIÃO</small>
+                <h2>Vendas sem estado identificado</h2>
+                <p>
+                  Defina a UF do cliente sem sair deste box. Ao salvar, o
+                  gráfico será atualizado automaticamente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setUnidentifiedOpen(false);
+                  setEditingSaleId(null);
+                }}
+                aria-label="Fechar vendas sem estado"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="unidentifiedRegionList">
+              {unidentifiedSales.map((sale) => {
+                const client = d.clients.find(
+                  (item) => item.id === sale.clientId,
+                );
+                const editing = editingSaleId === sale.id;
+                return (
+                  <article className="unidentifiedRegionSale" key={sale.id}>
+                    <div className="unidentifiedRegionSaleMain">
+                      <div>
+                        <strong>{saleCustomer(sale, d)}</strong>
+                        <small>
+                          Pedido #{orderNo(sale.id)} · {dateBR(sale.date)} ·{" "}
+                          {brl(sale.total)}
+                        </small>
+                        {client?.city ? (
+                          <small>{client.city} · estado não informado</small>
+                        ) : (
+                          <small>Estado do cliente não informado</small>
+                        )}
+                      </div>
+                      {sale.clientId ? (
+                        <button
+                          type="button"
+                          className={editing ? "secondary active" : "secondary"}
+                          onClick={() =>
+                            setEditingSaleId((current) =>
+                              current === sale.id ? null : sale.id,
+                            )
+                          }
+                        >
+                          <MapPin /> Definir estado
+                        </button>
+                      ) : (
+                        <span className="unidentifiedRegionNoClient">
+                          Cliente não vinculado
+                        </span>
+                      )}
+                    </div>
+
+                    {editing ? (
+                      <div className="unidentifiedStateGrid">
+                        {BRAZIL_STATES.map((state) => (
+                          <button
+                            type="button"
+                            key={state}
+                            onClick={() => updateClientState(sale, state)}
+                          >
+                            {state}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+
+              {!unidentifiedSales.length ? (
+                <div className="unidentifiedRegionEmpty">
+                  <Check />
+                  <strong>Todas as vendas estão identificadas.</strong>
+                  <span>
+                    Não há vendas diretas sem estado do cliente neste período.
+                  </span>
+                </div>
+              ) : null}
+            </div>
+
+            <footer className="unidentifiedRegionFooter">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setUnidentifiedOpen(false);
+                  setEditingSaleId(null);
+                }}
+              >
+                Fechar
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+function PartnerRanking({
+  d,
+  start,
+  end,
+}: {
+  d: D;
+  start: string;
+  end: string;
+}) {
+  const [metric, setMetric] = useState<"revenue" | "orders" | "ticket">(
+    "revenue",
+  );
+  const sales = d.sales.filter(
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isNoCost(sale) &&
+      dateInRange(sale.date, start, end),
+  );
+  const partners = d.teamMembers.filter(
+    (member) => member.role === "partner" && member.active !== false,
+  );
+  const ranking = partners
+    .map((partner, index) => {
+      const partnerSales = sales.filter((sale) => sale.sellerId === partner.id);
+      const revenue = partnerSales.reduce(
+        (sum, sale) => sum + Math.max(0, Number(sale.total) || 0),
+        0,
+      );
+      const orders = partnerSales.length;
+      const ticket = orders ? revenue / orders : 0;
+      const value =
+        metric === "revenue" ? revenue : metric === "orders" ? orders : ticket;
+      return { partner, revenue, orders, ticket, value, index };
+    })
+    .sort(
+      (a, b) =>
+        b.value - a.value ||
+        b.revenue - a.revenue ||
+        a.index - b.index,
+    );
+  const max = Math.max(1, ...ranking.map((item) => item.value));
+  const formatMetric = (item: (typeof ranking)[number]) =>
+    metric === "revenue"
+      ? brl(item.revenue)
+      : metric === "orders"
+        ? `${item.orders} pedido${item.orders === 1 ? "" : "s"}`
+        : brl(item.ticket);
+
+  return (
+    <div className="panel dashboardMetricPanel partnerRankingPanel">
+      <div className="dashboardMiniHeader">
+        <h2>Ranking de sócios</h2>
+        <p>Vendas atribuídas a cada sócio no período.</p>
+      </div>
+      <div className="groupRankingMetricButtons" role="group" aria-label="Classificar ranking de sócios">
+        <button type="button" className={metric === "revenue" ? "active" : ""} onClick={() => setMetric("revenue")}>Faturamento</button>
+        <button type="button" className={metric === "orders" ? "active" : ""} onClick={() => setMetric("orders")}>Pedidos</button>
+        <button type="button" className={metric === "ticket" ? "active" : ""} onClick={() => setMetric("ticket")}>Ticket médio</button>
+      </div>
+      <div className="leadRankingList partnerRankingList">
+        {ranking.map((item, index) => (
+          <div key={item.partner.id}>
+            <span className="leadRankPosition">{index + 1}º</span>
+            <div className="leadRankContent">
+              <span>
+                <strong>{item.partner.name}</strong>
+                <b>{formatMetric(item)}</b>
+              </span>
+              <i>
+                <em
+                  style={{
+                    width: `${item.value ? Math.max(5, (item.value / max) * 100) : 0}%`,
+                  }}
+                />
+              </i>
+              <small>
+                {brl(item.revenue)} · {item.orders} pedido
+                {item.orders === 1 ? "" : "s"}
+              </small>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -3962,7 +4681,12 @@ function Dash({ d, set }: { d: D; set: any }) {
         <OrderSummaryChart sales={periodSales} />
         <PaymentBreakdown d={d} sales={activeSales} compact />
         <CategoryChart d={d} sales={activeSales} />
+        <RegionChart d={d} set={set} sales={activeSales} />
+      </div>
+
+      <div className="dashboardRankingGrid">
         <LeadRanking d={d} start={rangeStart} end={rangeEnd} />
+        <PartnerRanking d={d} start={rangeStart} end={rangeEnd} />
       </div>
 
       <div className="panel dashboardStockSnapshot">
@@ -4196,7 +4920,14 @@ function Sales({
   }
   const filteredSales = d.sales.filter((sale) => {
     if (isHistoricalSale(sale)) return false;
-    const customer = saleCustomer(sale, d).toLowerCase();
+    const client = d.clients.find((item) => item.id === sale.clientId);
+    const matchesSearch = smartSearchMatch(
+      query,
+      saleCustomer(sale, d),
+      client?.cpf,
+      client?.phone,
+      orderNo(sale.id),
+    );
     const matchesStatus =
       saleStatus === "all" ||
       (saleStatus === "paid" &&
@@ -4211,7 +4942,7 @@ function Sales({
         isMarketplaceSale(sale)) ||
       (saleStatus === "cancelled" && sale.status === "cancelled");
     return (
-      customer.includes(query.trim().toLowerCase()) &&
+      matchesSearch &&
       sale.date.startsWith(month) &&
       (!saleDay || sale.date === saleDay) &&
       (origin === "all" ||
@@ -4283,7 +5014,7 @@ function Sales({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Pesquisar pelo nome do cliente"
+            placeholder="Pesquisar por cliente, CPF ou pedido"
           />
         </label>
         <div className="monthPicker" aria-label="Mês das vendas">
@@ -4961,9 +5692,13 @@ function Shipping({
       !isHistoricalSale(sale) &&
       sale.date.startsWith(shippingMonth) &&
       (tab === "sent" ? sale.sent : !sale.sent) &&
-      saleCustomer(sale, d)
-        .toLowerCase()
-        .includes(shippingQuery.trim().toLowerCase()),
+      smartSearchMatch(
+        shippingQuery,
+        saleCustomer(sale, d),
+        d.clients.find((client) => client.id === sale.clientId)?.cpf,
+        d.clients.find((client) => client.id === sale.clientId)?.phone,
+        orderNo(sale.id),
+      ),
   );
 
   function toggle(sale: V) {
@@ -7137,6 +7872,232 @@ function Payables({
   );
 }
 
+function PendingPerfumes({
+  d,
+  set,
+  close,
+  notify,
+}: {
+  d: D;
+  set: any;
+  close: () => void;
+  notify: (message: string) => void;
+}) {
+  const pending = pendingPerfumePurchases(d);
+  const [arrivalConfirm, setArrivalConfirm] = useState<B | null>(null);
+  const [pendingWarning, setPendingWarning] = useState("");
+
+  function requestMarkArrived(purchase: B) {
+    const matches = d.products.filter(
+      (product) =>
+        perfumeIdentity(product.brand, product.name) ===
+        perfumeIdentity(purchase.perfumeBrand, purchase.perfumeName),
+    );
+    if (matches.length > 1) {
+      setPendingWarning(
+        "Há mais de um cadastro para este perfume. Corrija a duplicidade antes de confirmar a chegada.",
+      );
+      return;
+    }
+    setArrivalConfirm(purchase);
+  }
+
+  function confirmArrival() {
+    if (!arrivalConfirm) return;
+    const existing = d.products.find(
+      (product) =>
+        perfumeIdentity(product.brand, product.name) ===
+        perfumeIdentity(
+          arrivalConfirm.perfumeBrand,
+          arrivalConfirm.perfumeName,
+        ),
+    );
+    set((state: D) => receivePerfumePurchase(state, arrivalConfirm.id));
+    notify(
+      existing
+        ? "Perfume recebido e somado ao estoque existente."
+        : "Perfume recebido e adicionado ao estoque.",
+    );
+    setArrivalConfirm(null);
+  }
+
+  return (
+    <div className="overlay">
+      <div className="systemDialog pendingPerfumesDialog">
+        <header>
+          <div>
+            <small>ESTOQUE DE PERFUMES</small>
+            <h2>Perfumes pendentes</h2>
+          </div>
+          <button
+            type="button"
+            onClick={close}
+            aria-label="Fechar perfumes pendentes"
+          >
+            <X />
+          </button>
+        </header>
+
+        <p className="pendingPerfumesHint">
+          Compras que ainda não deram entrada no estoque. Ao confirmar a
+          chegada, o sistema atualiza o estoque sem duplicar perfumes já
+          cadastrados.
+        </p>
+
+        <div className="pendingPerfumesList">
+          {pending.map((purchase) => {
+            const existing = d.products.find(
+              (product) =>
+                perfumeIdentity(product.brand, product.name) ===
+                perfumeIdentity(
+                  purchase.perfumeBrand,
+                  purchase.perfumeName,
+                ),
+            );
+            return (
+              <article className="pendingPerfumeCard" key={purchase.id}>
+                <div className="pendingPerfumeMain">
+                  <div>
+                    <small>{existing ? "RECOMPRA" : "NOVO PERFUME"}</small>
+                    <strong>{purchase.description}</strong>
+                    <span>
+                      {purchase.qty} frasco(s)
+                      {purchase.mlPerBottle
+                        ? ` × ${purchase.mlPerBottle} ml`
+                        : ""}
+                    </span>
+                  </div>
+                  <span className="purchaseArrivalBadge pending">
+                    Aguardando chegada
+                  </span>
+                </div>
+                <div className="pendingPerfumeMeta">
+                  <span><b>Compra:</b> {dateBR(purchase.date)}</span>
+                  <span><b>Fornecedor:</b> {purchase.supplier}</span>
+                  <span><b>Valor:</b> {brl(purchase.total)}</span>
+                  <span>
+                    <b>Pagamento:</b>{" "}
+                    {purchase.payment === "À prazo" ? "À prazo" : "À vista"}
+                  </span>
+                  {existing ? (
+                    <span>
+                      <b>Estoque atual:</b>{" "}
+                      {existing.stock.toLocaleString("pt-BR", {
+                        maximumFractionDigits: 2,
+                      })}{" "}
+                      ml
+                    </span>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  className="primary pendingPerfumeArrivedButton"
+                  onClick={() => requestMarkArrived(purchase)}
+                >
+                  <Check /> Marcar como chegou
+                </button>
+              </article>
+            );
+          })}
+          {!pending.length ? (
+            <div className="pendingPerfumesEmpty">
+              <Check />
+              <strong>Nenhum perfume pendente.</strong>
+              <span>Todas as compras de perfumes já deram entrada no estoque.</span>
+            </div>
+          ) : null}
+        </div>
+
+        <footer className="pendingPerfumesFooter">
+          <button type="button" className="secondary" onClick={close}>
+            Fechar
+          </button>
+        </footer>
+      </div>
+
+      {arrivalConfirm ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog pendingArrivalConfirmDialog">
+            <header>
+              <div>
+                <small>CONFIRMAR CHEGADA</small>
+                <h2>Dar entrada no estoque?</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setArrivalConfirm(null)}
+                aria-label="Fechar confirmação"
+              >
+                <X />
+              </button>
+            </header>
+            <div className="pendingArrivalConfirmContent">
+              <PackageOpen />
+              <div>
+                <strong>{arrivalConfirm.description}</strong>
+                <p>
+                  {d.products.some(
+                    (product) =>
+                      perfumeIdentity(product.brand, product.name) ===
+                      perfumeIdentity(
+                        arrivalConfirm.perfumeBrand,
+                        arrivalConfirm.perfumeName,
+                      ),
+                  )
+                    ? "O novo volume será somado ao cadastro já existente, sem criar outro perfume."
+                    : "O perfume será incluído no estoque e passará a ficar disponível no sistema."}
+                </p>
+              </div>
+            </div>
+            <footer className="pendingArrivalConfirmActions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => setArrivalConfirm(null)}
+              >
+                Cancelar
+              </button>
+              <button type="button" className="primary" onClick={confirmArrival}>
+                <Check /> Confirmar chegada
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingWarning ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog pendingArrivalWarningDialog">
+            <header>
+              <div>
+                <small>ATENÇÃO</small>
+                <h2>Não foi possível dar entrada</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingWarning("")}
+                aria-label="Fechar aviso"
+              >
+                <X />
+              </button>
+            </header>
+            <p className="pendingArrivalWarningText">{pendingWarning}</p>
+            <footer className="pendingArrivalConfirmActions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => setPendingWarning("")}
+              >
+                Entendi
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function StockReport({
   d,
   close,
@@ -7284,6 +8245,242 @@ function StockReport({
   );
 }
 
+function TeamMembers({
+  d,
+  set,
+  notify,
+}: {
+  d: D;
+  set: any;
+  notify: (message: string) => void;
+}) {
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [role, setRole] = useState<TeamMemberRole>("partner");
+  const [name, setName] = useState("");
+  const [equity, setEquity] = useState("0");
+  const [salary, setSalary] = useState("0");
+  const [commission, setCommission] = useState("0");
+  const [position, setPosition] = useState("");
+
+  const partners = d.teamMembers.filter((member) => member.role === "partner");
+  const employees = d.teamMembers.filter((member) => member.role === "employee");
+  const equityTotal = partners.reduce(
+    (sum, member) => sum + Math.max(0, Number(member.equityPercent) || 0),
+    0,
+  );
+
+  function openNew() {
+    setEditingId(null);
+    setRole("partner");
+    setName("");
+    setEquity("0");
+    setSalary("0");
+    setCommission("0");
+    setPosition("");
+    setEditorOpen(true);
+  }
+
+  function openEdit(member: TeamMember) {
+    setEditingId(member.id);
+    setRole(member.role);
+    setName(member.name);
+    setEquity(String(member.equityPercent || 0));
+    setSalary(String(member.salary || 0));
+    setCommission(String(member.commissionPercent || 0));
+    setPosition(member.position || "");
+    setEditorOpen(true);
+  }
+
+  function saveMember() {
+    const cleanName = name.trim();
+    if (!cleanName) return;
+    set((state: D) => {
+      const id = editingId || Math.max(Date.now(), ...state.teamMembers.map((member) => member.id + 1));
+      const current = state.teamMembers.find((member) => member.id === editingId);
+      let members = editingId
+        ? state.teamMembers.map((member) =>
+            member.id === editingId
+              ? {
+                  ...member,
+                  name: cleanName,
+                  salary:
+                    role === "employee" ? Math.max(0, parseDecimal(salary)) : undefined,
+                  commissionPercent:
+                    role === "employee"
+                      ? Math.max(0, parseDecimal(commission))
+                      : undefined,
+                  position: role === "employee" ? position.trim() : undefined,
+                }
+              : member,
+          )
+        : [
+            ...state.teamMembers,
+            {
+              id,
+              name: cleanName,
+              role,
+              equityPercent: role === "partner" ? 0 : undefined,
+              salary: role === "employee" ? Math.max(0, parseDecimal(salary)) : undefined,
+              commissionPercent:
+                role === "employee" ? Math.max(0, parseDecimal(commission)) : undefined,
+              position: role === "employee" ? position.trim() : undefined,
+              active: true,
+            } as TeamMember,
+          ];
+
+      if (role === "partner") {
+        members = rebalancePartnerEquity(
+          members,
+          id,
+          Math.max(0, parseDecimal(equity)),
+        );
+      } else if (current?.role === "partner") {
+        const remainingPartners = members.filter(
+          (member) => member.role === "partner" && member.id !== id,
+        );
+        if (remainingPartners.length) {
+          const first = remainingPartners[0];
+          members = rebalancePartnerEquity(
+            members,
+            first.id,
+            Number(first.equityPercent) || 0,
+          );
+        }
+      }
+      return { ...state, teamMembers: members };
+    });
+    setEditorOpen(false);
+    notify(editingId ? "Cadastro atualizado." : "Sócio/funcionário cadastrado.");
+  }
+
+  return (
+    <>
+      <div className="teamSummaryGrid">
+        <div className="panel teamSummaryCard">
+          <span>Sócios</span>
+          <b>{partners.length}</b>
+          <small>{equityTotal.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% da sociedade cadastrada</small>
+        </div>
+        <div className="panel teamSummaryCard">
+          <span>Funcionários</span>
+          <b>{employees.length}</b>
+          <small>Cadastros ativos na equipe</small>
+        </div>
+        <button type="button" className="primary teamNewButton" onClick={openNew}>
+          <Plus /> Novo sócio/funcionário
+        </button>
+      </div>
+
+      <div className="teamMembersGrid">
+        {d.teamMembers.map((member) => (
+          <article className="panel teamMemberCard" key={member.id}>
+            <div className="teamMemberHead">
+              <span className={"teamRoleBadge " + member.role}>
+                {member.role === "partner" ? "Sócio" : "Funcionário"}
+              </span>
+              <button type="button" className="iconButton" onClick={() => openEdit(member)}>
+                <Pencil /> Editar
+              </button>
+            </div>
+            <h3>{member.name}</h3>
+            {member.role === "partner" ? (
+              <div className="teamMemberFacts">
+                <span>Participação societária</span>
+                <b>
+                  {(member.equityPercent || 0).toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                  %
+                </b>
+              </div>
+            ) : (
+              <div className="teamMemberFacts employee">
+                <span><small>Cargo</small><b>{member.position || "Não informado"}</b></span>
+                <span><small>Salário</small><b>{brl(member.salary || 0)}</b></span>
+                <span><small>Comissão</small><b>{(member.commissionPercent || 0).toLocaleString("pt-BR")}%</b></span>
+              </div>
+            )}
+          </article>
+        ))}
+      </div>
+
+      {editorOpen ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog teamEditorDialog">
+            <header>
+              <div>
+                <small>CADASTROS</small>
+                <h2>{editingId ? "Editar cadastro" : "Novo sócio/funcionário"}</h2>
+              </div>
+              <button type="button" onClick={() => setEditorOpen(false)} aria-label="Fechar cadastro">
+                <X />
+              </button>
+            </header>
+
+            {!editingId ? (
+              <div className="teamRoleSelector">
+                <button type="button" className={role === "partner" ? "active" : ""} onClick={() => setRole("partner")}>
+                  Sócio
+                </button>
+                <button type="button" className={role === "employee" ? "active" : ""} onClick={() => setRole("employee")}>
+                  Funcionário
+                </button>
+              </div>
+            ) : null}
+
+            <label>
+              <span>Nome completo</span>
+              <input value={name} onChange={(event) => setName(event.target.value)} />
+            </label>
+
+            {role === "partner" ? (
+              <label>
+                <span>Participação societária (%)</span>
+                <input
+                  inputMode="decimal"
+                  value={equity}
+                  onChange={(event) => setEquity(event.target.value)}
+                />
+                <small>
+                  Ao salvar, a diferença será redistribuída proporcionalmente entre os demais sócios para manter a sociedade em 100%.
+                </small>
+              </label>
+            ) : (
+              <>
+                <label>
+                  <span>Cargo</span>
+                  <input value={position} onChange={(event) => setPosition(event.target.value)} />
+                </label>
+                <div className="row">
+                  <label>
+                    <span>Salário mensal</span>
+                    <input inputMode="decimal" value={salary} onChange={(event) => setSalary(event.target.value)} />
+                  </label>
+                  <label>
+                    <span>Comissão (%)</span>
+                    <input inputMode="decimal" value={commission} onChange={(event) => setCommission(event.target.value)} />
+                  </label>
+                </div>
+              </>
+            )}
+
+            <footer className="teamEditorActions">
+              <button type="button" className="secondary" onClick={() => setEditorOpen(false)}>
+                Cancelar
+              </button>
+              <button type="button" className="primary" onClick={saveMember}>
+                <Check /> Salvar cadastro
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function BrandManager({
   d,
   set,
@@ -7313,7 +8510,7 @@ function BrandManager({
   const [productsBrand, setProductsBrand] = useState("");
 
   const filteredBrands = brands.filter((brand) =>
-    brand.toLowerCase().includes(query.trim().toLowerCase()),
+    smartSearchMatch(query, brand),
   );
   const selectedBrandProducts = productsBrand
     ? d.products
@@ -7668,6 +8865,8 @@ function Stock({
   edit,
   set,
   notify,
+  pendingPerfumeCount,
+  openPendingPerfumes,
 }: {
   d: D;
   mode: "perfumes" | "supplies";
@@ -7677,8 +8876,11 @@ function Stock({
   edit: (id: number) => void;
   set: any;
   notify: (s: string) => void;
+  pendingPerfumeCount: number;
+  openPendingPerfumes: () => void;
 }) {
   const [apcOnly, setApcOnly] = useState(false),
+    [catalogMirrorOpen, setCatalogMirrorOpen] = useState(false),
     [category, setCategory] = useState("Todos"),
     [brand, setBrand] = useState("Todas"),
     [query, setQuery] = useState(""),
@@ -7806,7 +9008,7 @@ function Stock({
         (!apcOnly || p.apc > 0) &&
         (category === "Todos" || p.category === category) &&
         (brand === "Todas" || p.brand === brand) &&
-        `${p.brand} ${p.name}`.toLowerCase().includes(query.toLowerCase()),
+        smartSearchMatch(query, p.brand, p.name, p.category, p.gender),
     )
     .sort((a, b) =>
       `${a.brand} ${a.name}`.localeCompare(`${b.brand} ${b.name}`, "pt-BR", {
@@ -7835,6 +9037,31 @@ function Stock({
           </p>
         </div>
         <div className="stockHeadActions">
+          {view !== "supplies" ? (
+            <button
+              type="button"
+              className={"secondary stockCatalogMirrorButton" + (catalogMirrorOpen ? " active" : "")}
+              onClick={() => setCatalogMirrorOpen((current) => !current)}
+            >
+              <PackageOpen />
+              {catalogMirrorOpen ? "Fechar espelho" : "Espelho do catálogo"}
+            </button>
+          ) : null}
+          {view !== "supplies" ? (
+            <button
+              type="button"
+              className="secondary stockPendingAction"
+              onClick={openPendingPerfumes}
+            >
+              <PackageOpen />
+              Perfumes pendentes
+              {pendingPerfumeCount ? (
+                <span className="pendingPerfumesCount">
+                  {pendingPerfumeCount}
+                </span>
+              ) : null}
+            </button>
+          ) : null}
           <button
             className="primary stockAction"
             onClick={view !== "supplies" ? addProduct : add}
@@ -7844,6 +9071,58 @@ function Stock({
           </button>
         </div>
       </div>
+      {view !== "supplies" && catalogMirrorOpen ? (
+        <section className="stockCatalogMirror">
+          <div className="stockCatalogMirrorHead">
+            <div>
+              <small>ESPELHO DO CATÁLOGO</small>
+              <h3>Prévia do catálogo público</h3>
+              <p>Confira no Estoque como os perfumes e os ml disponíveis aparecem para o cliente.</p>
+            </div>
+            <div className="stockCatalogMirrorActions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => window.dispatchEvent(new CustomEvent("daf:catalog-edit"))}
+              >
+                <Palette /> Editar catálogo
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => window.dispatchEvent(new CustomEvent("daf:catalog-images"))}
+              >
+                <ImageIcon /> Imagens
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() =>
+                  window.open(
+                    import.meta.env.VITE_PUBLIC_CATALOG_URL || "https://daf-splits-catalogo.vercel.app",
+                    "_blank",
+                    "noopener,noreferrer",
+                  )
+                }
+              >
+                <PackageOpen /> Abrir catálogo público
+              </button>
+            </div>
+          </div>
+          <div className="stockCatalogMirrorViewport">
+            <CatalogAdminPreview
+              products={d.products}
+              settings={d.catalogSettings}
+              onSettingsChange={(catalogSettings) =>
+                set((current: D) => ({
+                  ...current,
+                  catalogSettings: catalogSettingsForPersistence(catalogSettings),
+                }))
+              }
+            />
+          </div>
+        </section>
+      ) : null}
       {view !== "supplies" ? (
         <>
           <div className="stockSummaryRow">
@@ -8286,12 +9565,16 @@ function Purchases({
     .filter((purchase) => {
       const matchesSupplier =
         supplierFilter === "Todos" || purchase.supplier === supplierFilter;
-      const searchable =
-        `${purchase.date} ${purchase.supplier} ${purchase.type} ${purchase.description}`.toLowerCase();
       return (
         purchase.date.startsWith(month) &&
         matchesSupplier &&
-        searchable.includes(purchaseQuery.trim().toLowerCase())
+        smartSearchMatch(
+          purchaseQuery,
+          purchase.date,
+          purchase.supplier,
+          purchase.type,
+          purchase.description,
+        )
       );
     })
     .sort(
@@ -8299,12 +9582,12 @@ function Purchases({
         b.date.localeCompare(a.date) || b.id - a.id,
     );
   function remove(id: number) {
-    if (
-      !window.confirm(
-        "Excluir este registro de compra? O estoque já lançado não será alterado.",
-      )
-    )
-      return;
+    const purchase = d.purchases.find((item) => item.id === id);
+    const confirmation =
+      purchase?.type === "Perfume" && purchase.arrivalStatus === "pending"
+        ? "Excluir este perfume pendente? Ele ainda não alterou o estoque."
+        : "Excluir este registro de compra? O estoque já lançado não será alterado.";
+    if (!window.confirm(confirmation)) return;
     set((x: D) => ({
       ...x,
       purchases: x.purchases.filter((p) => p.id !== id),
@@ -8395,6 +9678,7 @@ function Purchases({
               <th>Fornecedor</th>
               <th>Tipo</th>
               <th>Descrição</th>
+              <th>Status</th>
               <th>Quantidade</th>
               <th>Total</th>
               <th>Ações</th>
@@ -8407,6 +9691,20 @@ function Purchases({
                 <td>{p.supplier}</td>
                 <td>{p.type}</td>
                 <td>{p.description}</td>
+                <td>
+                  {p.type === "Perfume" ? (
+                    <span
+                      className={
+                        "purchaseArrivalBadge " +
+                        (p.arrivalStatus === "pending" ? "pending" : "received")
+                      }
+                    >
+                      {p.arrivalStatus === "pending" ? "Pendente" : "Recebido"}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
                 <td>
                   {p.qty}
                   {p.mlPerBottle ? ` × ${p.mlPerBottle} ml` : ""}
@@ -8460,7 +9758,14 @@ function Clients({
     (client) => !groupFilter || client.leadSource === groupFilter,
   );
   const clients = groupClients.filter((client) =>
-    client.name.toLowerCase().includes(query.trim().toLowerCase()),
+    smartSearchMatch(
+      query,
+      client.name,
+      client.cpf,
+      client.phone,
+      client.city,
+      client.state,
+    ),
   );
   const clientCountLabel = groupFilter
     ? `Clientes no ${groupFilter}`
@@ -8526,8 +9831,8 @@ function Clients({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Pesquisar cliente pelo nome"
-            aria-label="Pesquisar cliente pelo nome"
+            placeholder="Pesquisar por nome, CPF, telefone ou cidade"
+            aria-label="Pesquisar cliente por nome, CPF, telefone ou cidade"
           />
         </label>
 
@@ -8691,9 +9996,7 @@ function Suppliers({
 
   const suppliers = d.suppliers
     .map((name, index) => ({ name, index }))
-    .filter(({ name }) =>
-      name.toLowerCase().includes(query.trim().toLowerCase()),
-    );
+    .filter(({ name }) => smartSearchMatch(query, name));
   function remove(index: number, name: string) {
     if (d.purchases.some((purchase) => purchase.supplier === name)) {
       window.alert(
@@ -8865,13 +10168,8 @@ function SupplierHistory({
       0,
     );
   const filteredPurchases = purchases.filter((purchase) => {
-    const productText = (
-      purchase.description +
-      " " +
-      purchase.type
-    ).toLowerCase();
     return (
-      productText.includes(query.trim().toLowerCase()) &&
+      smartSearchMatch(query, purchase.description, purchase.type) &&
       (!month || purchase.date.startsWith(month)) &&
       (!purchaseDay || purchase.date === purchaseDay)
     );
@@ -9975,6 +11273,704 @@ function PricingCalculator({
   );
 }
 
+const LEGACY_REVENUE_2026: Record<string, number> = {
+  "2026-06": 14105,
+  "2026-07": 8047.21,
+  "2026-08": 13013.03,
+};
+
+
+type AchievementMetric =
+  | "revenueHistory"
+  | "revenueMonth"
+  | "ordersHistory"
+  | "ordersMonth";
+
+type AchievementDefinition = {
+  id: string;
+  metric: AchievementMetric;
+  threshold: number;
+  badgeValue: string;
+  badgeLabel: "FATURADOS" | "PEDIDOS";
+  title: string;
+  qualifier: "Histórico" | "Em um único mês";
+};
+
+const ACHIEVEMENTS: AchievementDefinition[] = [
+  ...[
+    [50_000, "50K"],
+    [100_000, "100K"],
+    [200_000, "200K"],
+    [350_000, "350K"],
+    [500_000, "500K"],
+    [800_000, "800K"],
+    [1_000_000, "1M"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `revenue-history-${threshold}`,
+    metric: "revenueHistory" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "FATURADOS" as const,
+    title: `${badgeValue} faturados`,
+    qualifier: "Histórico" as const,
+  })),
+  ...[
+    [30_000, "30K"],
+    [50_000, "50K"],
+    [100_000, "100K"],
+    [150_000, "150K"],
+    [200_000, "200K"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `revenue-month-${threshold}`,
+    metric: "revenueMonth" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "FATURADOS" as const,
+    title: `${badgeValue} faturados`,
+    qualifier: "Em um único mês" as const,
+  })),
+  ...[
+    [500, "500"],
+    [1_000, "1000"],
+    [2_000, "2000"],
+    [3_500, "3500"],
+    [5_000, "5000"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `orders-history-${threshold}`,
+    metric: "ordersHistory" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "PEDIDOS" as const,
+    title: `${Number(threshold).toLocaleString("pt-BR")} pedidos`,
+    qualifier: "Histórico" as const,
+  })),
+  ...[
+    [100, "100"],
+    [150, "150"],
+    [300, "300"],
+  ].map(([threshold, badgeValue]) => ({
+    id: `orders-month-${threshold}`,
+    metric: "ordersMonth" as const,
+    threshold: Number(threshold),
+    badgeValue: String(badgeValue),
+    badgeLabel: "PEDIDOS" as const,
+    title: `${threshold} pedidos`,
+    qualifier: "Em um único mês" as const,
+  })),
+];
+
+function achievementMonthlyRows(d: D) {
+  const startMonth = "2026-06";
+  const currentMonth = today().slice(0, 7);
+  const months: string[] = [];
+  let cursor = startMonth;
+  while (cursor <= currentMonth && months.length < 120) {
+    months.push(cursor);
+    cursor = shiftMonthKey(cursor, 1);
+  }
+  return months.map((monthKey) => {
+    const legacy = Object.prototype.hasOwnProperty.call(LEGACY_REVENUE_2026, monthKey);
+    const monthSales = d.sales.filter(
+      (sale) =>
+        sale.status !== "cancelled" &&
+        !isNoCost(sale) &&
+        String(sale.date || "").startsWith(monthKey),
+    );
+    const operationalSales = monthSales.filter((sale) => !isHistoricalSale(sale));
+    return {
+      revenue: legacy
+        ? LEGACY_REVENUE_2026[monthKey]
+        : monthSales.reduce(
+            (sum, sale) => sum + Math.max(0, Number(sale.total) || 0),
+            0,
+          ),
+      orders: operationalSales.length,
+    };
+  });
+}
+
+function achievementValue(
+  achievement: AchievementDefinition,
+  metrics: {
+    historicalRevenue: number;
+    bestRevenueMonth: number;
+    historicalOrders: number;
+    bestOrdersMonth: number;
+  },
+) {
+  switch (achievement.metric) {
+    case "revenueHistory":
+      return metrics.historicalRevenue;
+    case "revenueMonth":
+      return metrics.bestRevenueMonth;
+    case "ordersHistory":
+      return metrics.historicalOrders;
+    case "ordersMonth":
+      return metrics.bestOrdersMonth;
+  }
+}
+
+function achievementRule(achievement: AchievementDefinition) {
+  if (achievement.metric === "revenueHistory") {
+    return `Alcançar ${brl(achievement.threshold)} em faturamento acumulado pela DAF.`;
+  }
+  if (achievement.metric === "revenueMonth") {
+    return `Alcançar ${brl(achievement.threshold)} em faturamento dentro de um único mês.`;
+  }
+  if (achievement.metric === "ordersHistory") {
+    return `Registrar ${achievement.threshold.toLocaleString("pt-BR")} pedidos válidos ao longo da história da DAF.`;
+  }
+  return `Registrar ${achievement.threshold.toLocaleString("pt-BR")} pedidos válidos dentro de um único mês.`;
+}
+
+function drawPlaqueStar(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  outer: number,
+  inner: number,
+) {
+  ctx.beginPath();
+  for (let point = 0; point < 10; point += 1) {
+    const radius = point % 2 === 0 ? outer : inner;
+    const angle = -Math.PI / 2 + (Math.PI * point) / 5;
+    const x = cx + Math.cos(angle) * radius;
+    const y = cy + Math.sin(angle) * radius;
+    if (point === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawPlaqueLeaf(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  angle: number,
+  width: number,
+  height: number,
+) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, width, height, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+const APPROVED_ACHIEVEMENT_PLAQUES: Record<string, string> = {
+  "revenueHistory:100000": "/achievements/plaques/faturados-100k.png",
+  "revenueHistory:200000": "/achievements/plaques/faturados-200k.png",
+  "revenueHistory:350000": "/achievements/plaques/faturados-350k.png",
+  "revenueHistory:500000": "/achievements/plaques/faturados-500k.png",
+  "revenueHistory:800000": "/achievements/plaques/faturados-800k.png",
+  "revenueHistory:1000000": "/achievements/plaques/faturados-1m.png",
+  "ordersHistory:1000": "/achievements/plaques/pedidos-1000.png",
+  "ordersHistory:2000": "/achievements/plaques/pedidos-2000.png",
+  "ordersHistory:3500": "/achievements/plaques/pedidos-3500.png",
+  "ordersHistory:5000": "/achievements/plaques/pedidos-5000.png",
+};
+
+async function downloadAchievementPlaque(achievement: AchievementDefinition) {
+  // Apenas as conquistas históricas explicitamente aprovadas usam artes PNG.
+  // Mantém o renderizador atual como fallback para assets ainda não publicados.
+  const approvedFile = APPROVED_ACHIEVEMENT_PLAQUES[`${achievement.metric}:${achievement.threshold}`];
+  if (approvedFile) {
+    try {
+      const response = await fetch(approvedFile);
+      if (response.ok && response.headers.get("content-type")?.includes("image/png")) {
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `DAF-${achievement.badgeValue}-${achievement.badgeLabel.toLowerCase()}-historico.png`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        return;
+      }
+    } catch {
+      // Usa a arte anterior caso o arquivo não esteja disponível.
+    }
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 1600;
+  canvas.height = 2000;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const gold = ctx.createLinearGradient(0, 0, 1600, 2000);
+  gold.addColorStop(0, "#764608");
+  gold.addColorStop(0.18, "#e6a72d");
+  gold.addColorStop(0.37, "#fff0a0");
+  gold.addColorStop(0.53, "#c77a10");
+  gold.addColorStop(0.72, "#ffd760");
+  gold.addColorStop(1, "#6e4208");
+
+  const innerGold = ctx.createLinearGradient(180, 80, 1320, 1840);
+  innerGold.addColorStop(0, "#8a5511");
+  innerGold.addColorStop(0.33, "#f6c94f");
+  innerGold.addColorStop(0.58, "#fff0a0");
+  innerGold.addColorStop(0.74, "#9e6110");
+  innerGold.addColorStop(1, "#ffe17a");
+
+  const background = ctx.createLinearGradient(0, 0, 1600, 2000);
+  background.addColorStop(0, "#070707");
+  background.addColorStop(0.46, "#191611");
+  background.addColorStop(1, "#040404");
+  ctx.fillStyle = "#020202";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Moldura premium da arte emoldurável.
+  ctx.fillStyle = "#0b0b0b";
+  ctx.fillRect(36, 36, 1528, 1928);
+  ctx.strokeStyle = "#272727";
+  ctx.lineWidth = 36;
+  ctx.strokeRect(58, 58, 1484, 1884);
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 18;
+  ctx.strokeRect(92, 92, 1416, 1816);
+  ctx.strokeStyle = "#4b2d08";
+  ctx.lineWidth = 8;
+  ctx.strokeRect(119, 119, 1362, 1762);
+  ctx.fillStyle = background;
+  ctx.fillRect(132, 132, 1336, 1736);
+
+  const facets: Array<Array<[number, number]>> = [
+    [[132,132],[630,132],[380,610],[132,760]],
+    [[1468,132],[1110,132],[1310,525],[1468,710]],
+    [[132,1868],[132,1510],[445,1660],[620,1868]],
+    [[1468,1868],[1468,1480],[1185,1650],[995,1868]],
+    [[610,132],[1050,132],[900,520],[470,680]],
+  ];
+  facets.forEach((points,index) => {
+    ctx.beginPath();
+    points.forEach(([x,y],i) => i ? ctx.lineTo(x,y) : ctx.moveTo(x,y));
+    ctx.closePath();
+    ctx.fillStyle = index % 2 ? "rgba(213,151,39,.15)" : "rgba(255,255,255,.035)";
+    ctx.fill();
+    ctx.strokeStyle = index % 2 ? "rgba(230,174,55,.28)" : "rgba(255,255,255,.055)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = gold;
+  ctx.beginPath();
+  ctx.moveTo(132,132); ctx.lineTo(520,132); ctx.lineTo(270,510); ctx.lineTo(132,620); ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(1468,1320); ctx.lineTo(1468,1868); ctx.lineTo(1105,1868); ctx.lineTo(1375,1435); ctx.closePath(); ctx.fill();
+
+  try {
+    const logo = new window.Image();
+    logo.src = LOGO;
+    await new Promise<void>((resolve, reject) => {
+      logo.onload = () => resolve();
+      logo.onerror = () => reject(new Error("LOGO_LOAD_FAILED"));
+      if (logo.complete && logo.naturalWidth) resolve();
+    });
+    ctx.save();
+    ctx.globalCompositeOperation = "screen";
+    ctx.shadowColor = "rgba(0,0,0,.72)";
+    ctx.shadowBlur = 18;
+    ctx.drawImage(logo, 420, 205, 760, 535);
+    ctx.restore();
+  } catch {
+    ctx.textAlign = "center";
+    ctx.fillStyle = gold;
+    ctx.font = "700 190px Georgia, 'Times New Roman', serif";
+    ctx.fillText("DAF", 800, 420);
+    ctx.font = "600 62px Georgia, 'Times New Roman', serif";
+    ctx.fillText("— S P L I T S —", 800, 545);
+  }
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = "rgba(0,0,0,.92)";
+  ctx.shadowBlur = 30;
+  ctx.shadowOffsetY = 16;
+
+  const mainSize =
+    achievement.badgeValue.length >= 5
+      ? 345
+      : achievement.badgeValue.length === 4
+        ? 405
+        : 510;
+  ctx.font = `950 ${mainSize}px Arial, Helvetica, sans-serif`;
+  ctx.fillStyle = innerGold;
+  ctx.strokeStyle = "#6f3d05";
+  ctx.lineWidth = 7;
+  ctx.strokeText(achievement.badgeValue, 800, 1030);
+  ctx.fillText(achievement.badgeValue, 800, 1030);
+
+  ctx.font = "950 145px Arial, Helvetica, sans-serif";
+  ctx.fillStyle = "#f7f1e5";
+  ctx.strokeStyle = "rgba(0,0,0,.72)";
+  ctx.lineWidth = 6;
+  ctx.strokeText(achievement.badgeLabel, 800, 1390);
+  ctx.fillText(achievement.badgeLabel, 800, 1390);
+
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 5;
+  ctx.fillStyle = gold;
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.moveTo(365,1565); ctx.lineTo(610,1565);
+  ctx.moveTo(990,1565); ctx.lineTo(1235,1565);
+  ctx.stroke();
+  drawPlaqueStar(ctx,705,1565,33,14);
+  drawPlaqueStar(ctx,800,1565,54,23);
+  drawPlaqueStar(ctx,895,1565,33,14);
+
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(800 + side * 420, 1695);
+    ctx.quadraticCurveTo(800 + side * 560, 1640, 800 + side * 610, 1495);
+    ctx.stroke();
+    for (let leaf = 0; leaf < 7; leaf += 1) {
+      const x = 800 + side * (450 + leaf * 24);
+      const y = 1680 - leaf * 27;
+      drawPlaqueLeaf(ctx, x, y, side * -0.7, 17, 43);
+    }
+  }
+
+  ctx.shadowColor = "transparent";
+  ctx.strokeStyle = gold;
+  ctx.lineWidth = 13;
+  ctx.beginPath();
+  ctx.moveTo(410,1780); ctx.lineTo(800,1885); ctx.lineTo(1190,1780);
+  ctx.stroke();
+  ctx.strokeStyle = "#8b5610";
+  ctx.lineWidth = 7;
+  ctx.beginPath();
+  ctx.moveTo(470,1810); ctx.lineTo(800,1900); ctx.lineTo(1130,1810);
+  ctx.stroke();
+
+  const link = document.createElement("a");
+  const kind = achievement.metric.includes("Month") ? "mensal" : "historico";
+  link.download = `DAF-${achievement.badgeValue}-${achievement.badgeLabel.toLowerCase()}-${kind}.png`;
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+const REVENUE_BADGE_PNGS: Record<string, string> = {
+  "30K": "/achievements/faturados-30k.png",
+  "50K": "/achievements/faturados-50k.png",
+  "100K": "/achievements/faturados-100k.png",
+  "150K": "/achievements/faturados-150k.png",
+  "200K": "/achievements/faturados-200k.png",
+  "350K": "/achievements/faturados-350k.png",
+  "500K": "/achievements/faturados-500k.png",
+  "800K": "/achievements/faturados-800k.png",
+  "1M": "/achievements/faturados-1m.png",
+};
+
+const ORDER_BADGE_PNGS: Record<string, string> = {
+  "100": "/achievements/pedidos-100.png",
+  "150": "/achievements/pedidos-150.png",
+  "300": "/achievements/pedidos-300.png",
+  "500": "/achievements/pedidos-500.png",
+  "1000": "/achievements/pedidos-1000.png",
+  "2000": "/achievements/pedidos-2000.png",
+  "3500": "/achievements/pedidos-3500.png",
+  "5000": "/achievements/pedidos-5000.png",
+};
+
+function AchievementBadge({
+  achievement,
+  unlocked,
+  large = false,
+}: {
+  achievement: AchievementDefinition;
+  unlocked: boolean;
+  large?: boolean;
+}) {
+  // Os selos de faturamento e pedidos usam os PNGs aprovados,
+  // preservando a arte. Somente o estado bloqueado recebe o filtro visual.
+  const approvedBadgePng =
+    achievement.badgeLabel === "FATURADOS"
+      ? REVENUE_BADGE_PNGS[achievement.badgeValue]
+      : ORDER_BADGE_PNGS[achievement.badgeValue];
+
+  if (approvedBadgePng) {
+    return (
+      <div
+        className={[
+          "achievementBadgeArt",
+          "achievementBadgePng",
+          unlocked ? "unlocked" : "locked",
+          large ? "large" : "",
+        ].filter(Boolean).join(" ")}
+        aria-hidden="true"
+      >
+        <img
+          src={approvedBadgePng}
+          alt=""
+          loading={large ? "eager" : "lazy"}
+          draggable={false}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={[
+        "achievementBadgeArt",
+        unlocked ? "unlocked" : "locked",
+        large ? "large" : "",
+        achievement.badgeValue.length >= 5 ? "compactValue" : "",
+      ].filter(Boolean).join(" ")}
+      aria-hidden="true"
+    >
+      <div className="achievementBadgeOuter">
+        <div className="achievementBadgeInner">
+          <span className="achievementBadgeFacet facetA" />
+          <span className="achievementBadgeFacet facetB" />
+          <span className="achievementBadgeFacet facetC" />
+          <span className="achievementBadgeSparkle sparkleA">✦</span>
+          <span className="achievementBadgeSparkle sparkleB">✦</span>
+          <span className="achievementBadgeSparkle sparkleC">✦</span>
+          <img className="achievementBadgeLogo" src={LOGO} alt="" />
+          <b className="achievementBadgeValue">{achievement.badgeValue}</b>
+          <span className="achievementBadgeLabel">{achievement.badgeLabel}</span>
+          <span className="achievementBadgeOrnament">
+            <i />
+            <b>★</b>
+            <strong>★</strong>
+            <b>★</b>
+            <i />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AchievementDetailModal({
+  achievement,
+  unlocked,
+  close,
+}: {
+  achievement: AchievementDefinition;
+  unlocked: boolean;
+  close: () => void;
+}) {
+  return (
+    <div className="overlay achievementDetailOverlay" onMouseDown={close}>
+      <div
+        className="systemDialog achievementDetailDialog"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <small>CONQUISTA DAF</small>
+            <h2>{achievement.title}</h2>
+          </div>
+          <button type="button" onClick={close} aria-label="Fechar conquista">
+            <X />
+          </button>
+        </header>
+
+        <div className="achievementDetailBody">
+          <AchievementBadge achievement={achievement} unlocked={unlocked} large />
+          <div className="achievementDetailInfo">
+            <span className={unlocked ? "achievementStatus unlocked" : "achievementStatus locked"}>
+              {unlocked ? <Check /> : <Trophy />}
+              {unlocked ? "Conquista alcançada" : "Ainda não alcançada"}
+            </span>
+            <div>
+              <small>REGRA</small>
+              <p>{achievementRule(achievement)}</p>
+            </div>
+            <div>
+              <small>TIPO</small>
+              <p>{achievement.qualifier}</p>
+            </div>
+          </div>
+        </div>
+
+        <footer className="achievementDetailFooter">
+          <button type="button" className="secondary" onClick={close}>
+            Fechar
+          </button>
+          {unlocked && Boolean(APPROVED_ACHIEVEMENT_PLAQUES[`${achievement.metric}:${achievement.threshold}`]) ? (
+            <button
+              type="button"
+              className="primary achievementDownloadModal"
+              onClick={() => void downloadAchievementPlaque(achievement)}
+            >
+              <Download />
+              Baixar PNG para emoldurar
+            </button>
+          ) : null}
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function Achievements({ d }: { d: D }) {
+  const [selectedAchievement, setSelectedAchievement] =
+    useState<AchievementDefinition | null>(null);
+
+  const rows = achievementMonthlyRows(d);
+  const metrics = {
+    historicalRevenue: rows.reduce((sum, row) => sum + row.revenue, 0),
+    bestRevenueMonth: rows.reduce((best, row) => Math.max(best, row.revenue), 0),
+    historicalOrders: d.sales.filter(
+      (sale) =>
+        sale.status !== "cancelled" &&
+        !isNoCost(sale) &&
+        !isHistoricalSale(sale),
+    ).length,
+    bestOrdersMonth: rows.reduce((best, row) => Math.max(best, row.orders), 0),
+  };
+
+  return (
+    <div className="achievementsPage">
+      <div className="achievementGrid">
+        {ACHIEVEMENTS.map((achievement) => {
+          const unlocked =
+            achievementValue(achievement, metrics) >= achievement.threshold;
+          return (
+            <button
+              type="button"
+              className={"achievementCard " + (unlocked ? "unlocked" : "locked")}
+              key={achievement.id}
+              onClick={() => setSelectedAchievement(achievement)}
+            >
+              <AchievementBadge achievement={achievement} unlocked={unlocked} />
+              <span className="achievementCardCopy">
+                <strong>{achievement.title}</strong>
+                <small>{achievement.qualifier}</small>
+                <em>{unlocked ? "Conquista alcançada" : "Conquista bloqueada"}</em>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {selectedAchievement ? (
+        <AchievementDetailModal
+          achievement={selectedAchievement}
+          unlocked={
+            achievementValue(selectedAchievement, metrics) >=
+            selectedAchievement.threshold
+          }
+          close={() => setSelectedAchievement(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function RevenueHistoryModal({
+  d,
+  close,
+}: {
+  d: D;
+  close: () => void;
+}) {
+  const startMonth = "2026-06";
+  const currentMonth = today().slice(0, 7);
+  const months: string[] = [];
+  let cursor = startMonth;
+  while (cursor <= currentMonth && months.length < 120) {
+    months.push(cursor);
+    cursor = shiftMonthKey(cursor, 1);
+  }
+
+  const rows = months.map((monthKey) => {
+    const legacy = Object.prototype.hasOwnProperty.call(
+      LEGACY_REVENUE_2026,
+      monthKey,
+    );
+    const revenue = legacy
+      ? LEGACY_REVENUE_2026[monthKey]
+      : d.sales
+          .filter(
+            (sale) =>
+              sale.status !== "cancelled" &&
+              !isNoCost(sale) &&
+              String(sale.date || "").startsWith(monthKey),
+          )
+          .reduce(
+            (sum, sale) => sum + Math.max(0, Number(sale.total) || 0),
+            0,
+          );
+    const orders = legacy
+      ? undefined
+      : d.sales.filter(
+          (sale) =>
+            sale.status !== "cancelled" &&
+            !isNoCost(sale) &&
+            String(sale.date || "").startsWith(monthKey),
+        ).length;
+    return { monthKey, revenue, orders, legacy };
+  });
+
+  const total = rows.reduce((sum, row) => sum + row.revenue, 0);
+  return (
+    <div className="overlay">
+      <div className="systemDialog revenueHistoryDialog">
+        <header>
+          <div>
+            <small>FINANCEIRO</small>
+            <h2>Histórico de faturamento</h2>
+            <p>
+              Faturamento mensal desde junho de 2026, incluindo os valores
+              anteriores à implantação do sistema.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={close}
+            aria-label="Fechar histórico de faturamento"
+          >
+            <X />
+          </button>
+        </header>
+
+        <div className="revenueHistoryTotal">
+          <b>{brl(total)}</b>
+          <span>Desde Junho de 2026</span>
+        </div>
+
+        <div className="revenueHistoryList">
+          {[...rows].reverse().map((row) => (
+            <article key={row.monthKey} className="revenueHistoryRow">
+              <div>
+                <strong>
+                  {periodMonthLabel(row.monthKey).replace(/^./, (letter) =>
+                    letter.toUpperCase(),
+                  )}
+                </strong>
+                <small>
+                  {row.legacy
+                    ? "Valor histórico informado"
+                    : `${row.orders || 0} pedido${row.orders === 1 ? "" : "s"} registrado${row.orders === 1 ? "" : "s"}`}
+                </small>
+              </div>
+              <b>{brl(row.revenue)}</b>
+            </article>
+          ))}
+        </div>
+
+        <footer className="revenueHistoryFooter">
+          <button type="button" className="secondary" onClick={close}>
+            Fechar
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function Finance({
   d,
   totals: _totals,
@@ -10604,6 +12600,29 @@ function InventoryEdit({
         setError("Quantidade e volume devem ser positivos.");
         return;
       }
+      if (
+        purchase.type === "Perfume" &&
+        purchase.arrivalStatus === "pending"
+      ) {
+        set((x: D) => ({
+          ...x,
+          purchases: x.purchases.map((item) =>
+            item.id === purchase.id
+              ? {
+                  ...item,
+                  date: String(f.date),
+                  supplier: String(f.supplier),
+                  qty,
+                  total,
+                  mlPerBottle: ml,
+                }
+              : item,
+          ),
+        }));
+        close();
+        return;
+      }
+
       const product = d.products.find(
         (p) =>
           `${p.brand} ${p.name}`.trim().toLowerCase() ===
@@ -10743,10 +12762,18 @@ function InventoryEdit({
               />
             ) : null}
             <Field n="total" l="Total pago" t="number" v={purchase.total} />
-            <p>
-              A quantidade altera o estoque pela diferença. O preço unitário
-              será atualizado para o valor desta compra corrigida.
-            </p>
+            {purchase.type === "Perfume" &&
+            purchase.arrivalStatus === "pending" ? (
+              <p>
+                Esta compra ainda está pendente. As alterações serão salvas
+                somente na fila e não modificarão o estoque até a chegada.
+              </p>
+            ) : (
+              <p>
+                A quantidade altera o estoque pela diferença. O preço unitário
+                será atualizado para o valor desta compra corrigida.
+              </p>
+            )}
           </>
         ) : null}
         {error ? <p role="alert">{error}</p> : null}
@@ -10757,6 +12784,110 @@ function InventoryEdit({
           <button className="primary">Salvar alterações</button>
         </footer>
       </form>
+    </div>
+  );
+}
+
+function SaleClientPicker({
+  clients,
+  selectedId,
+  onSelect,
+  onNewClient,
+}: {
+  clients: C[];
+  selectedId: number;
+  onSelect: (id: number) => void;
+  onNewClient: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const selected = clients.find((client) => client.id === selectedId);
+  const filtered = clients
+    .filter((client) =>
+      smartSearchMatch(
+        query,
+        client.name,
+        client.cpf,
+        client.phone,
+        client.city,
+        client.state,
+      ),
+    )
+    .sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }),
+    );
+
+  return (
+    <div className="saleClientSelector">
+      <span className="saleClientSelectorLabel">Cliente</span>
+      <button
+        type="button"
+        className={"saleClientSelectorButton" + (open ? " open" : "")}
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+      >
+        <span>
+          <b>{selected?.name || "Selecionar cliente"}</b>
+          <small>
+            {selected
+              ? [selected.cpf, selected.phone].filter(Boolean).join(" · ") ||
+                "Cliente cadastrado"
+              : "Pesquise por nome ou CPF"}
+          </small>
+        </span>
+        <ChevronDown />
+      </button>
+      {open ? (
+        <div className="saleClientSelectorPopover">
+          <label className="saleClientSelectorSearch">
+            <Search />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Nome, CPF ou telefone"
+            />
+          </label>
+          <div className="saleClientSelectorResults">
+            {filtered.map((client) => (
+              <button
+                type="button"
+                key={client.id}
+                className={client.id === selectedId ? "selected" : ""}
+                onClick={() => {
+                  onSelect(client.id);
+                  setOpen(false);
+                  setQuery("");
+                }}
+              >
+                <span>
+                  <b>{client.name}</b>
+                  <small>
+                    {[client.cpf, client.phone, client.city, client.state]
+                      .filter(Boolean)
+                      .join(" · ") || "Sem dados adicionais"}
+                  </small>
+                </span>
+                {client.id === selectedId ? <Check /> : null}
+              </button>
+            ))}
+            {!filtered.length ? (
+              <p className="empty">Nenhum cliente encontrado.</p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="primary saleClientCreateInside"
+            onClick={() => {
+              setOpen(false);
+              setQuery("");
+              onNewClient();
+            }}
+          >
+            <Plus /> Cadastrar novo cliente
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -10810,10 +12941,16 @@ function Form({
     [kind, setKind] = useState("Perfume"),
     [newSupplier, setNewSupplier] = useState(false),
     [newClient, setNewClient] = useState(false),
+    [saleClientId, setSaleClientId] = useState(existingSale?.clientId || 0),
+    [newClientDialogOpen, setNewClientDialogOpen] = useState(false),
+    [saleClientError, setSaleClientError] = useState(""),
+    [sellerPromptOpen, setSellerPromptOpen] = useState(false),
+    [selectedSellerId, setSelectedSellerId] = useState(existingSale?.sellerId || 0),
     [addressCount, setAddressCount] = useState(
       existingClient?.addresses.length || 1,
     ),
     [purchaseCalc, setPurchaseCalc] = useState({ qty: 0, ml: 0, total: 0 }),
+    [pendingPerfumeForm, setPendingPerfumeForm] = useState<Record<string, any> | null>(null),
     [purchasePayment, setPurchasePayment] = useState<"À vista" | "À prazo">("À vista"),
     [purchaseInstallmentLines, setPurchaseInstallmentLines] = useState(1),
     [purchaseTotal, setPurchaseTotal] = useState(0),
@@ -10828,6 +12965,11 @@ function Form({
   const [saleVolumes, setSaleVolumes] = useState<number[]>(
     existingSale?.items.map((item) => item.ml) || [],
   );
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const saleVolumeTimerRef = useRef<number | null>(null);
+  const stockWarningTimerRef = useRef<number | null>(null);
+  const saleAmountTimerRef = useRef<number | null>(null);
+  const sellerIdRef = useRef(existingSale?.sellerId || 0);
   const [stockWarnings, setStockWarnings] = useState<Record<number, string>>({});
   const [clientDraft, setClientDraft] = useState({
     name: existingClient?.name || "",
@@ -10847,6 +12989,47 @@ function Form({
     label: existingClient?.addresses[0]?.label || "Principal",
   });
   const [clientLookupMessage, setClientLookupMessage] = useState("");
+
+  const saleSelectableProducts = useMemo(
+    () =>
+      d.products.filter(
+        (product) =>
+          product.stock > 0 ||
+          Boolean(
+            existingSale?.items.some((item) => item.productId === product.id),
+          ),
+      ),
+    [d.products, existingSale],
+  );
+
+  const saleSupplyItems = useMemo(
+    () =>
+      Array.from({ length: lines }, (_, index) => ({
+        ml: saleVolumes[index] || 0,
+        isApc: Boolean(apcLines[index]),
+      })),
+    [lines, saleVolumes, apcLines],
+  );
+
+  useEffect(
+    () => () => {
+      if (saleVolumeTimerRef.current)
+        window.clearTimeout(saleVolumeTimerRef.current);
+      if (stockWarningTimerRef.current)
+        window.clearTimeout(stockWarningTimerRef.current);
+      if (saleAmountTimerRef.current)
+        window.clearTimeout(saleAmountTimerRef.current);
+    },
+    [],
+  );
+
+  function scheduleSaleAmount(key: "total" | "paid", value: number) {
+    if (saleAmountTimerRef.current)
+      window.clearTimeout(saleAmountTimerRef.current);
+    saleAmountTimerRef.current = window.setTimeout(() => {
+      setSaleAmounts((current) => ({ ...current, [key]: value }));
+    }, 90);
+  }
   function addBrandFromForm(brand: string) {
     const clean = brand.trim();
     if (!clean) return;
@@ -10929,6 +13112,92 @@ function Form({
       setClientLookupMessage("Não foi possível localizar este CEP.");
     }
   }
+  function openNewSaleClient() {
+    setClientDraft({
+      name: "",
+      phone: "",
+      cpf: "",
+      cep: "",
+      address: "",
+      number: "",
+      complement: "",
+      district: "",
+      city: "",
+      state: "",
+      leadSource: "",
+      label: "Principal",
+    });
+    setClientLookupMessage("");
+    setNewClientDialogOpen(true);
+  }
+
+  function saveNewSaleClient() {
+    const cleanName = clientDraft.name.trim();
+    if (!cleanName) {
+      setClientLookupMessage("Informe o nome do cliente.");
+      return;
+    }
+    const cpfDigits = clientDraft.cpf.replace(/\D/g, "");
+    const duplicated = cpfDigits
+      ? d.clients.find(
+          (client) => client.cpf.replace(/\D/g, "") === cpfDigits,
+        )
+      : undefined;
+    if (duplicated) {
+      setSaleClientId(duplicated.id);
+      setSaleClientError("");
+      setNewClientDialogOpen(false);
+      setClientLookupMessage("");
+      return;
+    }
+    const id = Math.max(
+      Date.now(),
+      d.clients.reduce((max, client) => Math.max(max, client.id), 0) + 1,
+    );
+    const address = clientDraft.address.trim();
+    const client: C = {
+      id,
+      name: cleanName,
+      phone: formatClientPhone(clientDraft.phone),
+      cpf: formatCpf(clientDraft.cpf),
+      cep: clientDraft.cep.trim(),
+      number: clientDraft.number.trim(),
+      complement: clientDraft.complement.trim(),
+      district: clientDraft.district.trim(),
+      city: clientDraft.city.trim(),
+      state: clientDraft.state.trim(),
+      leadSource: MANUAL_LEAD_SOURCES.includes(
+        clientDraft.leadSource as LeadSource,
+      )
+        ? (clientDraft.leadSource as LeadSource)
+        : undefined,
+      date: today(),
+      addresses: address
+        ? [
+            {
+              label: clientDraft.label || "Principal",
+              value: address,
+              complement: clientDraft.complement.trim(),
+              district: clientDraft.district.trim(),
+              city: clientDraft.city.trim(),
+              state: clientDraft.state.trim(),
+            },
+          ]
+        : [],
+    };
+    set((state: D) => ({ ...state, clients: [...state.clients, client] }));
+    setSaleClientId(id);
+    setSaleClientError("");
+    setNewClientDialogOpen(false);
+  }
+
+  function chooseSeller(memberId: number) {
+    sellerIdRef.current = memberId;
+    setSelectedSellerId(memberId);
+    setSellerPromptOpen(false);
+    window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+  }
+
   function collectSaleStockWarnings(
     form: HTMLFormElement,
     overrideIndex?: number,
@@ -11002,23 +13271,143 @@ function Form({
 
   function handleSaleVolumeChange(index: number, event: any) {
     const nextValue = Math.max(0, parseDecimal(event.target.value));
-    setSaleVolumes((current) => {
-      const next = [...current];
-      next[index] = nextValue;
-      return next;
-    });
-
     const form = event.currentTarget.form as HTMLFormElement | null;
+
+    if (saleVolumeTimerRef.current)
+      window.clearTimeout(saleVolumeTimerRef.current);
+    saleVolumeTimerRef.current = window.setTimeout(() => {
+      setSaleVolumes((current) => {
+        const next = [...current];
+        next[index] = nextValue;
+        return next;
+      });
+    }, 90);
+
     if (!form) return;
-    setStockWarnings(collectSaleStockWarnings(form, index, nextValue));
+    if (stockWarningTimerRef.current)
+      window.clearTimeout(stockWarningTimerRef.current);
+    stockWarningTimerRef.current = window.setTimeout(() => {
+      setStockWarnings(collectSaleStockWarnings(form, index, nextValue));
+    }, 140);
   }
 
-  function handleSaleProductChange(event: any) {
-    const form = event.currentTarget.form as HTMLFormElement | null;
+  function handleSaleProductChange() {
+    const form = formRef.current;
     if (!form) return;
-    window.setTimeout(() => {
+    if (stockWarningTimerRef.current)
+      window.clearTimeout(stockWarningTimerRef.current);
+    stockWarningTimerRef.current = window.setTimeout(() => {
       setStockWarnings(collectSaleStockWarnings(form));
-    }, 0);
+    }, 80);
+  }
+
+  function commitPerfumePurchase(arrived: boolean) {
+    const f = pendingPerfumeForm;
+    if (!f) return;
+
+    const supplier = (
+      newSupplier ? String(f.newSupplier) : String(f.supplier)
+    ).trim();
+    const qty = Math.max(1, Math.round(Number(f.qty || 1)));
+    const mlPerBottle = Math.max(0, Number(f.mlPerBottle) || 0);
+    const total = Math.max(0, Number(f.total) || 0);
+    const brand = String(f.brand || "").trim();
+    const perfumeName = parseBottleMarker(f.productName).name.trim();
+    const description = `${brand} ${perfumeName}`.trim();
+    const purchaseInstallments =
+      purchasePayment === "À prazo"
+        ? Array.from({ length: purchaseInstallmentLines }, (_, index) => ({
+            date: String(f["purchaseDue" + index] || ""),
+            amount: Number(f["purchaseInstallment" + index] || 0),
+          })).filter((installment) => installment.date || installment.amount)
+        : [];
+
+    set((state: D) => {
+      const matchingProducts = state.products.filter(
+        (product) =>
+          perfumeIdentity(product.brand, product.name) ===
+          perfumeIdentity(brand, perfumeName),
+      );
+      if (matchingProducts.length > 1) {
+        window.alert(
+          "Há mais de um cadastro para este perfume. Confira as identidades antes de registrar a compra.",
+        );
+        return state;
+      }
+
+      const purchaseId = Math.max(
+        Date.now(),
+        state.purchases.reduce(
+          (max, purchase) => Math.max(max, Number(purchase.id) || 0),
+          0,
+        ) + 1,
+      );
+      const purchase: B = {
+        id: purchaseId,
+        date: String(f.date),
+        supplier,
+        type: "Perfume",
+        description,
+        qty,
+        mlPerBottle,
+        total,
+        arrivalStatus: "pending",
+        perfumeBrand: brand,
+        perfumeName,
+        perfumeCategory: String(f.category || "Designer"),
+        perfumeGender: String(f.gender || "Unissex"),
+        perfumeApc: String(f.apc) === "Sim",
+        payment: purchasePayment,
+        paid: purchasePayment === "À prazo" ? 0 : total,
+        dueDate: purchaseInstallments[0]?.date,
+        installment: purchaseInstallments[0]?.amount,
+        installments: purchaseInstallments,
+      };
+
+      const supplierAlreadyExists = state.suppliers.some(
+        (name) => name.toLowerCase() === supplier.toLowerCase(),
+      );
+      const newSupplierType = newSupplier
+        ? SUPPLIER_TYPES.includes(String(f.newSupplierType) as SupplierType)
+          ? (String(f.newSupplierType) as SupplierType)
+          : "Outros"
+        : undefined;
+      const brandAlreadyExists = state.brands.some(
+        (item) =>
+          item.localeCompare(brand, "pt-BR", { sensitivity: "base" }) === 0,
+      );
+
+      let nextState: D = {
+        ...state,
+        brands: brandAlreadyExists ? state.brands : [...state.brands, brand],
+        purchases: [purchase, ...state.purchases],
+        suppliers: supplierAlreadyExists
+          ? state.suppliers
+          : [...state.suppliers, supplier],
+        supplierTypes:
+          newSupplier && !supplierAlreadyExists
+            ? {
+                ...(state.supplierTypes || {}),
+                [supplier]: newSupplierType || "Outros",
+              }
+            : state.supplierTypes,
+        supplierDates:
+          newSupplier && !supplierAlreadyExists
+            ? {
+                ...(state.supplierDates || {}),
+                [supplier]: String(f.date || today()),
+              }
+            : state.supplierDates,
+      };
+
+      if (arrived) {
+        nextState = receivePerfumePurchase(nextState, purchaseId);
+      }
+      return nextState;
+    });
+
+    setPendingPerfumeForm(null);
+    close();
   }
 
   function submit(e: any) {
@@ -11116,6 +13505,21 @@ function Form({
         return;
       }
     }
+    if (type === "purchase" && kind === "Perfume") {
+      setPendingPerfumeForm(f);
+      return;
+    }
+
+    if (isSale && !isOldSale && !isMarketplace && !Number(f.clientId || 0)) {
+      setSaleClientError("Selecione um cliente antes de salvar a venda.");
+      return;
+    }
+
+    if (isSale && !isOldSale && !existingSale && !sellerIdRef.current) {
+      setSellerPromptOpen(true);
+      return;
+    }
+
     set((x: D) => {
       if (type === "product") {
         const brand = String(f.brand || "").trim();
@@ -11524,12 +13928,15 @@ function Form({
       }
       const typedClientName = isMarketplace
         ? String(f.marketplaceCustomer || "").trim()
-        : String(f.clientName || "").trim();
-      const matchedClient = x.clients.find(
-        (client) =>
-          client.name.trim().toLowerCase() === typedClientName.toLowerCase(),
-      );
-      let clientId = matchedClient?.id || 0,
+        : "";
+      const selectedDirectClientId = Number(f.clientId || 0);
+      const matchedClient = isMarketplace
+        ? x.clients.find(
+            (client) =>
+              client.name.trim().toLowerCase() === typedClientName.toLowerCase(),
+          )
+        : x.clients.find((client) => client.id === selectedDirectClientId);
+      let clientId = matchedClient?.id || selectedDirectClientId || 0,
         clients = x.clients;
 
       if (isMarketplace && typedClientName) {
@@ -11660,11 +14067,7 @@ function Form({
           x.sales.reduce((max, current) => Math.max(max, current.id), 0) + 1,
         date: String(f.date),
         clientId,
-        customerName: isMarketplace
-        ? typedClientName
-        : newClient || matchedClient
-          ? undefined
-          : typedClientName || undefined,
+        customerName: isMarketplace ? typedClientName : undefined,
         items,
         total: Number(f.total),
         paid: Number(f.paid),
@@ -11681,6 +14084,11 @@ function Form({
           existingSale?.accumulatingDecants ||
           inheritedPreparationStatus === "accumulating",
         status: existingSale?.status || "active",
+        sellerId:
+          existingSale?.sellerId ||
+          sellerIdRef.current ||
+          selectedSellerId ||
+          undefined,
         expenses: existingSale?.expenses || 0,
         supplyOverrides,
         channel: isMarketplace ? "marketplace" : "direct",
@@ -11736,6 +14144,22 @@ function Form({
     });
     close();
   }
+  const pendingArrivalMatch = pendingPerfumeForm
+    ? d.products.find(
+        (product) =>
+          perfumeIdentity(product.brand, product.name) ===
+          perfumeIdentity(
+            pendingPerfumeForm.brand,
+            parseBottleMarker(pendingPerfumeForm.productName).name,
+          ),
+      )
+    : undefined;
+  const pendingArrivalName = pendingPerfumeForm
+    ? `${String(pendingPerfumeForm.brand || "").trim()} ${parseBottleMarker(
+        pendingPerfumeForm.productName,
+      ).name}`.trim()
+    : "";
+
   const title = isSale
     ? isOldSale
       ? "Cadastrar venda antiga a receber"
@@ -11762,6 +14186,7 @@ function Form({
   return (
     <div className={isSale ? "overlay saleRecordOverlay" : "overlay"}>
       <form
+        ref={formRef}
         onSubmit={submit}
         className={isSale ? "recordForm saleRecordForm" : "recordForm"}
       >
@@ -11893,67 +14318,36 @@ function Form({
                 v={existingSale ? saleCustomer(existingSale, d) : ""}
               />
             ) : (
-              <>
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    onChange={(e) => setNewClient(e.target.checked)}
-                  />
-                  Cadastrar cliente nesta venda
-                </label>
-                {newClient ? (
-                  <>
-                    <div className="row three clientSaleIdentityRow">
-                      <label><span>Nome</span><input name="newName" value={clientDraft.name} onChange={(e) => setClientDraft((c) => ({ ...c, name: e.target.value }))} required /></label>
-                      <label><span>CPF (opcional)</span><input name="newCpf" inputMode="numeric" maxLength={14} value={clientDraft.cpf} onChange={(e) => setClientDraft((c) => ({ ...c, cpf: formatCpf(e.target.value) }))} onBlur={(e) => findClientByCpf(e.target.value)} /></label>
-                      <label><span>WhatsApp (opcional)</span><input name="newPhone" inputMode="tel" value={clientDraft.phone} onChange={(e) => setClientDraft((c) => ({ ...c, phone: formatClientPhone(e.target.value) }))} /></label>
-                    </div>
-                    <div className="clientSaleAddressRow">
-                      <label><span>Endereço (opcional)</span><input name="newAddress" value={clientDraft.address} onChange={(e) => setClientDraft((c) => ({ ...c, address: e.target.value }))} /></label>
-                      <label><span>Número (opcional)</span><input name="newNumber" value={clientDraft.number} onChange={(e) => setClientDraft((c) => ({ ...c, number: e.target.value }))} /></label>
-                      <label><span>Complemento (opcional)</span><input name="newComplement" value={clientDraft.complement} onChange={(e) => setClientDraft((c) => ({ ...c, complement: e.target.value }))} placeholder="Apto, bloco, sala..." /></label>
-                      <label><span>CEP (opcional)</span><input name="newCep" value={clientDraft.cep} onChange={(e) => setClientDraft((c) => ({ ...c, cep: e.target.value }))} onBlur={(e) => fillAddressFromCep(e.target.value)} /></label>
-                    </div>
-                    <div className="row three">
-                      <label><span>Bairro (opcional)</span><input name="newDistrict" value={clientDraft.district} onChange={(e) => setClientDraft((c) => ({ ...c, district: e.target.value }))} /></label>
-                      <label><span>Cidade (opcional)</span><input name="newCity" value={clientDraft.city} onChange={(e) => setClientDraft((c) => ({ ...c, city: e.target.value }))} /></label>
-                      <label><span>Estado (opcional)</span><select name="newState" value={clientDraft.state} onChange={(e) => setClientDraft((c) => ({ ...c, state: e.target.value }))}><option value="">Selecione...</option>{BRAZIL_STATES.map((state) => <option key={state}>{state}</option>)}</select></label>
-                    </div>
-                    <Select
-                      n="newLeadSource"
-                      l="Origem do lead / Grupo"
-                      o={MANUAL_LEAD_SOURCES.map((source) => [source, source])}
-                    />
-                    {clientLookupMessage ? <small className="cepStatus">{clientLookupMessage}</small> : null}
-                  </>
-                ) : (
-        <label className="saleClientInput">
-          <span>Cliente</span>
-          <input
-            name="clientName"
-            list="sale-client-options"
-            defaultValue={existingSale ? saleCustomer(existingSale, d) : ""}
-            placeholder="Selecione ou digite o nome do cliente"
-            required
-          />
-          <datalist id="sale-client-options">
-            {d.clients.map((client) => (
-              <option key={client.id} value={client.name} />
-            ))}
-          </datalist>
-        </label>
-      )}
-              </>
+              <div className="saleClientSelectionBlock">
+                <input type="hidden" name="clientId" value={saleClientId || ""} />
+                <SaleClientPicker
+                  clients={d.clients}
+                  selectedId={saleClientId}
+                  onSelect={(id) => {
+                    setSaleClientId(id);
+                    setSaleClientError("");
+                  }}
+                  onNewClient={openNewSaleClient}
+                />
+                <button
+                  type="button"
+                  className="secondary saleNewClientButton"
+                  onClick={openNewSaleClient}
+                >
+                  <Plus /> Cadastrar novo cliente
+                </button>
+                {saleClientError ? (
+                  <small className="saleClientError" role="alert">
+                    {saleClientError}
+                  </small>
+                ) : null}
+              </div>
             )}{" "}
             {Array.from({ length: lines }, (_, i) => (
               <div className="row item" key={i}>
                 <ProductSearch
                   index={i}
-                  products={d.products.filter(
-                    (p) =>
-                      p.stock > 0 ||
-                      existingSale?.items.some((x) => x.productId === p.id),
-                  )}
+                  products={saleSelectableProducts}
                   value={existingSale?.items[i]?.productId}
                   onChange={handleSaleProductChange}
                 />
@@ -12017,10 +14411,7 @@ function Form({
     ) : null}
   </div>
             <SaleSupplyPicker
-              items={Array.from({ length: lines }, (_, index) => ({
-                ml: saleVolumes[index] || 0,
-                isApc: Boolean(apcLines[index]),
-              }))}
+              items={saleSupplyItems}
               supplies={d.supplies}
               overrides={supplyOverrides}
               setOverrides={setSupplyOverrides}
@@ -12038,10 +14429,7 @@ function Form({
                 t="number"
                 v={existingSale?.total}
                 onChange={(e) =>
-                  setSaleAmounts((v) => ({
-                    ...v,
-                    total: Number(e.target.value),
-                  }))
+                  scheduleSaleAmount("total", Number(e.target.value))
                 }
               />
             </div>
@@ -12051,7 +14439,7 @@ function Form({
               t="number"
               v={existingSale?.paid}
               onChange={(e) =>
-                setSaleAmounts((v) => ({ ...v, paid: Number(e.target.value) }))
+                scheduleSaleAmount("paid", Number(e.target.value))
               }
             />
             {isMarketplace ? (
@@ -12706,6 +15094,153 @@ function Form({
           <button className="primary">Salvar registro</button>
         </footer>
       </form>
+
+      {pendingPerfumeForm ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog perfumeArrivalDialog">
+            <header>
+              <div>
+                <small>ENTRADA NO ESTOQUE</small>
+                <h2>O perfume já chegou?</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPendingPerfumeForm(null)}
+                aria-label="Voltar ao registro da compra"
+              >
+                <X />
+              </button>
+            </header>
+
+            <div className="perfumeArrivalContent">
+              <PackageOpen />
+              <div>
+                <strong>{pendingArrivalName}</strong>
+                {pendingArrivalMatch ? (
+                  <p>
+                    Este perfume já existe no estoque. Se ele já chegou, o
+                    novo volume será somado ao cadastro existente, sem criar
+                    outro perfume.
+                  </p>
+                ) : (
+                  <p>
+                    Se ele já chegou, será incluído no estoque. Se ainda não
+                    chegou, ficará na fila de Perfumes pendentes.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <footer className="perfumeArrivalActions">
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => commitPerfumePurchase(false)}
+              >
+                Ainda não chegou
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => commitPerfumePurchase(true)}
+              >
+                <Check /> Sim, já chegou
+              </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {newClientDialogOpen ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog saleNewClientDialog">
+            <header>
+              <div>
+                <small>NOVA VENDA</small>
+                <h2>Cadastrar novo cliente</h2>
+              </div>
+              <button type="button" onClick={() => setNewClientDialogOpen(false)} aria-label="Fechar cadastro de cliente">
+                <X />
+              </button>
+            </header>
+
+            <div className="row three clientSaleIdentityRow">
+              <label><span>Nome</span><input value={clientDraft.name} onChange={(event) => setClientDraft((current) => ({ ...current, name: event.target.value }))} /></label>
+              <label><span>CPF (opcional)</span><input inputMode="numeric" maxLength={14} value={clientDraft.cpf} onChange={(event) => setClientDraft((current) => ({ ...current, cpf: formatCpf(event.target.value) }))} onBlur={(event) => findClientByCpf(event.target.value)} /></label>
+              <label><span>WhatsApp (opcional)</span><input inputMode="tel" value={clientDraft.phone} onChange={(event) => setClientDraft((current) => ({ ...current, phone: formatClientPhone(event.target.value) }))} /></label>
+            </div>
+            <div className="clientSaleAddressRow">
+              <label><span>Endereço (opcional)</span><input value={clientDraft.address} onChange={(event) => setClientDraft((current) => ({ ...current, address: event.target.value }))} /></label>
+              <label><span>Número (opcional)</span><input value={clientDraft.number} onChange={(event) => setClientDraft((current) => ({ ...current, number: event.target.value }))} /></label>
+              <label><span>Complemento (opcional)</span><input value={clientDraft.complement} onChange={(event) => setClientDraft((current) => ({ ...current, complement: event.target.value }))} placeholder="Apto, bloco, sala..." /></label>
+              <label><span>CEP (opcional)</span><input value={clientDraft.cep} onChange={(event) => setClientDraft((current) => ({ ...current, cep: event.target.value }))} onBlur={(event) => fillAddressFromCep(event.target.value)} /></label>
+            </div>
+            <div className="row three">
+              <label><span>Bairro (opcional)</span><input value={clientDraft.district} onChange={(event) => setClientDraft((current) => ({ ...current, district: event.target.value }))} /></label>
+              <label><span>Cidade (opcional)</span><input value={clientDraft.city} onChange={(event) => setClientDraft((current) => ({ ...current, city: event.target.value }))} /></label>
+              <label><span>Estado (opcional)</span><select value={clientDraft.state} onChange={(event) => setClientDraft((current) => ({ ...current, state: event.target.value }))}><option value="">Selecione...</option>{BRAZIL_STATES.map((state) => <option key={state}>{state}</option>)}</select></label>
+            </div>
+            <div className="saleLeadSourcePicker">
+              <span>Origem do lead / Grupo</span>
+              <div>
+                {MANUAL_LEAD_SOURCES.map((source) => (
+                  <button
+                    type="button"
+                    key={source}
+                    className={clientDraft.leadSource === source ? "active" : ""}
+                    onClick={() => setClientDraft((current) => ({ ...current, leadSource: source }))}
+                  >
+                    {source}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {clientLookupMessage ? <small className="cepStatus">{clientLookupMessage}</small> : null}
+            <footer className="saleNewClientActions">
+              <button type="button" className="secondary" onClick={() => setNewClientDialogOpen(false)}>Cancelar</button>
+              <button type="button" className="primary" onClick={saveNewSaleClient}><Check /> Salvar cliente</button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {sellerPromptOpen ? (
+        <div className="overlay nestedOverlay">
+          <div className="systemDialog sellerPromptDialog">
+            <header>
+              <div>
+                <small>NOVA VENDA</small>
+                <h2>Quem realizou a venda?</h2>
+                <p>Selecione o responsável para registrar a autoria desta venda.</p>
+              </div>
+              <button type="button" onClick={() => setSellerPromptOpen(false)} aria-label="Fechar seleção de responsável">
+                <X />
+              </button>
+            </header>
+            <div className="sellerPromptList">
+              {d.teamMembers
+                .filter((member) => member.active !== false)
+                .map((member) => (
+                  <button
+                    type="button"
+                    key={member.id}
+                    onClick={() => chooseSeller(member.id)}
+                  >
+                    <span>
+                      <b>{member.name}</b>
+                      <small>
+                        {member.role === "partner"
+                          ? `Sócio · ${(member.equityPercent || 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`
+                          : `Funcionário · ${member.position || "Cargo não informado"}`}
+                      </small>
+                    </span>
+                    <ChevronRight />
+                  </button>
+                ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -12721,13 +15256,16 @@ function SaleSupplyPicker({
   overrides: Record<string, number>;
   setOverrides: (value: Record<string, number>) => void;
 }) {
-  const options = packagingOptions({ items }, supplies);
-  const automatic = Object.fromEntries(
-    options.map(({ name, automaticQty }) => [name, automaticQty]),
-  ) as Record<string, number>;
-  const effectiveSale = { items, supplyOverrides: overrides };
-  const effectiveLines = packaging(effectiveSale, supplies).lines;
-  const total = effectiveLines.reduce((sum, line) => sum + line.total, 0);
+  const { options, effectiveLines, total } = useMemo(() => {
+    const nextOptions = packagingOptions({ items }, supplies);
+    const effectiveSale = { items, supplyOverrides: overrides };
+    const nextLines = packaging(effectiveSale, supplies).lines;
+    return {
+      options: nextOptions,
+      effectiveLines: nextLines,
+      total: nextLines.reduce((sum, line) => sum + line.total, 0),
+    };
+  }, [items, supplies, overrides]);
 
   function update(name: string, qty: number) {
     setOverrides({ ...overrides, [name]: Math.max(0, qty) });
@@ -12983,42 +15521,113 @@ function ProductSearch({
   index: number;
   products: P[];
   value?: number;
-  onChange?: (event: any) => void;
+  onChange?: () => void;
 }) {
-  const selected = products.find((p) => p.id === value);
-  const displayNames = Array.from(
-    new Set(products.map((product) => productDisplayName(product))),
+  const selected = useMemo(
+    () => products.find((product) => product.id === value),
+    [products, value],
   );
-  const selectableProducts = displayNames
-    .map((displayName) =>
-      resolveSaleProduct(products, displayName, {
-        preferredId:
-          selected && productDisplayName(selected) === displayName
-            ? selected.id
-            : undefined,
-      }),
-    )
-    .filter(Boolean) as P[];
+  const [query, setQuery] = useState(
+    selected ? productDisplayName(selected) : "",
+  );
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (selected) setQuery(productDisplayName(selected));
+  }, [selected?.id]);
+
+  const selectableProducts = useMemo(() => {
+    const displayNames = Array.from(
+      new Set(products.map((product) => productDisplayName(product))),
+    );
+    return displayNames
+      .map((displayName) =>
+        resolveSaleProduct(products, displayName, {
+          preferredId:
+            selected && productDisplayName(selected) === displayName
+              ? selected.id
+              : undefined,
+        }),
+      )
+      .filter(Boolean) as P[];
+  }, [products, selected?.id]);
+
+  const filteredProducts = useMemo(
+    () =>
+      selectableProducts
+        .filter((product) =>
+          smartSearchMatch(
+            query,
+            productDisplayName(product),
+            product.brand,
+            product.name,
+            product.category,
+            product.gender,
+          ),
+        )
+        .slice(0, 30),
+    [selectableProducts, query],
+  );
+
+  function selectProduct(product: P) {
+    setQuery(productDisplayName(product));
+    setOpen(false);
+    window.setTimeout(() => onChange?.(), 0);
+  }
 
   return (
-    <label>
+    <label className="saleProductSearch">
       <span>Perfume {index + 1}</span>
-      <input
-        name={"productName" + index}
-        list={"products" + index}
-        defaultValue={selected ? productDisplayName(selected) : ""}
-        placeholder="Digite para buscar..."
-        required
-        onChange={onChange}
-      />
-      <datalist id={"products" + index}>
-        {selectableProducts.map((p) => (
-          <option key={p.id} value={productDisplayName(p)}>
-            {p.stock} ml disponíveis · Frasco nº {p.bottleNumber || 1} · APC{" "}
-            {p.apc ? "disponível" : "indisponível"}
-          </option>
-        ))}
-      </datalist>
+      <div className="saleProductSearchControl">
+        <Search />
+        <input
+          name={"productName" + index}
+          value={query}
+          placeholder="Digite para buscar..."
+          autoComplete="off"
+          required
+          onFocus={() => setOpen(true)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        />
+      </div>
+      {open ? (
+        <div className="saleProductSearchPopover">
+          {filteredProducts.map((product) => (
+            <button
+              type="button"
+              key={product.id}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => selectProduct(product)}
+            >
+              <span>
+                <b>{productDisplayName(product)}</b>
+                <small>
+                  {product.stock.toLocaleString("pt-BR", {
+                    maximumFractionDigits: 2,
+                  })}{" "}
+                  ml disponíveis · Frasco nº {product.bottleNumber || 1}
+                </small>
+              </span>
+              <em className={product.apc ? "available" : "unavailable"}>
+                APC {product.apc ? "disponível" : "indisponível"}
+              </em>
+            </button>
+          ))}
+          {!filteredProducts.length ? (
+            <p className="empty">Nenhum perfume encontrado.</p>
+          ) : null}
+          {selectableProducts.length > 30 &&
+          filteredProducts.length === 30 ? (
+            <small className="saleProductSearchHint">
+              Refine a busca para ver mais resultados.
+            </small>
+          ) : null}
+        </div>
+      ) : null}
     </label>
   );
 }
@@ -13156,10 +15765,9 @@ function History({ id, d, close }: { id: number; d: D; close: () => void }) {
           ? product.brand + " " + product.name
           : sale.description || "";
       })
-      .join(" ")
-      .toLowerCase();
+      .join(" ");
     return (
-      perfumeText.includes(query.trim().toLowerCase()) &&
+      smartSearchMatch(query, perfumeText, sale.description) &&
       (!month || sale.date.startsWith(month)) &&
       (!saleDay || sale.date === saleDay)
     );
