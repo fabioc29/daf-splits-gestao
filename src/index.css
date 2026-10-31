@@ -14187,6 +14187,18 @@ main > header {
 .achievementBadgeArt.large {
   width: min(100%, 300px);
 }
+.achievementBadgeArt.achievementBadgePng {
+  overflow: visible;
+  background: transparent;
+}
+.achievementBadgePng img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
 .achievementBadgeArt.locked {
   filter: grayscale(1) saturate(0) brightness(.52) contrast(.9) blur(2.2px);
   opacity: .78;
