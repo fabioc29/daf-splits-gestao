@@ -14653,3 +14653,56 @@ main > header {
     justify-content: center;
   }
 }
+
+
+/* Rentabilidade: origem de vendas e composição dos custos de perfume */
+.profitChannelFilter {
+  display: grid;
+  gap: 6px;
+  min-width: min(320px, 100%);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+}
+.profitChannelFilter select {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  color: var(--text);
+  background: var(--panel-2);
+  font: inherit;
+  font-size: 12px;
+}
+.profitCostDetails .expenseBreakdownSupplies {
+  min-width: 180px;
+  padding-right: 5px;
+}
+.profitCostDetails summary {
+  font-size: 11px;
+}
+.profitPerfumeLine {
+  display: grid !important;
+  gap: 3px;
+  margin: 3px 0;
+}
+.profitPerfumeLine strong {
+  color: var(--text);
+  font-size: 10px;
+}
+.profitPerfumeLine span {
+  line-height: 1.4;
+}
+.profitPerfumeLine b {
+  color: var(--text);
+}
+.profitOrdersEmpty {
+  padding: 22px !important;
+  text-align: center;
+  color: var(--muted);
+}
+@media (max-width: 720px) {
+  .profitControl .panelHeading { flex-wrap: wrap; }
+  .profitChannelFilter { width: 100%; }
+}
