@@ -8,6 +8,7 @@ import { LocalRecovery, optionalLocalGet, optionalLocalSet, optionalLocalRemove 
 import { CRMFeedPanel } from "./crm/CRMFeedPanel";
 import { askConfirm, showAlert } from "./ui/dialogs";
 import { RowMenu } from "./ui/RowMenu";
+import { SortableHeader, compareValues, useTableSort } from "./ui/SortableHeader";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -313,102 +314,148 @@ type SystemPalette = {
   categoryDesigner: string;
 };
 
+// Visual "Atelier": superfícies grafite/ameixa e o dourado champanhe do logo como destaque.
 const DARK_SYSTEM_PALETTE: SystemPalette = {
-  background: "#090d14",
-  panel: "#111722",
-  panel2: "#161e2b",
-  panel3: "#1b2534",
-  sidebar: "#070a10",
-  input: "#0d131d",
-  hover: "#182232",
-  line: "#263142",
-  lineStrong: "#354256",
-  text: "#f4f7fb",
-  muted: "#8c98aa",
-  accent: "#7186ff",
-  accentStrong: "#5b6ef5",
-  gold: "#7186ff",
-  success: "#32bf8a",
-  warning: "#f2b84b",
-  danger: "#ef6670",
-  cyan: "#54c7d4",
-  healthCritical: "#e34b57",
-  healthModerate: "#e7ad2f",
-  healthHealthy: "#2fac7a",
-  paymentPix: "#22a66f",
-  paymentCard: "#2f80ed",
-  paymentInstallment: "#e0b43c",
-  paymentMarketplace: "#8b5cf6",
-  orderDirect: "#22a66f",
-  orderTiktok: "#5dc9d6",
-  orderShopee: "#ee4d2d",
-  orderCancelled: "#05070a",
-  categoryNiche: "#e0b43c",
-  categoryArabic: "#8b5cf6",
-  categoryDesigner: "#2f80ed",
+  background: "#121017",
+  panel: "#1a1720",
+  panel2: "#211d29",
+  panel3: "#2a2533",
+  sidebar: "#0e0c12",
+  input: "#16131c",
+  hover: "#262130",
+  line: "#2f2a38",
+  lineStrong: "#423b4d",
+  text: "#f3efe7",
+  muted: "#a39cae",
+  accent: "#d0ab63",
+  accentStrong: "#b8934c",
+  gold: "#d0ab63",
+  success: "#4cb98a",
+  warning: "#e3a948",
+  danger: "#e2686e",
+  cyan: "#6fc3c9",
+  healthCritical: "#e2686e",
+  healthModerate: "#e3a948",
+  healthHealthy: "#4cb98a",
+  paymentPix: "#4cb98a",
+  paymentCard: "#7c9be3",
+  paymentInstallment: "#d0ab63",
+  paymentMarketplace: "#a283d9",
+  orderDirect: "#4cb98a",
+  orderTiktok: "#6fc3c9",
+  orderShopee: "#e8774f",
+  orderCancelled: "#5b5466",
+  categoryNiche: "#d0ab63",
+  categoryArabic: "#a283d9",
+  categoryDesigner: "#7c9be3",
 };
 
 const LIGHT_SYSTEM_PALETTE: SystemPalette = {
-  background: "#f2f5f9",
+  background: "#f4f3f6",
   panel: "#ffffff",
-  panel2: "#f7f9fc",
-  panel3: "#eef2f7",
-  sidebar: "#ffffff",
-  input: "#f8fafc",
-  hover: "#edf1f7",
-  line: "#dde3ec",
-  lineStrong: "#cbd4e1",
-  text: "#172033",
-  muted: "#6e7a8c",
-  accent: "#5b6ef5",
-  accentStrong: "#4859db",
-  gold: "#5b6ef5",
-  success: "#168a65",
-  warning: "#b87c18",
-  danger: "#cf4654",
-  cyan: "#168da0",
-  healthCritical: "#d64b57",
-  healthModerate: "#d79a1f",
-  healthHealthy: "#198b63",
-  paymentPix: "#168a65",
-  paymentCard: "#2878d9",
-  paymentInstallment: "#c38b23",
-  paymentMarketplace: "#7650d6",
-  orderDirect: "#168a65",
-  orderTiktok: "#2aa7b8",
-  orderShopee: "#df4a31",
-  orderCancelled: "#7b8492",
-  categoryNiche: "#c38b23",
-  categoryArabic: "#7650d6",
-  categoryDesigner: "#2878d9",
+  panel2: "#f8f7fa",
+  panel3: "#efedf2",
+  sidebar: "#141118",
+  input: "#fbfafc",
+  hover: "#f0eef3",
+  line: "#e4e0e9",
+  lineStrong: "#d1ccd8",
+  text: "#1d1923",
+  muted: "#6c6577",
+  accent: "#9b7531",
+  accentStrong: "#83611f",
+  gold: "#9b7531",
+  success: "#1f8a5e",
+  warning: "#a86e12",
+  danger: "#c2434e",
+  cyan: "#1d8a92",
+  healthCritical: "#c2434e",
+  healthModerate: "#c48a1c",
+  healthHealthy: "#1f8a5e",
+  paymentPix: "#1f8a5e",
+  paymentCard: "#4a6fc4",
+  paymentInstallment: "#b8893a",
+  paymentMarketplace: "#7a58b8",
+  orderDirect: "#1f8a5e",
+  orderTiktok: "#1d8a92",
+  orderShopee: "#d2602f",
+  orderCancelled: "#9a93a3",
+  categoryNiche: "#b8893a",
+  categoryArabic: "#7a58b8",
+  categoryDesigner: "#4a6fc4",
 };
+
+// Cores de destaque oferecidas em Configurações (tema escuro / tema claro).
+const ACCENT_PRESETS = [
+  { id: "champagne", label: "Champanhe", dark: "#d0ab63", light: "#9b7531" },
+  { id: "rose", label: "Rosé", dark: "#d98e9c", light: "#a8505f" },
+  { id: "amethyst", label: "Ametista", dark: "#a98ce0", light: "#6b4fae" },
+  { id: "sage", label: "Sálvia", dark: "#8fbf9f", light: "#3f7a55" },
+  { id: "ocean", label: "Oceano", dark: "#7fb3e0", light: "#2f69a3" },
+] as const;
+type AccentPresetId = (typeof ACCENT_PRESETS)[number]["id"];
+
+function shadeHex(hex: string, amount: number) {
+  const value = hex.replace("#", "");
+  const channels = [0, 2, 4].map((index) => parseInt(value.slice(index, index + 2), 16));
+  const next = channels.map((channel) =>
+    Math.max(0, Math.min(255, Math.round(channel + (amount < 0 ? channel : 255 - channel) * amount))),
+  );
+  return "#" + next.map((channel) => channel.toString(16).padStart(2, "0")).join("");
+}
+
+function paletteWithAccent(base: SystemPalette, accent: string): SystemPalette {
+  return { ...base, accent, gold: accent, accentStrong: shadeHex(accent, -0.14) };
+}
 
 type LocalUiSettings = {
   appName: string;
   panelLabel: string;
   menuOrder: string[];
   menuZoom: number;
+  accentId: AccentPresetId;
+  // Derivadas do tema base + cor de destaque (não são mais editadas uma a uma).
   darkPalette: SystemPalette;
   lightPalette: SystemPalette;
 };
 
-const DEFAULT_LOCAL_UI_SETTINGS: LocalUiSettings = {
-  appName: "DAF Splits",
-  panelLabel: "PAINEL ADMINISTRATIVO",
-  menuOrder: [...DEFAULT_MENU_ORDER],
-  menuZoom: 100,
-  darkPalette: { ...DARK_SYSTEM_PALETTE },
-  lightPalette: { ...LIGHT_SYSTEM_PALETTE },
-};
+// Versão das preferências visuais. Ao mudar o visual base, preferências antigas
+// de cor deixam de valer e o sistema volta para o padrão novo.
+const LOCAL_UI_VERSION = 2;
+const DEFAULT_PANEL_LABEL = "DAF Splits";
+const LEGACY_PANEL_LABELS = ["PAINEL ADMINISTRATIVO", "Painel administrativo"];
+
+function buildLocalUiSettings(
+  values: Partial<Omit<LocalUiSettings, "darkPalette" | "lightPalette">> = {},
+): LocalUiSettings {
+  const accent =
+    ACCENT_PRESETS.find((preset) => preset.id === values.accentId) || ACCENT_PRESETS[0];
+  return {
+    appName: values.appName ?? "DAF Splits",
+    panelLabel: values.panelLabel ?? DEFAULT_PANEL_LABEL,
+    menuOrder: values.menuOrder ? [...values.menuOrder] : [...DEFAULT_MENU_ORDER],
+    menuZoom: values.menuZoom ?? 100,
+    accentId: accent.id,
+    darkPalette: paletteWithAccent(DARK_SYSTEM_PALETTE, accent.dark),
+    lightPalette: paletteWithAccent(LIGHT_SYSTEM_PALETTE, accent.light),
+  };
+}
+
+const DEFAULT_LOCAL_UI_SETTINGS: LocalUiSettings = buildLocalUiSettings();
+
+function serializeLocalUiSettings(settings: LocalUiSettings) {
+  return JSON.stringify({
+    version: LOCAL_UI_VERSION,
+    appName: settings.appName,
+    panelLabel: settings.panelLabel,
+    menuOrder: settings.menuOrder,
+    menuZoom: settings.menuZoom,
+    accentId: settings.accentId,
+  });
+}
 
 function readLocalUiSettings(): LocalUiSettings {
-  if (typeof window === "undefined")
-    return {
-      ...DEFAULT_LOCAL_UI_SETTINGS,
-      menuOrder: [...DEFAULT_MENU_ORDER],
-      darkPalette: { ...DARK_SYSTEM_PALETTE },
-      lightPalette: { ...LIGHT_SYSTEM_PALETTE },
-    };
+  if (typeof window === "undefined") return buildLocalUiSettings();
   try {
     const stored = JSON.parse(
       window.localStorage.getItem("daf-ui-settings") || "null",
@@ -419,66 +466,34 @@ function readLocalUiSettings(): LocalUiSettings {
             typeof id === "string" && DEFAULT_MENU_ORDER.includes(id),
         )
       : [];
-    const legacyAccent =
-      typeof stored?.accent === "string" ? stored.accent : undefined;
-    const legacyGold =
-      typeof stored?.gold === "string" ? stored.gold : undefined;
-    const darkPalette = {
-      ...DARK_SYSTEM_PALETTE,
-      ...(stored?.darkPalette && typeof stored.darkPalette === "object"
-        ? stored.darkPalette
-        : {}),
-      ...(legacyAccent
-        ? { accent: legacyAccent, accentStrong: legacyAccent }
-        : {}),
-      ...(legacyGold ? { gold: legacyGold } : {}),
-    };
-    const lightPalette = {
-      ...LIGHT_SYSTEM_PALETTE,
-      ...(stored?.lightPalette && typeof stored.lightPalette === "object"
-        ? stored.lightPalette
-        : {}),
-      ...(legacyAccent
-        ? { accent: legacyAccent, accentStrong: legacyAccent }
-        : {}),
-      ...(legacyGold ? { gold: legacyGold } : {}),
-    };
     const menuOrder = [
       ...storedOrder,
       ...DEFAULT_MENU_ORDER.filter((id) => !storedOrder.includes(id)),
     ];
     // Usuários que já tinham uma ordem salva recebem o novo menu exatamente
     // abaixo de Financeiro. Depois disso, qualquer reordenação manual é respeitada.
-    if (!storedOrder.includes("achievements")) {
+    if (storedOrder.length && !storedOrder.includes("achievements")) {
       const currentIndex = menuOrder.indexOf("achievements");
       if (currentIndex >= 0) menuOrder.splice(currentIndex, 1);
       const financeIndex = menuOrder.indexOf("finance");
       menuOrder.splice(financeIndex >= 0 ? financeIndex + 1 : menuOrder.length, 0, "achievements");
     }
-    return {
-      appName:
-        typeof stored?.appName === "string"
-          ? stored.appName
-          : DEFAULT_LOCAL_UI_SETTINGS.appName,
+    const storedLabel =
+      typeof stored?.panelLabel === "string" ? stored.panelLabel : undefined;
+    return buildLocalUiSettings({
+      appName: typeof stored?.appName === "string" ? stored.appName : undefined,
       panelLabel:
-        typeof stored?.panelLabel === "string"
-          ? stored.panelLabel
-          : DEFAULT_LOCAL_UI_SETTINGS.panelLabel,
+        !storedLabel || LEGACY_PANEL_LABELS.includes(storedLabel.trim())
+          ? DEFAULT_PANEL_LABEL
+          : storedLabel,
       menuOrder,
-      menuZoom: Math.max(
-        80,
-        Math.min(130, Number(stored?.menuZoom) || 100),
-      ),
-      darkPalette,
-      lightPalette,
-    };
+      menuZoom: Math.max(80, Math.min(130, Number(stored?.menuZoom) || 100)),
+      // Paletas de 32 cores das versões anteriores são descartadas de propósito.
+      accentId:
+        stored?.version === LOCAL_UI_VERSION ? stored?.accentId : undefined,
+    });
   } catch {
-    return {
-      ...DEFAULT_LOCAL_UI_SETTINGS,
-      menuOrder: [...DEFAULT_MENU_ORDER],
-      darkPalette: { ...DARK_SYSTEM_PALETTE },
-      lightPalette: { ...LIGHT_SYSTEM_PALETTE },
-    };
+    return buildLocalUiSettings();
   }
 }
 
@@ -928,15 +943,15 @@ const BRAZIL_REGION_STATES: Record<Exclude<BrazilRegion, "Não informado">, stri
 };
 
 const REGION_STATE_COLORS = [
-  "#7186ff",
-  "#54c7d4",
-  "#32bf8a",
-  "#f2b84b",
-  "#8b5cf6",
-  "#ef6670",
-  "#4ba3ff",
-  "#d76de8",
-  "#76c85a",
+  "#d0ab63",
+  "#6fc3c9",
+  "#4cb98a",
+  "#a283d9",
+  "#7c9be3",
+  "#e2686e",
+  "#c9b28f",
+  "#c78bb8",
+  "#9bb86a",
 ];
 const isMarketplaceSale = (sale: V) =>
   sale.channel === "marketplace" || Boolean(sale.marketplace);
@@ -1377,7 +1392,7 @@ function System({ session }: { session: Session }) {
     Object.entries(variables).forEach(([key, value]) =>
       root.style.setProperty(key, value),
     );
-    optionalLocalSet("daf-ui-settings", JSON.stringify(localUi));
+    optionalLocalSet("daf-ui-settings", serializeLocalUiSettings(localUi));
     document.title = "Gestão | DAF Splits";
   }, [localUi, theme]);
   useEffect(() => {
@@ -2821,51 +2836,16 @@ function SettingsPage({
     setSettings({ ...settings, [key]: value });
   }
 
-  const paletteKey = theme === "dark" ? "darkPalette" : "lightPalette";
-  const activePalette = settings[paletteKey];
-  const paletteFields: Array<[keyof SystemPalette, string]> = [
-    ["background", "Fundo geral"],
-    ["panel", "Painéis principais"],
-    ["panel2", "Painéis secundários"],
-    ["panel3", "Painéis terciários"],
-    ["sidebar", "Menu lateral"],
-    ["input", "Campos de formulário"],
-    ["hover", "Hover e seleção"],
-    ["line", "Bordas"],
-    ["lineStrong", "Bordas fortes"],
-    ["text", "Texto principal"],
-    ["muted", "Texto secundário"],
-    ["accent", "Cor de destaque"],
-    ["accentStrong", "Destaque forte"],
-    ["gold", "Cor secundária"],
-    ["success", "Sucesso / positivo"],
-    ["warning", "Avisos"],
-    ["danger", "Erro / crítico"],
-    ["cyan", "Ciano / informativos"],
-    ["healthCritical", "Saúde — crítico"],
-    ["healthModerate", "Saúde — moderado"],
-    ["healthHealthy", "Saúde — saudável"],
-    ["paymentPix", "Gráfico — Pix"],
-    ["paymentCard", "Gráfico — cartão"],
-    ["paymentInstallment", "Gráfico — à prazo"],
-    ["paymentMarketplace", "Gráfico — marketplace"],
-    ["orderDirect", "Pedidos — venda direta"],
-    ["orderTiktok", "Pedidos — TikTok"],
-    ["orderShopee", "Pedidos — Shopee"],
-    ["orderCancelled", "Pedidos — cancelados"],
-    ["categoryNiche", "Categoria — nicho"],
-    ["categoryArabic", "Categoria — árabe"],
-    ["categoryDesigner", "Categoria — designer"],
-  ];
-
-  function updatePalette(key: keyof SystemPalette, value: string) {
-    setSettings({
-      ...settings,
-      [paletteKey]: {
-        ...activePalette,
-        [key]: value,
-      },
-    });
+  function chooseAccent(accentId: AccentPresetId) {
+    setSettings(
+      buildLocalUiSettings({
+        appName: settings.appName,
+        panelLabel: settings.panelLabel,
+        menuOrder: settings.menuOrder,
+        menuZoom: settings.menuZoom,
+        accentId,
+      }),
+    );
   }
 
   function moveMenu(index: number, direction: -1 | 1) {
@@ -2879,21 +2859,15 @@ function SettingsPage({
   function resetLocalSettings() {
     optionalLocalRemove("daf-ui-settings");
     optionalLocalRemove("daf-theme");
-    setSettings({
-      ...DEFAULT_LOCAL_UI_SETTINGS,
-      menuOrder: [...DEFAULT_MENU_ORDER],
-      darkPalette: { ...DARK_SYSTEM_PALETTE },
-      lightPalette: { ...LIGHT_SYSTEM_PALETTE },
-    });
+    setSettings(buildLocalUiSettings());
     setTheme("dark");
-    notify("Configurações locais restauradas para o padrão.");
+    notify("Configurações visuais restauradas para o padrão.");
   }
 
   return (
     <div className="settingsWorkspace">
       <div className="panel settingsIntro">
         <div>
-          <span className="eyebrow">Personalização local</span>
           <h2>Configurações do sistema</h2>
           <p>
             Estas preferências ficam salvas somente neste navegador e não
@@ -2907,33 +2881,67 @@ function SettingsPage({
         <div className="panel settingsSection">
           <div className="panelHeading">
             <div>
-              <span className="eyebrow">Aparência</span>
-              <h2>Tema e cores</h2>
+              <h2>Aparência</h2>
             </div>
             <Palette />
           </div>
 
-          <div className="themeSettingRow">
+          <div className="appearanceRow">
             <div>
-              <b>Modo da interface</b>
-              <small>Alterna apenas neste navegador.</small>
+              <b>Tema</b>
+              <small>Vale somente neste navegador.</small>
             </div>
-            <button
-              type="button"
-              className="themeToggle settingsThemeToggle"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            >
-              {theme === "dark" ? <Sun /> : <Moon />}
-              {theme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
-            </button>
+            <div className="segmented themeChoice" role="radiogroup" aria-label="Tema">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={theme === "dark"}
+                className={theme === "dark" ? "on" : ""}
+                onClick={() => setTheme("dark")}
+              >
+                <Moon /> Escuro
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={theme === "light"}
+                className={theme === "light" ? "on" : ""}
+                onClick={() => setTheme("light")}
+              >
+                <Sun /> Claro
+              </button>
+            </div>
           </div>
 
-          <div className="menuZoomSetting">
+          <div className="appearanceRow appearanceRowStacked">
             <div>
-              <b>Zoom do menu</b>
-              <small>
-                Ajusta o tamanho do menu lateral apenas neste navegador.
-              </small>
+              <b>Cor de destaque</b>
+              <small>Usada em botões, seleção e indicadores.</small>
+            </div>
+            <div className="accentChoices" role="radiogroup" aria-label="Cor de destaque">
+              {ACCENT_PRESETS.map((preset) => {
+                const selected = settings.accentId === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    className={"accentChoice" + (selected ? " on" : "")}
+                    onClick={() => chooseAccent(preset.id)}
+                  >
+                    <i style={{ background: theme === "dark" ? preset.dark : preset.light }} />
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="appearanceRow">
+            <div>
+              <b>Tamanho do menu</b>
+              <small>Ajusta o menu lateral neste navegador.</small>
             </div>
             <div className="menuZoomControl">
               <input
@@ -2945,50 +2953,16 @@ function SettingsPage({
                 onChange={(event) =>
                   update("menuZoom", Number(event.target.value))
                 }
+                aria-label="Tamanho do menu"
               />
               <b>{settings.menuZoom}%</b>
             </div>
-          </div>
-
-          <div className="settingsPaletteHead">
-            <div>
-              <b>Paleta do modo {theme === "dark" ? "escuro" : "claro"}</b>
-              <small>
-                Todas as cores abaixo são independentes por modo de interface.
-              </small>
-            </div>
-            <span>{paletteFields.length} cores editáveis</span>
-          </div>
-
-          <div className="settingsColorGrid settingsColorGridFull">
-            {paletteFields.map(([key, label]) => (
-              <label key={key}>
-                <span>{label}</span>
-                <div className="colorSetting">
-                  <input
-                    type="color"
-                    value={activePalette[key]}
-                    onChange={(event) =>
-                      updatePalette(key, event.target.value)
-                    }
-                  />
-                  <input
-                    value={activePalette[key]}
-                    onChange={(event) =>
-                      updatePalette(key, event.target.value)
-                    }
-                    maxLength={7}
-                  />
-                </div>
-              </label>
-            ))}
           </div>
         </div>
 
         <div className="panel settingsSection">
           <div className="panelHeading">
             <div>
-              <span className="eyebrow">Identificação</span>
               <h2>Informações da interface</h2>
             </div>
             <Pencil />
@@ -3007,7 +2981,7 @@ function SettingsPage({
             <input
               value={settings.panelLabel}
               onChange={(event) => update("panelLabel", event.target.value)}
-              placeholder="PAINEL ADMINISTRATIVO"
+              placeholder="DAF Splits"
             />
           </label>
         </div>
@@ -3016,7 +2990,6 @@ function SettingsPage({
       <div className="panel settingsMenuOrder">
         <div className="panelHeading">
           <div>
-            <span className="eyebrow">Navegação</span>
             <h2>Ordem dos menus</h2>
             <p>
               Organize os menus na ordem que preferir. Esta ordem vale somente
@@ -3067,7 +3040,7 @@ function SettingsPage({
         <div>
           <b>Restaurar configurações visuais</b>
           <small>
-            Remove tema, cores e textos personalizados apenas deste navegador.
+            Volta ao tema escuro, à cor champanhe e aos textos padrão neste navegador.
           </small>
         </div>
         <button type="button" onClick={resetLocalSettings}>
@@ -3946,7 +3919,7 @@ function RegionChart({
     Nordeste: "var(--warning)",
     "Centro-Oeste": "var(--cyan)",
     Sudeste: "var(--accent)",
-    Sul: "#8b5cf6",
+    Sul: "var(--chart-payment-marketplace)",
     "Não informado": "var(--muted)",
   };
 
@@ -4904,12 +4877,12 @@ function categoryGradient(
   c: { category: string; value: number }[],
   total: number,
 ) {
-  if (!total) return "#303b4c";
+  if (!total) return "var(--panel-3)";
   let n = 0;
   const color: { [k: string]: string } = {
-    Nicho: "#e0b43c",
-    Árabe: "#8b5cf6",
-    Designer: "#2f80ed",
+    Nicho: "var(--chart-category-niche)",
+    Árabe: "var(--chart-category-arabic)",
+    Designer: "var(--chart-category-designer)",
   };
   return `conic-gradient(${c
     .map((x) => {
@@ -9814,6 +9787,43 @@ function Clients({
     ? `Clientes no ${groupFilter}`
     : "Clientes cadastrados";
 
+  // Pedidos, total gasto e última compra de cada cliente (vendas válidas).
+  const clientStats = useMemo(() => {
+    const stats = new Map<number, { orders: number; spent: number; last: string }>();
+    for (const sale of d.sales) {
+      if (sale.status === "cancelled" || isNoCost(sale)) continue;
+      const current = stats.get(sale.clientId) || { orders: 0, spent: 0, last: "" };
+      current.orders += 1;
+      current.spent += Math.max(0, Number(sale.total || 0));
+      if (sale.date > current.last) current.last = sale.date;
+      stats.set(sale.clientId, current);
+    }
+    return stats;
+  }, [d.sales]);
+  const clientSort = useTableSort<"name" | "source" | "orders" | "spent" | "last">("name");
+  const sortedClients = clients
+    .map((client) => ({
+      client,
+      ...(clientStats.get(client.id) || { orders: 0, spent: 0, last: "" }),
+    }))
+    .sort((a, b) => {
+      const { key, direction } = clientSort.sort;
+      const value = (item: typeof a) =>
+        key === "name"
+          ? item.client.name
+          : key === "source"
+            ? item.client.leadSource || "~"
+            : key === "orders"
+              ? item.orders
+              : key === "spent"
+                ? item.spent
+                : item.last || "0000";
+      return (
+        compareValues(value(a), value(b), direction) ||
+        a.client.name.localeCompare(b.client.name, "pt-BR")
+      );
+    });
+
   const clientRanking = d.clients
     .map((client) => {
       const sales = d.sales.filter(
@@ -9919,41 +9929,81 @@ function Clients({
           ) : null}
         </div>
       </div>
-      <div className="clients">
-        {clients.map((c) => (
-          <div key={c.id}>
-            <i>{nameInitials(c.name)}</i>
-            <h3>{c.name}</h3>
-            <p>
-              {c.phone || "Sem telefone"} · {c.cep ? `CEP ${c.cep}` : "CEP não informado"}
-            </p>
-            <span className={"leadSourceBadge " + (c.leadSource ? "filled" : "empty")}>
-              {c.leadSource || "Origem do lead não definida"}
-            </span>
-            <div className="clientActions">
-              <button onClick={() => history(c.id)}>Ver histórico</button>
-              <button onClick={() => edit(c.id)}>
-                <Pencil />
-                Editar
-              </button>
-              <button className="dangerText" onClick={() => remove(c.id)}>
-                <Trash2 />
-                Excluir
-              </button>
-            </div>
-          </div>
-        ))}
+      <div className="panel table directoryTablePanel">
+        <div className="recordsTableScroll">
+          <table className="directoryTable clientsTable">
+            <thead>
+              <tr>
+                <SortableHeader label="Cliente" sortKey="name" sort={clientSort.sort} onSort={clientSort.toggle} />
+                <th>Contato</th>
+                <SortableHeader label="Origem" sortKey="source" sort={clientSort.sort} onSort={clientSort.toggle} />
+                <SortableHeader label="Pedidos" sortKey="orders" sort={clientSort.sort} onSort={clientSort.toggle} firstDirection="desc" align="right" />
+                <SortableHeader label="Total gasto" sortKey="spent" sort={clientSort.sort} onSort={clientSort.toggle} firstDirection="desc" align="right" />
+                <SortableHeader label="Última compra" sortKey="last" sort={clientSort.sort} onSort={clientSort.toggle} firstDirection="desc" />
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedClients.map(({ client: c, orders, spent, last }) => (
+                <tr key={c.id}>
+                  <td>
+                    <div className="directoryName">
+                      <i aria-hidden="true">{nameInitials(c.name)}</i>
+                      <div>
+                        <b>{c.name}</b>
+                        <small>
+                          {[c.city, c.state].filter(Boolean).join(" / ") ||
+                            (c.cep ? `CEP ${c.cep}` : "Endereço não informado")}
+                        </small>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    {c.phone && c.phone !== "n/a" ? c.phone : <span className="mutedText">Sem telefone</span>}
+                  </td>
+                  <td>
+                    <span className={"leadSourceBadge " + (c.leadSource ? "filled" : "empty")}>
+                      {c.leadSource || "Não definida"}
+                    </span>
+                  </td>
+                  <td className="alignRight">{orders}</td>
+                  <td className="alignRight">{spent ? brl(spent) : "—"}</td>
+                  <td>{last ? dateBR(last) : <span className="mutedText">—</span>}</td>
+                  <td>
+                    <div className="tableActions compactRowActions">
+                      <button className="iconButton" onClick={() => history(c.id)}>
+                        <ReceiptText />
+                        Histórico
+                      </button>
+                      <RowMenu
+                        label={`Mais ações de ${c.name}`}
+                        items={[
+                          { label: "Editar cliente", icon: <Pencil />, onSelect: () => edit(c.id) },
+                          {
+                            label: "Excluir cliente",
+                            icon: <Trash2 />,
+                            danger: true,
+                            onSelect: () => void remove(c.id),
+                          },
+                        ]}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!sortedClients.length ? (
+            <p className="empty">Nenhum cliente encontrado. Ajuste a busca ou o filtro de grupo.</p>
+          ) : null}
+        </div>
       </div>
-      {!clients.length ? (
-        <p className="empty">Nenhum cliente encontrado.</p>
-      ) : null}
 
       {rankingOpen ? (
         <div className="overlay">
           <div className="systemDialog clientRankingDialog">
             <header>
               <div>
-                <small>RELACIONAMENTO COM CLIENTES</small>
                 <h2>Ranking dos clientes</h2>
                 <p>
                   Ordenado principalmente pelo valor total gasto. Número de pedidos é
@@ -10035,6 +10085,33 @@ function Suppliers({
   const suppliers = d.suppliers
     .map((name, index) => ({ name, index }))
     .filter(({ name }) => smartSearchMatch(query, name));
+  const supplierSort = useTableSort<"name" | "type" | "purchases" | "spent" | "last">("name");
+  const sortedSuppliers = suppliers
+    .map(({ name, index }) => {
+      const purchases = d.purchases.filter((purchase) => purchase.supplier === name);
+      return {
+        name,
+        index,
+        type: d.supplierTypes?.[name] || "",
+        purchases: purchases.length,
+        spent: purchases.reduce((sum, purchase) => sum + Math.max(0, Number(purchase.total || 0)), 0),
+        last: purchases.reduce((latest, purchase) => (purchase.date > latest ? purchase.date : latest), ""),
+      };
+    })
+    .sort((a, b) => {
+      const { key, direction } = supplierSort.sort;
+      const value = (item: typeof a) =>
+        key === "name"
+          ? item.name
+          : key === "type"
+            ? item.type || "~"
+            : key === "purchases"
+              ? item.purchases
+              : key === "spent"
+                ? item.spent
+                : item.last || "0000";
+      return compareValues(value(a), value(b), direction) || a.name.localeCompare(b.name, "pt-BR");
+    });
   async function remove(index: number, name: string) {
     if (d.purchases.some((purchase) => purchase.supplier === name)) {
       void showAlert(
@@ -10081,50 +10158,69 @@ function Suppliers({
           aria-label="Pesquisar fornecedor pelo nome"
         />
       </div>
-      <div className="clients">
-        {suppliers.map(({ name, index }) => {
-          const purchases = d.purchases.filter(
-            (purchase) => purchase.supplier === name,
-          );
-          const total = purchases.reduce((sum, purchase) => sum + purchase.total, 0);
-          return (
-            <div key={`${name}-${index}`}>
-              <i>
-                {name
-                  .split(" ")
-                  .filter(Boolean)
-                  .map((part) => part[0])
-                  .slice(0, 2)}
-              </i>
-              <h3>{name}</h3>
-              <p>
-                {purchases.length} compra(s) · {brl(total)} em compras
-              </p>
-              <div className="clientActions">
-                <button onClick={() => history(name)}>Ver histórico</button>
-                <button onClick={() => edit(index)}>
-                  <Pencil />
-                  Editar
-                </button>
-                <button className="dangerText" onClick={() => remove(index, name)}>
-                  <Trash2 />
-                  Excluir
-                </button>
-              </div>
-            </div>
-          );
-        })}
+      <div className="panel table directoryTablePanel">
+        <div className="recordsTableScroll">
+          <table className="directoryTable suppliersTable">
+            <thead>
+              <tr>
+                <SortableHeader label="Fornecedor" sortKey="name" sort={supplierSort.sort} onSort={supplierSort.toggle} />
+                <SortableHeader label="Tipo" sortKey="type" sort={supplierSort.sort} onSort={supplierSort.toggle} />
+                <SortableHeader label="Compras" sortKey="purchases" sort={supplierSort.sort} onSort={supplierSort.toggle} firstDirection="desc" align="right" />
+                <SortableHeader label="Total comprado" sortKey="spent" sort={supplierSort.sort} onSort={supplierSort.toggle} firstDirection="desc" align="right" />
+                <SortableHeader label="Última compra" sortKey="last" sort={supplierSort.sort} onSort={supplierSort.toggle} firstDirection="desc" />
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedSuppliers.map(({ name, index, type, purchases, spent, last }) => (
+                <tr key={`${name}-${index}`}>
+                  <td>
+                    <div className="directoryName">
+                      <i aria-hidden="true">{nameInitials(name)}</i>
+                      <div>
+                        <b>{name}</b>
+                      </div>
+                    </div>
+                  </td>
+                  <td>{type || <span className="mutedText">Não definido</span>}</td>
+                  <td className="alignRight">{purchases}</td>
+                  <td className="alignRight">{spent ? brl(spent) : "—"}</td>
+                  <td>{last ? dateBR(last) : <span className="mutedText">—</span>}</td>
+                  <td>
+                    <div className="tableActions compactRowActions">
+                      <button className="iconButton" onClick={() => history(name)}>
+                        <ReceiptText />
+                        Histórico
+                      </button>
+                      <RowMenu
+                        label={`Mais ações de ${name}`}
+                        items={[
+                          { label: "Editar fornecedor", icon: <Pencil />, onSelect: () => edit(index) },
+                          {
+                            label: "Excluir fornecedor",
+                            icon: <Trash2 />,
+                            danger: true,
+                            onSelect: () => void remove(index, name),
+                          },
+                        ]}
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!sortedSuppliers.length ? (
+            <p className="empty">Nenhum fornecedor encontrado. Ajuste a busca.</p>
+          ) : null}
+        </div>
       </div>
-      {!suppliers.length ? (
-        <p className="empty">Nenhum fornecedor encontrado.</p>
-      ) : null}
 
       {rankingOpen ? (
         <div className="overlay">
           <div className="systemDialog supplierRankingDialog">
             <header>
               <div>
-                <small>ANÁLISE DE COMPRAS</small>
                 <h2>Ranking dos fornecedores</h2>
                 <p>Ordenado pelo valor total gasto em cada fornecedor.</p>
               </div>
@@ -10424,7 +10520,7 @@ function PaymentBreakdown({
           return `${x.color} ${start}deg ${(cursor / total) * 360}deg`;
         })
         .join(",")})`
-    : "#303b4c";
+    : "var(--panel-3)";
   return (
     <div
       className={

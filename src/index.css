@@ -5029,7 +5029,7 @@ main > header small,
   background: var(--accent);
   color: #fff;
   border-radius: 10px;
-  box-shadow: 0 6px 16px rgb(91 110 245 / 18%);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .primary:hover {
   background: var(--accent-strong);
@@ -5340,7 +5340,7 @@ tbody tr:hover {
 }
 .bars i {
   max-width: 18px;
-  background: linear-gradient(180deg, #7d8fff, #5b6ef5);
+  background: linear-gradient(180deg, var(--accent), var(--accent-strong));
 }
 .bars i.future {
   background: var(--line-strong);
@@ -5350,7 +5350,7 @@ tbody tr:hover {
 }
 .bars button.selected i {
   transform: scaleX(1.45);
-  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 18px rgb(91 110 245 / 26%);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 18px color-mix(in srgb, var(--accent) 26%, transparent);
 }
 .sidecharts .panel {
   padding: 14px;
@@ -6977,7 +6977,7 @@ aside nav {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 5px 14px rgb(91 110 245 / 18%);
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 /* Clientes: pesquisa e filtro de grupo na mesma linha */
