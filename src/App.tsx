@@ -12264,20 +12264,28 @@ function ProfitControl({
   notify: (message: string) => void;
 }) {
   const [showOrders, setShowOrders] = useState(false);
+  const [salesFilter, setSalesFilter] = useState<"all" | "marketplace">("all");
   const [editingSale, setEditingSale] = useState<V | null>(null);
   const sales = (providedSales || d.sales).filter(
-    (sale) => sale.status !== "cancelled" && !isHistoricalSale(sale),
+    (sale) =>
+      sale.status !== "cancelled" &&
+      !isHistoricalSale(sale) &&
+      (salesFilter === "all" || isMarketplaceSale(sale)),
   );
   const rows = sales.map((sale) => {
-    const perfumeCost = sale.items.reduce(
-      (sum, item) =>
-        sum +
-        item.ml *
-          (item.unitCost ??
-            d.products.find((p) => p.id === item.productId)?.cost ??
-            0),
-      0,
-    );
+    const perfumeDetails = sale.items.map((item, index) => {
+      const product = d.products.find((p) => p.id === item.productId);
+      const ml = Number(item.ml) || 0;
+      const unitCost = Number(item.unitCost ?? product?.cost ?? 0);
+      return {
+        key: `${item.productId}-${index}`,
+        name: product?.name || `Perfume ${index + 1}`,
+        ml,
+        unitCost,
+        total: ml * unitCost,
+      };
+    });
+    const perfumeCost = perfumeDetails.reduce((sum, item) => sum + item.total, 0);
     const expenseBreakdown = saleExpenseBreakdown(sale, d);
     const expenses = expenseBreakdown.total;
     const profit = (isNoCost(sale) ? 0 : sale.total) - perfumeCost - expenses;
@@ -12286,6 +12294,7 @@ function ProfitControl({
     return {
       sale,
       perfumeCost,
+      perfumeDetails,
       expenses,
       expenseBreakdown,
       profit,
@@ -12311,6 +12320,17 @@ function ProfitControl({
             Preço vendido, custo por ml e despesas do período selecionado.
           </p>
         </div>
+        <label className="profitChannelFilter">
+          <span>Origem das vendas</span>
+          <select
+            value={salesFilter}
+            onChange={(event) => setSalesFilter(event.target.value as "all" | "marketplace")}
+            aria-label="Filtrar vendas por origem"
+          >
+            <option value="all">Todas as vendas</option>
+            <option value="marketplace">Apenas marketplaces (TikTok e Shopee)</option>
+          </select>
+        </label>
       </div>
       <Cards
         v={[
@@ -12348,6 +12368,7 @@ function ProfitControl({
               ({
                 sale,
                 perfumeCost: cost,
+                perfumeDetails,
                 expenses: expense,
                 expenseBreakdown,
                 profit: rowProfit,
@@ -12356,7 +12377,24 @@ function ProfitControl({
                 <tr key={sale.id}>
                   <td>#{orderNo(sale.id)}</td>
                   <td>{brl(sale.total)}</td>
-                  <td>{brl(cost)}</td>
+                  <td>
+                    <b>{brl(cost)}</b>
+                    <details className="expenseBreakdownDetails profitCostDetails">
+                      <summary>Ver custos</summary>
+                      <span className="expenseBreakdownSupplies">
+                        {perfumeDetails.length ? perfumeDetails.map((item) => (
+                          <small key={item.key} className="profitPerfumeLine">
+                            <strong>{item.name} — {item.ml.toLocaleString("pt-BR")} ml</strong>
+                            <span>{brl(item.unitCost)}/ml × {item.ml.toLocaleString("pt-BR")} ml = <b>{brl(item.total)}</b></span>
+                          </small>
+                        )) : <small>Nenhum perfume registrado neste pedido.</small>}
+                      </span>
+                      <small className="expenseBreakdownTotal">
+                        <span>Total dos perfumes</span>
+                        <b>{brl(cost)}</b>
+                      </small>
+                    </details>
+                  </td>
                   <td>
                     <b>{brl(expense)}</b>
                     <details className="expenseBreakdownDetails">
@@ -12416,6 +12454,9 @@ function ProfitControl({
                 </tr>
               ),
             )}
+            {rows.length === 0 ? (
+              <tr><td colSpan={7} className="profitOrdersEmpty">Nenhuma venda encontrada para este filtro no período selecionado.</td></tr>
+            ) : null}
           </tbody>
         </table>
       </div> : null}
