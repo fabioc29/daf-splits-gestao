@@ -7,7 +7,9 @@ import { FabioStateWriter } from "./crm/fabio-persistence";
 import { LocalRecovery, optionalLocalGet, optionalLocalSet, optionalLocalRemove } from "./crm/local-recovery";
 import { CRMFeedPanel } from "./crm/CRMFeedPanel";
 import { SortableHeader, compareValues, useTableSort } from "./ui/SortableHeader";
-import { askConfirm } from "./ui/dialogs";
+import { askConfirm, showAlert } from "./ui/dialogs";
+import { RowMenu } from "./ui/RowMenu";
+import { ColorInput, ComboInput, DateInput, SysSelect } from "./ui/controls";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -56,6 +58,9 @@ import {
   Image as ImageIcon,
   Trophy,
   Download,
+  MapPin,
+  MoreHorizontal,
+  PieChart,
 } from "lucide-react";
 import { automaticPackaging, packaging, packagingOptions, PACKAGING_RULES } from "./packaging";
 import { captureReport } from "./report";
@@ -660,7 +665,7 @@ function receivePerfumePurchase(
       perfumeIdentity(brand, name),
   );
   if (matchingProducts.length > 1) {
-    window.alert(
+    void showAlert(
       "Há mais de um cadastro para este perfume. A chegada não foi lançada para evitar somar o estoque no item errado.",
     );
     return state;
@@ -1287,7 +1292,7 @@ function System({ session }: { session: Session }) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   async function loadCurrent() {
-    if (!window.confirm("Carregar o estado salvo descarta este rascunho local. Exporte-o antes se precisar preservá-lo. Continuar?")) return;
+    if (!(await askConfirm("Carregar o estado salvo descarta este rascunho local. Exporte-o antes se precisar preservá-lo. Continuar?"))) return;
     const version = saveVersion.current;
     try {
       if (writer.current?.pending) throw Error("Aguarde a gravação em andamento.");
@@ -3017,8 +3022,8 @@ function SettingsPage({
               <label key={key}>
                 <span>{label}</span>
                 <div className="colorSetting">
-                  <input
-                    type="color"
+                  <ColorInput
+                    aria-label={`Cor de ${label}`}
                     value={activePalette[key]}
                     onChange={(event) =>
                       updatePalette(key, event.target.value)
@@ -3605,8 +3610,7 @@ function PeriodSelector({
           <strong>Filtrar por data ou período</strong>
           <label>
             <span>Data inicial</span>
-            <input
-              type="date"
+            <DateInput
               value={draftStart}
               onChange={(event) => {
                 const value = event.target.value;
@@ -3617,8 +3621,7 @@ function PeriodSelector({
           </label>
           <label>
             <span>Data final</span>
-            <input
-              type="date"
+            <DateInput
               min={draftStart || undefined}
               value={draftEnd}
               onChange={(event) => setDraftEnd(event.target.value)}
@@ -3994,12 +3997,12 @@ function RegionChart({
   const [editingSaleId, setEditingSaleId] = useState<number | null>(null);
 
   const regionColors: Record<BrazilRegion, string> = {
-    Norte: "var(--success)",
-    Nordeste: "var(--warning)",
-    "Centro-Oeste": "var(--cyan)",
+    Norte: "#32bf8a",
+    Nordeste: "#ef6670",
+    "Centro-Oeste": "#54c7d4",
     Sudeste: "var(--accent)",
     Sul: "#8b5cf6",
-    "Não informado": "var(--muted)",
+    "Não informado": "#8f98a8",
   };
 
   const directSales = sales.filter(
@@ -4166,14 +4169,22 @@ function RegionChart({
               ? Math.round((value / comparisonTotal) * 100)
               : 0;
             const color = isState ? item.color : regionColors[item.region];
-            return selectedRegion ? (
-              <div key={label} className="regionLegendStaticRow">
+            // Regiões/estados sem venda ficam apagados e sem clique.
+            const empty = !value && !item.orders;
+            return selectedRegion || empty ? (
+              <div
+                key={label}
+                className={
+                  "regionLegendStaticRow" + (empty ? " regionLegendEmpty" : "")
+                }
+              >
                 <span>
                   <i style={{ background: color }} />
                   <strong>{label}</strong>
                   <small>{percentage}%</small>
                 </span>
                 <b>{brl(value)}</b>
+                {empty && !selectedRegion ? <span className="regionLegendChevronSpace" /> : null}
               </div>
             ) : (
               <button
@@ -4431,6 +4442,16 @@ function LeadRanking({ d, start, end }: { d: D; start: string; end: string }) {
         metric === "revenue" ? revenue : metric === "orders" ? orders : ticket;
       return { source, revenue, orders, ticket, value, index };
     })
+    // Grupo 1 e Grupo 2 aparecem sempre; os demais (Grupo 3, ainda inativo)
+    // só entram no ranking quando já têm vendas registradas no período.
+    .filter(
+      (item) =>
+        item.source === "Grupo 1" ||
+        item.source === "Grupo 2" ||
+        item.source === "TikTok" ||
+        item.source === "Shopee" ||
+        item.orders > 0,
+    )
     .sort((a, b) => b.value - a.value || b.revenue - a.revenue || a.index - b.index);
 
   const max = Math.max(1, ...ranking.map((item) => item.value));
@@ -5052,12 +5073,12 @@ function Sales({
       ),
     }));
   }
-  function cancel(s: V) {
+  async function cancel(s: V) {
     if (
       !set ||
-      !window.confirm(
+      !(await askConfirm(
         `Cancelar o pedido #${orderNo(s.id)}? O estoque será devolvido.`,
-      )
+      ))
     )
       return;
     set((x: D) => ({
@@ -5070,10 +5091,10 @@ function Sales({
     }));
     notify?.("Venda cancelada e estoque devolvido.");
   }
-  function remove(s: V) {
+  async function remove(s: V) {
     if (
       !set ||
-      !window.confirm(`Excluir definitivamente o pedido #${orderNo(s.id)}?`)
+      !(await askConfirm(`Excluir definitivamente o pedido #${orderNo(s.id)}?`))
     )
       return;
     set((x: D) => ({
@@ -5125,8 +5146,7 @@ function Sales({
         <div className="salesFilters">
           <label>
             <span>Dia</span>
-            <input
-              type="date"
+            <DateInput
               value={saleDay}
               onChange={(event) => {
                 setSaleDay(event.target.value);
@@ -5136,21 +5156,21 @@ function Sales({
           </label>
           <label>
             <span>Origem</span>
-            <select value={origin} onChange={(event) => setOrigin(event.target.value)}>
+            <SysSelect value={origin} onChange={(event) => setOrigin(event.target.value)}>
               <option value="all">Todas</option>
               <option value="direct">Venda direta</option>
               <option value="marketplace">Marketplace</option>
-            </select>
+            </SysSelect>
           </label>
           <label>
             <span>Status</span>
-            <select value={saleStatus} onChange={(event) => setSaleStatus(event.target.value)}>
+            <SysSelect value={saleStatus} onChange={(event) => setSaleStatus(event.target.value)}>
               <option value="all">Todos</option>
               <option value="paid">Pago</option>
               <option value="open">A prazo</option>
               <option value="marketplace">Marketplace</option>
               <option value="cancelled">Cancelada</option>
-            </select>
+            </SysSelect>
           </label>
           <button type="button" onClick={() => { setSaleDay(""); setOrigin("all"); setSaleStatus("all"); }}>
             Limpar filtros
@@ -5219,30 +5239,33 @@ function Sales({
                 <td>
                   <div className="tableActions rowActions">
                     {s.status !== "cancelled" ? (
-                      <>
-                        <button
-                          className="iconButton"
-                          onClick={() => edit(s.id)}
-                        >
-                          <Pencil />
-                          Editar
-                        </button>
-                        <button
-                          className="iconButton danger"
-                          onClick={() => cancel(s)}
-                        >
-                          <Ban />
-                          Cancelar
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        className="iconButton"
+                        onClick={() => edit(s.id)}
+                      >
+                        <Pencil />
+                        Editar
+                      </button>
                     ) : null}
-                    <button
-                      className="iconButton danger"
-                      onClick={() => remove(s)}
-                    >
-                      <Trash2 />
-                      Excluir
-                    </button>
+                    <RowMenu
+                      label={`Mais ações do pedido #${orderNo(s.id)}`}
+                      items={[
+                        {
+                          label: "Cancelar venda",
+                          icon: <Ban />,
+                          danger: true,
+                          hidden: s.status === "cancelled",
+                          onSelect: () => cancel(s),
+                        },
+                        {
+                          label: "Excluir",
+                          icon: <Trash2 />,
+                          danger: true,
+                          onSelect: () => remove(s),
+                        },
+                      ]}
+                    />
                   </div>
                 </td>
               ) : null}
@@ -5637,7 +5660,7 @@ function Prepare({
                   <em>Finalizado</em>
                 ) : (
                   <label className="preparationStatus">
-                    <select
+                    <SysSelect
                       aria-label={`Situação dos pedidos de ${group.customer}`}
                       value={group.status}
                       onChange={(event) =>
@@ -5650,7 +5673,7 @@ function Prepare({
                       <option value="preparing">A preparar</option>
                       <option value="accumulating">Vai acumular</option>
                       <option value="waiting">Vai esperar</option>
-                    </select>
+                    </SysSelect>
                   </label>
                 )}
               </span>
@@ -6240,7 +6263,7 @@ function Shipping({
                       {client?.addresses.length ? (
                         <label>
                           <small>Endereço cadastrado</small>
-                          <select
+                          <SysSelect
                             value={selectedAddressIndex}
                             onChange={(event) =>
                               setAddressIndex((current) => ({
@@ -6255,7 +6278,7 @@ function Shipping({
                                 {address.value}
                               </option>
                             ))}
-                          </select>
+                          </SysSelect>
                         </label>
                       ) : null}
 
@@ -6425,7 +6448,7 @@ function Shipping({
                       <span>Forma de envio</span>
                       <label>
                         <small>Modalidade</small>
-                        <select
+                        <SysSelect
                           value={
                             isMarketplaceSale(sale)
                               ? sale.marketplace || ""
@@ -6451,7 +6474,7 @@ function Shipping({
                           <option>Uber/Pessoalmente</option>
                           <option>TikTok Shop</option>
                           <option>Shopee</option>
-                        </select>
+                        </SysSelect>
                       </label>
                       <small>
                         {isMarketplaceSale(sale)
@@ -6537,7 +6560,7 @@ function Shipping({
                 </label>
                 <label>
                   <span>Forma de envio *</span>
-                  <select
+                  <SysSelect
                     value={labelDraft.forma_envio}
                     onChange={(e) =>
                       setLabelDraft((current) => ({
@@ -6550,7 +6573,7 @@ function Shipping({
                     <option value="SEDEX">SEDEX</option>
                     <option value="PACMINI">Mini Envios</option>
                     <option value="LOGGI">Loggi</option>
-                  </select>
+                  </SysSelect>
                 </label>
                 <label>
                   <span>CEP *</span>
@@ -6639,7 +6662,7 @@ function Shipping({
                 </label>
                 <label>
                   <span>Peso *</span>
-                  <select
+                  <SysSelect
                     value={labelDraft.peso}
                     onChange={(e) =>
                       setLabelDraft((current) => ({
@@ -6651,7 +6674,7 @@ function Shipping({
                     <option value="0.3">Até 300 g</option>
                     <option value="1">De 300 g a 1 kg</option>
                     <option value="2">De 1 a 2 kg</option>
-                  </select>
+                  </SysSelect>
                 </label>
               </div>
             </section>
@@ -7108,7 +7131,7 @@ function MandaBem({
             </label>
             <label>
               <span>Serviço</span>
-              <select
+              <SysSelect
                 value={quote.servico}
                 onChange={(e) =>
                   setQuote((current) => ({
@@ -7121,11 +7144,11 @@ function MandaBem({
                 <option value="SEDEX">SEDEX</option>
                 <option value="PACMINI">Mini Envios</option>
                 <option value="LOGGI">Loggi</option>
-              </select>
+              </SysSelect>
             </label>
             <label>
               <span>Peso</span>
-              <select
+              <SysSelect
                 value={quote.peso}
                 onChange={(e) =>
                   setQuote((current) => ({ ...current, peso: e.target.value }))
@@ -7134,7 +7157,7 @@ function MandaBem({
                 <option value="0.3">Até 300 g</option>
                 <option value="1">Até 1 kg</option>
                 <option value="2">Até 2 kg</option>
-              </select>
+              </SysSelect>
             </label>
             <label>
               <span>Seguro</span>
@@ -7212,7 +7235,7 @@ function MandaBem({
           <div className="mandaBemGenerateWorkspace">
             <label>
               <span>Pedido</span>
-              <select
+              <SysSelect
                 value={generateSaleId}
                 onChange={(e) => setGenerateSaleId(e.target.value)}
               >
@@ -7223,7 +7246,7 @@ function MandaBem({
                     {sale.shippingMethod || "Envio"}
                   </option>
                 ))}
-              </select>
+              </SysSelect>
             </label>
 
             {generateSaleId ? (() => {
@@ -7289,8 +7312,7 @@ function MandaBem({
           <div className="mandaBemDateFilter">
             <label>
               <span>De</span>
-              <input
-                type="date"
+              <DateInput
                 value={labelDates.start_date}
                 onChange={(e) =>
                   setLabelDates((current) => ({
@@ -7302,8 +7324,7 @@ function MandaBem({
             </label>
             <label>
               <span>Até</span>
-              <input
-                type="date"
+              <DateInput
                 value={labelDates.end_date}
                 onChange={(e) =>
                   setLabelDates((current) => ({
@@ -8389,6 +8410,125 @@ function StockReport({
   );
 }
 
+const PARTNER_PIE_COLORS = ["#d5aa3d", "#8b5cf6", "#32bf8a", "#ef6670", "#54c7d4", "#f08a4b", "#4ba3ff", "#d76de8"];
+
+function partnerPieSlicePath(startAngle: number, endAngle: number, radius = 54, cx = 60, cy = 60) {
+  if (endAngle - startAngle >= 359.999) {
+    return `M ${cx} ${cy - radius} A ${radius} ${radius} 0 1 1 ${cx - 0.01} ${cy - radius} Z`;
+  }
+  const point = (angle: number) => {
+    const radians = ((angle - 90) * Math.PI) / 180;
+    return [cx + radius * Math.cos(radians), cy + radius * Math.sin(radians)];
+  };
+  const [x1, y1] = point(startAngle);
+  const [x2, y2] = point(endAngle);
+  const large = endAngle - startAngle > 180 ? 1 : 0;
+  return `M ${cx} ${cy} L ${x1} ${y1} A ${radius} ${radius} 0 ${large} 1 ${x2} ${y2} Z`;
+}
+
+/** Pizza com a participação de cada sócio na sociedade da DAF Splits. */
+function PartnerEquityPie({ partners }: { partners: TeamMember[] }) {
+  const [active, setActive] = useState<number | null>(null);
+  const formatPercent = (value: number) =>
+    value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%";
+  const slices: { key: string; label: string; value: number; color: string }[] = partners
+    .map((partner, index) => ({
+      key: String(partner.id),
+      label: partner.name,
+      value: Math.max(0, Number(partner.equityPercent) || 0),
+      color: PARTNER_PIE_COLORS[index % PARTNER_PIE_COLORS.length],
+    }))
+    .filter((slice) => slice.value > 0);
+  const assigned = slices.reduce((sum, slice) => sum + slice.value, 0);
+  if (assigned < 99.99) {
+    slices.push({
+      key: "free",
+      label: "Não distribuído",
+      value: Math.max(0, 100 - assigned),
+      color: "var(--line)",
+    });
+  }
+  const total = slices.reduce((sum, slice) => sum + slice.value, 0) || 1;
+  let cursor = 0;
+  const arcs = slices.map((slice, index) => {
+    const start = (cursor / total) * 360;
+    cursor += slice.value;
+    const end = (cursor / total) * 360;
+    const mid = ((start + end) / 2 - 90) * (Math.PI / 180);
+    const offset = active === index ? 3 : 0;
+    return {
+      ...slice,
+      index,
+      path: partnerPieSlicePath(start, end),
+      dx: offset * Math.cos(mid),
+      dy: offset * Math.sin(mid),
+      labelX: 60 + 34 * Math.cos(mid),
+      labelY: 60 + 34 * Math.sin(mid),
+      sweep: end - start,
+    };
+  });
+  const focus = active === null ? null : arcs[active];
+
+  return (
+    <div className="panel partnerEquityPanel">
+      <div className="dashboardMiniHeader">
+        <div>
+          <h2>Composição da sociedade</h2>
+          <p>Participação de cada sócio na DAF Splits.</p>
+        </div>
+      </div>
+      <div className="partnerEquityBody">
+        <svg
+          viewBox="0 0 120 120"
+          className="partnerEquityPie"
+          role="img"
+          aria-label="Gráfico de pizza da participação societária"
+          onMouseLeave={() => setActive(null)}
+        >
+          {arcs.map((arc) => (
+            <g key={arc.key} transform={`translate(${arc.dx} ${arc.dy})`}>
+              <path
+                d={arc.path}
+                fill={arc.color}
+                className={active !== null && active !== arc.index ? "dimmed" : ""}
+                onMouseEnter={() => setActive(arc.index)}
+                onClick={() => setActive((current) => (current === arc.index ? null : arc.index))}
+              />
+              {arc.sweep >= 22 ? (
+                <text x={arc.labelX} y={arc.labelY} textAnchor="middle" dominantBaseline="central">
+                  {Math.round(arc.value)}%
+                </text>
+              ) : null}
+            </g>
+          ))}
+        </svg>
+        <div className="partnerEquityLegend">
+          {arcs.map((arc) => (
+            <button
+              type="button"
+              key={arc.key}
+              className={active === arc.index ? "active" : ""}
+              onMouseEnter={() => setActive(arc.index)}
+              onMouseLeave={() => setActive(null)}
+              onFocus={() => setActive(arc.index)}
+              onBlur={() => setActive(null)}
+            >
+              <i style={{ background: arc.color }} />
+              <strong>{arc.label}</strong>
+              <b>{formatPercent(arc.value)}</b>
+            </button>
+          ))}
+          <small className="partnerEquityFoot">
+            {focus
+              ? `${focus.label}: ${formatPercent(focus.value)} da sociedade.`
+              : "Passe o mouse ou toque numa fatia para destacar o sócio."}
+          </small>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TeamMembers({
   d,
   set,
@@ -8515,6 +8655,8 @@ function TeamMembers({
           <Plus /> Novo sócio/funcionário
         </button>
       </div>
+
+      {partners.length ? <PartnerEquityPie partners={partners} /> : null}
 
       <div className="teamMembersGrid">
         {d.teamMembers.map((member) => (
@@ -8681,7 +8823,7 @@ function BrandManager({
         brand.localeCompare(clean, "pt-BR", { sensitivity: "base" }) === 0,
     );
     if (duplicate) {
-      window.alert("Esta marca já está cadastrada.");
+      void showAlert("Esta marca já está cadastrada.");
       return;
     }
     set((state: D) => ({
@@ -8707,7 +8849,7 @@ function BrandManager({
         brand.localeCompare(nextBrand, "pt-BR", { sensitivity: "base" }) === 0,
     );
     if (duplicate) {
-      window.alert("Já existe uma marca cadastrada com este nome.");
+      void showAlert("Já existe uma marca cadastrada com este nome.");
       return;
     }
     set((state: D) => ({
@@ -8740,14 +8882,14 @@ function BrandManager({
     setDraft("");
   }
 
-  function removeBrand(brand: string) {
+  async function removeBrand(brand: string) {
     if (d.products.some((product) => product.brand === brand)) {
-      window.alert(
+      void showAlert(
         "Esta marca ainda está vinculada a perfumes. Edite ou exclua os perfumes dessa marca antes de removê-la.",
       );
       return;
     }
-    if (!window.confirm(`Excluir a marca “${brand}”?`)) return;
+    if (!(await askConfirm(`Excluir a marca “${brand}”?`))) return;
     set((state: D) => ({
       ...state,
       brands: state.brands.filter((item) => item !== brand),
@@ -9159,13 +9301,13 @@ function Stock({
         sensitivity: "base",
       }),
     );
-  function removeProduct(id: number) {
-    if (!window.confirm("Excluir este perfume do estoque?")) return;
+  async function removeProduct(id: number) {
+    if (!(await askConfirm("Excluir este perfume do estoque?"))) return;
     set((x: D) => ({ ...x, products: x.products.filter((p) => p.id !== id) }));
     notify("Perfume excluído do estoque.");
   }
-  function removeSupply(id: number) {
-    if (!window.confirm("Excluir este suprimento do estoque?")) return;
+  async function removeSupply(id: number) {
+    if (!(await askConfirm("Excluir este suprimento do estoque?"))) return;
     set((x: D) => ({ ...x, supplies: x.supplies.filter((s) => s.id !== id) }));
     notify("Suprimento excluído do estoque.");
   }
@@ -9301,7 +9443,7 @@ function Stock({
                 placeholder="Buscar perfume ou marca"
               />
             </label>
-            <select
+            <SysSelect
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               aria-label="Filtrar por categoria"
@@ -9310,8 +9452,8 @@ function Stock({
               <option value="Árabe">Árabe</option>
               <option value="Nicho">Nicho</option>
               <option value="Designer">Designer</option>
-            </select>
-            <select
+            </SysSelect>
+            <SysSelect
               value={brand}
               onChange={(e) => setBrand(e.target.value)}
               aria-label="Filtrar por marca"
@@ -9320,7 +9462,7 @@ function Stock({
               {brands.map((x) => (
                 <option key={x}>{x}</option>
               ))}
-            </select>
+            </SysSelect>
             <button
               type="button"
               className={"stockApcFilter" + (apcOnly ? " active" : "")}
@@ -9497,7 +9639,7 @@ function Stock({
             </header>
             <label>
               <span>Perfume</span>
-              <select
+              <SysSelect
                 defaultValue=""
                 onChange={(event) => {
                   const id = Number(event.target.value);
@@ -9522,7 +9664,7 @@ function Stock({
                       {product.brand} {product.name}
                     </option>
                   ))}
-              </select>
+              </SysSelect>
             </label>
           </div>
         </div>
@@ -9722,13 +9864,13 @@ function Purchases({
       (a, b) =>
         b.date.localeCompare(a.date) || b.id - a.id,
     );
-  function remove(id: number) {
+  async function remove(id: number) {
     const purchase = d.purchases.find((item) => item.id === id);
     const confirmation =
       purchase?.type === "Perfume" && purchase.arrivalStatus === "pending"
         ? "Excluir este perfume pendente? Ele ainda não alterou o estoque."
         : "Excluir este registro de compra? O estoque já lançado não será alterado.";
-    if (!window.confirm(confirmation)) return;
+    if (!(await askConfirm(confirmation))) return;
     set((x: D) => ({
       ...x,
       purchases: x.purchases.filter((p) => p.id !== id),
@@ -9791,7 +9933,7 @@ function Purchases({
           <div className="purchaseMonthFilters">
             <label>
               <span>Fornecedor</span>
-              <select
+              <SysSelect
                 value={supplierFilter}
                 onChange={(event) => setSupplierFilter(event.target.value)}
                 aria-label="Filtrar compras por fornecedor"
@@ -9800,7 +9942,7 @@ function Purchases({
                 {suppliers.map((supplier) => (
                   <option key={supplier}>{supplier}</option>
                 ))}
-              </select>
+              </SysSelect>
             </label>
             <button
               type="button"
@@ -9980,14 +10122,14 @@ function Clients({
         a.client.name.localeCompare(b.client.name, "pt-BR"),
     );
 
-  function remove(id: number) {
+  async function remove(id: number) {
     if (d.sales.some((s) => s.clientId === id)) {
-      window.alert(
+      void showAlert(
         "Este cliente possui vendas registradas e não pode ser excluído.",
       );
       return;
     }
-    if (!window.confirm("Excluir este cliente?")) return;
+    if (!(await askConfirm("Excluir este cliente?"))) return;
     set((x: D) => ({ ...x, clients: x.clients.filter((c) => c.id !== id) }));
     notify("Cliente excluído.");
   }
@@ -10234,14 +10376,14 @@ function Suppliers({
                 : item.last || "0000";
       return compareValues(value(a), value(b), direction) || a.name.localeCompare(b.name, "pt-BR");
     });
-  function remove(index: number, name: string) {
+  async function remove(index: number, name: string) {
     if (d.purchases.some((purchase) => purchase.supplier === name)) {
-      window.alert(
+      void showAlert(
         "Este fornecedor possui compras registradas e não pode ser excluído.",
       );
       return;
     }
-    if (!window.confirm("Excluir este fornecedor?")) return;
+    if (!(await askConfirm("Excluir este fornecedor?"))) return;
     set((state: D) => ({
       ...state,
       suppliers: state.suppliers.filter((_, current) => current !== index),
@@ -10537,8 +10679,7 @@ function SupplierHistory({
             <div className="supplierHistoryFilters compact">
               <label>
                 <span>Data específica</span>
-                <input
-                  type="date"
+                <DateInput
                   value={purchaseDay}
                   onChange={(event) => {
                     setPurchaseDay(event.target.value);
@@ -12455,7 +12596,7 @@ function MarketplaceForecast({
     const form = Object.fromEntries(new FormData(event.currentTarget));
     const next = { Shopee: Number(form.shopee), "TikTok Shop": Number(form.tiktok) };
     if (!Number.isFinite(next.Shopee) || !Number.isFinite(next["TikTok Shop"]) || next.Shopee < 0 || next["TikTok Shop"] < 0) {
-      window.alert("Informe prazos válidos em dias.");
+      void showAlert("Informe prazos válidos em dias.");
       return;
     }
     set((state: D) => ({ ...state, marketplacePayoutDays: next }));
@@ -12573,14 +12714,14 @@ function ProfitControl({
         </div>
         <label className="profitChannelFilter">
           <span>Origem das vendas</span>
-          <select
+          <SysSelect
             value={salesFilter}
             onChange={(event) => setSalesFilter(event.target.value as "all" | "marketplace")}
             aria-label="Filtrar vendas por origem"
           >
             <option value="all">Todas as vendas</option>
             <option value="marketplace">Apenas marketplaces (TikTok e Shopee)</option>
-          </select>
+          </SysSelect>
         </label>
       </div>
       <Cards
@@ -13621,7 +13762,7 @@ function Form({
           perfumeIdentity(brand, perfumeName),
       );
       if (matchingProducts.length > 1) {
-        window.alert(
+        void showAlert(
           "Há mais de um cadastro para este perfume. Confira as identidades antes de registrar a compra.",
         );
         return state;
@@ -13720,7 +13861,7 @@ function Form({
           ),
       ).length > 1;
     if (ambiguous) {
-      window.alert(
+      void showAlert(
         "Há mais de um produto com esta marca e nome. Confira as identidades antes de lançar esta operação.",
       );
       return;
@@ -13735,7 +13876,7 @@ function Form({
         }),
       );
       if (invalid) {
-        window.alert(
+        void showAlert(
           `O perfume “${invalid}” não foi encontrado no estoque. Selecione uma opção da busca.`,
         );
         return;
@@ -13766,7 +13907,7 @@ function Form({
         });
       }).filter(Boolean) as P[];
       if (new Set(apcProducts.map((p) => p.id)).size !== apcProducts.length) {
-        window.alert("Só é possível vender um APC de cada perfume por pedido.");
+        void showAlert("Só é possível vender um APC de cada perfume por pedido.");
         return;
       }
       const unavailable = apcProducts.find(
@@ -13775,7 +13916,7 @@ function Form({
           !existingSale?.items.some((i) => i.productId === p.id && i.isApc),
       );
       if (unavailable) {
-        window.alert(
+        void showAlert(
           `O APC de ${unavailable.brand} ${unavailable.name} não está disponível.`,
         );
         return;
@@ -13784,7 +13925,7 @@ function Form({
     if (type === "supplier") {
       const supplierName = String(f.name || "").trim();
       if (!supplierName) {
-        window.alert("Informe o nome do fornecedor.");
+        void showAlert("Informe o nome do fornecedor.");
         return;
       }
       const duplicated = d.suppliers.some(
@@ -13793,7 +13934,7 @@ function Form({
           name.trim().toLowerCase() === supplierName.toLowerCase(),
       );
       if (duplicated) {
-        window.alert("Este fornecedor já está cadastrado.");
+        void showAlert("Este fornecedor já está cadastrado.");
         return;
       }
     }
@@ -14836,7 +14977,7 @@ function Form({
                 </div>
                 <label>
                   <span>Forma de entrega</span>
-                  <select
+                  <SysSelect
                     name="shippingMethod"
                     value={deliveryMethod}
                     onChange={(event) => {
@@ -14851,12 +14992,12 @@ function Form({
                     <option value="Loggi">Loggi</option>
                     <option value="Jadlog">Jadlog</option>
                     <option value="Uber/Pessoalmente">Uber/Pessoalmente</option>
-                  </select>
+                  </SysSelect>
                 </label>
                 {deliveryMethod === "Correios" ? (
                   <label>
                     <span>Modalidade dos Correios</span>
-                    <select
+                    <SysSelect
                       value={correiosDeliveryMethod}
                       onChange={(event) =>
                         setCorreiosDeliveryMethod(event.target.value)
@@ -14867,7 +15008,7 @@ function Form({
                       <option value="Correios Sedex">Sedex</option>
                       <option value="Correios PAC">PAC</option>
                       <option value="Correios Mini">Mini Envios</option>
-                    </select>
+                    </SysSelect>
                   </label>
                 ) : null}
                 <div className="shippingCostBox saleDeliveryFreight">
@@ -15041,17 +15182,12 @@ function Form({
               <>
                 <label>
                   <span>Suprimento / insumo</span>
-                  <input
+                  <ComboInput
                     name="description"
-                    list="purchase-supply-options"
+                    options={d.supplies.map((supply) => supply.name)}
                     placeholder="Selecione um existente ou digite um novo"
                     required
                   />
-                  <datalist id="purchase-supply-options">
-                    {d.supplies.map((supply) => (
-                      <option key={supply.id} value={supply.name} />
-                    ))}
-                  </datalist>
                 </label>
                 <div className="row three">
                   <Field n="qty" l="Quantidade" t="number" />
@@ -15304,7 +15440,7 @@ function Form({
             </div>
             <label>
               <span>Origem do lead / Grupo</span>
-              <select
+              <SysSelect
                 name="leadSource"
                 value={clientDraft.leadSource}
                 onChange={(event) =>
@@ -15321,7 +15457,7 @@ function Form({
                 <option value="Grupo 3">Grupo 3</option>
                 <option value="TikTok" disabled={clientDraft.leadSource !== "TikTok"}>TikTok (automático)</option>
                 <option value="Shopee" disabled={clientDraft.leadSource !== "Shopee"}>Shopee (automático)</option>
-              </select>
+              </SysSelect>
               <small className="fieldHint">
                 TikTok e Shopee são preenchidos automaticamente pelas vendas de marketplace.
               </small>
@@ -15470,7 +15606,7 @@ function Form({
             <div className="row three">
               <label><span>Bairro (opcional)</span><input value={clientDraft.district} onChange={(event) => setClientDraft((current) => ({ ...current, district: event.target.value }))} /></label>
               <label><span>Cidade (opcional)</span><input value={clientDraft.city} onChange={(event) => setClientDraft((current) => ({ ...current, city: event.target.value }))} /></label>
-              <label><span>Estado (opcional)</span><select value={clientDraft.state} onChange={(event) => setClientDraft((current) => ({ ...current, state: event.target.value }))}><option value="">Selecione...</option>{BRAZIL_STATES.map((state) => <option key={state}>{state}</option>)}</select></label>
+              <label><span>Estado (opcional)</span><SysSelect value={clientDraft.state} onChange={(event) => setClientDraft((current) => ({ ...current, state: event.target.value }))}><option value="">Selecione...</option>{BRAZIL_STATES.map((state) => <option key={state}>{state}</option>)}</SysSelect></label>
             </div>
             <div className="saleLeadSourcePicker">
               <span>Origem do lead / Grupo</span>
@@ -15680,7 +15816,7 @@ function BrandFields({
         brand.localeCompare(clean, "pt-BR", { sensitivity: "base" }) === 0,
     );
     if (duplicated) {
-      window.alert("Esta marca já está cadastrada.");
+      void showAlert("Esta marca já está cadastrada.");
       setCurrentBrand(
         sortedBrands.find(
           (brand) =>
@@ -15701,19 +15837,14 @@ function BrandFields({
     <div className="brandFieldBlock">
       <label>
         <span>Marca</span>
-        <input
+        <ComboInput
           name="brand"
-          list="brand-options"
+          options={sortedBrands}
           value={currentBrand}
           onChange={(event) => setCurrentBrand(event.target.value)}
           placeholder="Selecione ou digite uma marca"
           required
         />
-        <datalist id="brand-options">
-          {sortedBrands.map((brand) => (
-            <option key={brand} value={brand} />
-          ))}
-        </datalist>
       </label>
       {onAddBrand ? (
         <>
@@ -15980,6 +16111,19 @@ function Field({
   inputMode?: "none" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | "search";
   maxLength?: number;
 }) {
+  if (t === "date") {
+    return (
+      <label>
+        <span>{l}</span>
+        <DateInput
+          name={n}
+          defaultValue={v === undefined ? undefined : String(v)}
+          required={required}
+          onChange={onChange}
+        />
+      </label>
+    );
+  }
   return (
     <label>
       <span>{l}</span>
@@ -16017,7 +16161,7 @@ function Select({
   return (
     <label>
       <span>{l}</span>
-      <select name={n} required defaultValue={value ?? ""}>
+      <SysSelect name={n} required defaultValue={value ?? ""}>
         <option value="" disabled>
           Selecione...
         </option>
@@ -16026,7 +16170,7 @@ function Select({
             {x[1]}
           </option>
         ))}
-      </select>
+      </SysSelect>
     </label>
   );
 }
@@ -16207,8 +16351,7 @@ const apcCount = completedSales.reduce(
             <div className="clientHistoryFilters compact">
               <label>
                 <span>Data específica</span>
-                <input
-                  type="date"
+                <DateInput
                   value={saleDay}
                   onChange={(event) => {
                     setSaleDay(event.target.value);
