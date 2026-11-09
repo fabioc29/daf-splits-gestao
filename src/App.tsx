@@ -6,6 +6,8 @@ import { readState, newIdentities, StateConflict } from "./crm/state-persistence
 import { FabioStateWriter } from "./crm/fabio-persistence";
 import { LocalRecovery, optionalLocalGet, optionalLocalSet, optionalLocalRemove } from "./crm/local-recovery";
 import { CRMFeedPanel } from "./crm/CRMFeedPanel";
+import { askConfirm, showAlert } from "./ui/dialogs";
+import { RowMenu } from "./ui/RowMenu";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -641,7 +643,7 @@ function receivePerfumePurchase(
       perfumeIdentity(brand, name),
   );
   if (matchingProducts.length > 1) {
-    window.alert(
+    void showAlert(
       "Há mais de um cadastro para este perfume. A chegada não foi lançada para evitar somar o estoque no item errado.",
     );
     return state;
@@ -878,6 +880,19 @@ const formatClientPhone = (value: unknown) => {
 
   return `+55 0${ddd}${subscriber ? ` ${local}` : ""}`;
 };
+// Iniciais para avatares: ignora parênteses, números e símbolos ("Adalmir (amigo Fábio)" -> "AD").
+function nameInitials(name: string) {
+  const words = String(name || "")
+    .replace(/\([^)]*\)/g, " ")
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\p{L}]/gu, ""))
+    .filter(Boolean);
+  const letters =
+    words.length > 1
+      ? words[0][0] + words[1][0]
+      : (words[0] || "?").slice(0, 2);
+  return letters.toUpperCase();
+}
 const orderNo = (id: number) => String(id).padStart(5, "0");
 const BRAZIL_STATES = [
   "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT",
@@ -1151,6 +1166,9 @@ const saleCustomer = (sale: V, data: D) =>
   "Cliente não informado";
 const LOGO =
   "data:image/webp;base64,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";
+// A integração MandaBem está desativada no servidor (api/mandabem.js responde 503).
+// Enquanto não for reativada, o item fica fora do menu para não exibir uma tela sem função.
+const SHOW_MANDABEM = false;
 const nav = [
   ["dashboard", "Visão geral", LayoutDashboard],
   ["sales", "Vendas", ShoppingBag],
@@ -1255,7 +1273,7 @@ function System({ session }: { session: Session }) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   async function loadCurrent() {
-    if (!window.confirm("Carregar o estado salvo descarta este rascunho local. Exporte-o antes se precisar preservá-lo. Continuar?")) return;
+    if (!(await askConfirm("Carregar o estado salvo descarta este rascunho local. Exporte-o antes se precisar preservá-lo. Continuar?"))) return;
     const version = saveVersion.current;
     try {
       if (writer.current?.pending) throw Error("Aguarde a gravação em andamento.");
@@ -1297,10 +1315,14 @@ function System({ session }: { session: Session }) {
     [supplierHistory, setSupplierHistory] = useState(""),
     [toast, setToast] = useState("");
   const modalRef = useRef(modal); modalRef.current = modal;
-  const [stockMenuOpen, setStockMenuOpen] = useState(false);
-  const [registrationsMenuOpen, setRegistrationsMenuOpen] = useState(false);
-  const [financeMenuOpen, setFinanceMenuOpen] = useState(false);
-  const [shippingMenuOpen, setShippingMenuOpen] = useState(false);
+  // Menu lateral em acordeão: apenas um grupo fica aberto por vez.
+  const [openNavGroup, setOpenNavGroup] = useState<string | null>(null);
+  const toggleNavGroup = (group: string) =>
+    setOpenNavGroup((current) => (current === group ? null : group));
+  const stockMenuOpen = openNavGroup === "stock";
+  const registrationsMenuOpen = openNavGroup === "registrations";
+  const financeMenuOpen = openNavGroup === "finance";
+  const shippingMenuOpen = openNavGroup === "shipping";
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [localUi, setLocalUi] = useState<LocalUiSettings>(() =>
     readLocalUiSettings(),
@@ -1581,6 +1603,19 @@ const action =
     page === "finance-pricing";
   const shippingSectionActive =
     page === "shipping" || page === "shipping-mandabem";
+  const activeNavGroup = stockSectionActive
+    ? "stock"
+    : registrationsSectionActive
+      ? "registrations"
+      : financeSectionActive
+        ? "finance"
+        : shippingSectionActive
+          ? "shipping"
+          : null;
+  useEffect(() => {
+    // Ao trocar de tela, mantém aberto somente o grupo da tela atual.
+    setOpenNavGroup(activeNavGroup);
+  }, [activeNavGroup]);
   const orderedNav = [...nav].sort((a, b) => {
     const aIndex = localUi.menuOrder.indexOf(a[0]);
     const bIndex = localUi.menuOrder.indexOf(b[0]);
@@ -1650,7 +1685,7 @@ const action =
                 <div className="stockNavGroup" key={id}>
                   <button
                     className={stockSectionActive ? "on stockParent" : "stockParent"}
-                    onClick={() => setStockMenuOpen((open) => !open)}
+                    onClick={() => toggleNavGroup("stock")}
                     aria-expanded={stockMenuOpen}
                   >
                     <Icon />
@@ -1686,9 +1721,7 @@ const action =
                     className={
                       registrationsSectionActive ? "on stockParent" : "stockParent"
                     }
-                    onClick={() =>
-                      setRegistrationsMenuOpen((open) => !open)
-                    }
+                    onClick={() => toggleNavGroup("registrations")}
                     aria-expanded={registrationsMenuOpen}
                   >
                     <Icon />
@@ -1732,14 +1765,14 @@ const action =
               );
             }
 
-            if (id === "shipping") {
+            if (id === "shipping" && SHOW_MANDABEM) {
               return (
                 <div className="stockNavGroup shippingNavGroup" key={id}>
                   <button
                     className={
                       shippingSectionActive ? "on stockParent" : "stockParent"
                     }
-                    onClick={() => setShippingMenuOpen((open) => !open)}
+                    onClick={() => toggleNavGroup("shipping")}
                     aria-expanded={shippingMenuOpen}
                   >
                     <Icon />
@@ -1790,7 +1823,7 @@ const action =
                 <div className="stockNavGroup financeNavGroup" key={id}>
                   <button
                     className={financeSectionActive ? "on stockParent" : "stockParent"}
-                    onClick={() => setFinanceMenuOpen((open) => !open)}
+                    onClick={() => toggleNavGroup("finance")}
                     aria-expanded={financeMenuOpen}
                   >
                     <Icon />
@@ -3243,11 +3276,16 @@ function monthDays(monthKey: string) {
   const parts = monthKey.split("-").map(Number);
   return new Date(parts[0], parts[1], 0).getDate();
 }
-function periodMonthLabel(monthKey: string) {
-  return new Intl.DateTimeFormat("pt-BR", {
+// "novembro de 2026" -> "Novembro de 2026" (apenas a primeira letra maiúscula).
+function formatMonthLabel(monthKey: string) {
+  const label = new Intl.DateTimeFormat("pt-BR", {
     month: "long",
     year: "numeric",
   }).format(new Date(monthKey + "-01T12:00:00"));
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+function periodMonthLabel(monthKey: string) {
+  return formatMonthLabel(monthKey);
 }
 function periodCutoffDay(monthKey: string) {
   const currentMonth = today().slice(0, 7);
@@ -4899,10 +4937,7 @@ function Sales({
   const [saleDay, setSaleDay] = useState("");
   const [origin, setOrigin] = useState("all");
   const [saleStatus, setSaleStatus] = useState("all");
-  const monthLabel = new Intl.DateTimeFormat("pt-BR", {
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${month}-01T12:00:00`));
+  const monthLabel = formatMonthLabel(month);
   const selectedMonthRevenue = d.sales
     .filter(
       (sale) =>
@@ -4965,12 +5000,12 @@ function Sales({
       ),
     }));
   }
-  function cancel(s: V) {
+  async function cancel(s: V) {
     if (
       !set ||
-      !window.confirm(
+      !(await askConfirm(
         `Cancelar o pedido #${orderNo(s.id)}? O estoque será devolvido.`,
-      )
+      ))
     )
       return;
     set((x: D) => ({
@@ -4983,10 +5018,10 @@ function Sales({
     }));
     notify?.("Venda cancelada e estoque devolvido.");
   }
-  function remove(s: V) {
+  async function remove(s: V) {
     if (
       !set ||
-      !window.confirm(`Excluir definitivamente o pedido #${orderNo(s.id)}?`)
+      !(await askConfirm(`Excluir definitivamente o pedido #${orderNo(s.id)}? Essa ação não pode ser desfeita.`))
     )
       return;
     set((x: D) => ({
@@ -5130,32 +5165,34 @@ function Sales({
               <td>{saleBadge(s)}</td>
               {edit ? (
                 <td>
-                  <div className="tableActions">
+                  <div className="tableActions compactRowActions">
                     {s.status !== "cancelled" ? (
-                      <>
-                        <button
-                          className="iconButton"
-                          onClick={() => edit(s.id)}
-                        >
-                          <Pencil />
-                          Editar
-                        </button>
-                        <button
-                          className="iconButton danger"
-                          onClick={() => cancel(s)}
-                        >
-                          <Ban />
-                          Cancelar
-                        </button>
-                      </>
+                      <button
+                        className="iconButton"
+                        onClick={() => edit(s.id)}
+                      >
+                        <Pencil />
+                        Editar
+                      </button>
                     ) : null}
-                    <button
-                      className="iconButton danger"
-                      onClick={() => remove(s)}
-                    >
-                      <Trash2 />
-                      Excluir
-                    </button>
+                    <RowMenu
+                      label={`Mais ações do pedido #${orderNo(s.id)}`}
+                      items={[
+                        {
+                          label: "Cancelar venda",
+                          icon: <Ban />,
+                          danger: true,
+                          hidden: s.status === "cancelled",
+                          onSelect: () => void cancel(s),
+                        },
+                        {
+                          label: "Excluir pedido",
+                          icon: <Trash2 />,
+                          danger: true,
+                          onSelect: () => void remove(s),
+                        },
+                      ]}
+                    />
                   </div>
                 </td>
               ) : null}
@@ -5672,10 +5709,7 @@ function Shipping({
     observacao: "",
   });
 
-  const shippingMonthLabel = new Intl.DateTimeFormat("pt-BR", {
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${shippingMonth}-01T12:00:00`));
+  const shippingMonthLabel = formatMonthLabel(shippingMonth);
 
   function shiftShippingMonth(delta: number) {
     const base = new Date(`${shippingMonth}-01T12:00:00`);
@@ -8537,7 +8571,7 @@ function BrandManager({
         brand.localeCompare(clean, "pt-BR", { sensitivity: "base" }) === 0,
     );
     if (duplicate) {
-      window.alert("Esta marca já está cadastrada.");
+      void showAlert("Esta marca já está cadastrada.");
       return;
     }
     set((state: D) => ({
@@ -8563,7 +8597,7 @@ function BrandManager({
         brand.localeCompare(nextBrand, "pt-BR", { sensitivity: "base" }) === 0,
     );
     if (duplicate) {
-      window.alert("Já existe uma marca cadastrada com este nome.");
+      void showAlert("Já existe uma marca cadastrada com este nome.");
       return;
     }
     set((state: D) => ({
@@ -8596,14 +8630,14 @@ function BrandManager({
     setDraft("");
   }
 
-  function removeBrand(brand: string) {
+  async function removeBrand(brand: string) {
     if (d.products.some((product) => product.brand === brand)) {
-      window.alert(
+      void showAlert(
         "Esta marca ainda está vinculada a perfumes. Edite ou exclua os perfumes dessa marca antes de removê-la.",
       );
       return;
     }
-    if (!window.confirm(`Excluir a marca “${brand}”?`)) return;
+    if (!(await askConfirm(`Excluir a marca “${brand}”?`))) return;
     set((state: D) => ({
       ...state,
       brands: state.brands.filter((item) => item !== brand),
@@ -9015,13 +9049,13 @@ function Stock({
         sensitivity: "base",
       }),
     );
-  function removeProduct(id: number) {
-    if (!window.confirm("Excluir este perfume do estoque?")) return;
+  async function removeProduct(id: number) {
+    if (!(await askConfirm("Excluir este perfume do estoque?"))) return;
     set((x: D) => ({ ...x, products: x.products.filter((p) => p.id !== id) }));
     notify("Perfume excluído do estoque.");
   }
-  function removeSupply(id: number) {
-    if (!window.confirm("Excluir este suprimento do estoque?")) return;
+  async function removeSupply(id: number) {
+    if (!(await askConfirm("Excluir este suprimento do estoque?"))) return;
     set((x: D) => ({ ...x, supplies: x.supplies.filter((s) => s.id !== id) }));
     notify("Suprimento excluído do estoque.");
   }
@@ -9219,25 +9253,27 @@ function Stock({
                       </span>
                     </td>
                     <td>
-                      <div className="tableActions productStockActions">
+                      <div className="tableActions productStockActions compactRowActions">
                         <button className="iconButton" onClick={() => edit(p.id)}>
                           <Pencil />
                           Editar
                         </button>
-                        <button
-                          className="iconButton danger"
-                          onClick={() => removeProduct(p.id)}
-                        >
-                          <Trash2 />
-                          Excluir
-                        </button>
-                        <button
-                          className="iconButton productCardHistoryButton"
-                          onClick={() => setProductHistoryId(p.id)}
-                        >
-                          <ReceiptText />
-                          Histórico
-                        </button>
+                        <RowMenu
+                          label={`Mais ações de ${p.name}`}
+                          items={[
+                            {
+                              label: "Histórico de vendas",
+                              icon: <ReceiptText />,
+                              onSelect: () => setProductHistoryId(p.id),
+                            },
+                            {
+                              label: "Excluir perfume",
+                              icon: <Trash2 />,
+                              danger: true,
+                              onSelect: () => void removeProduct(p.id),
+                            },
+                          ]}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -9306,7 +9342,7 @@ function Stock({
                         )}
                       </td>
                       <td>
-                        <div className="tableActions productStockActions">
+                        <div className="tableActions productStockActions compactRowActions">
                           <button
                             className="iconButton"
                             onClick={() => editSupply(s.id)}
@@ -9314,13 +9350,17 @@ function Stock({
                             <Pencil />
                             Editar
                           </button>
-                          <button
-                            className="iconButton danger"
-                            onClick={() => removeSupply(s.id)}
-                          >
-                            <Trash2 />
-                            Excluir
-                          </button>
+                          <RowMenu
+                            label={`Mais ações de ${s.name}`}
+                            items={[
+                              {
+                                label: "Excluir insumo",
+                                icon: <Trash2 />,
+                                danger: true,
+                                onSelect: () => void removeSupply(s.id),
+                              },
+                            ]}
+                          />
                         </div>
                       </td>
                     </tr>
@@ -9538,10 +9578,7 @@ function Purchases({
   const [purchaseQuery, setPurchaseQuery] = useState("");
   const [month, setMonth] = useState(today().slice(0, 7));
   const [showFilters, setShowFilters] = useState(false);
-  const monthLabel = new Intl.DateTimeFormat("pt-BR", {
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${month}-01T12:00:00`));
+  const monthLabel = formatMonthLabel(month);
   function shiftMonth(delta: number) {
     const base = new Date(`${month}-01T12:00:00`);
     base.setMonth(base.getMonth() + delta);
@@ -9581,13 +9618,13 @@ function Purchases({
       (a, b) =>
         b.date.localeCompare(a.date) || b.id - a.id,
     );
-  function remove(id: number) {
+  async function remove(id: number) {
     const purchase = d.purchases.find((item) => item.id === id);
     const confirmation =
       purchase?.type === "Perfume" && purchase.arrivalStatus === "pending"
         ? "Excluir este perfume pendente? Ele ainda não alterou o estoque."
         : "Excluir este registro de compra? O estoque já lançado não será alterado.";
-    if (!window.confirm(confirmation)) return;
+    if (!(await askConfirm(confirmation))) return;
     set((x: D) => ({
       ...x,
       purchases: x.purchases.filter((p) => p.id !== id),
@@ -9711,17 +9748,23 @@ function Purchases({
                 </td>
                 <td>{brl(p.total)}</td>
                 <td>
-                  <button className="iconButton" onClick={() => edit(p.id)}>
-                    <Pencil />
-                    Editar
-                  </button>
-                  <button
-                    className="iconButton danger"
-                    onClick={() => remove(p.id)}
-                  >
-                    <Trash2 />
-                    Excluir
-                  </button>
+                  <div className="tableActions compactRowActions">
+                    <button className="iconButton" onClick={() => edit(p.id)}>
+                      <Pencil />
+                      Editar
+                    </button>
+                    <RowMenu
+                      label="Mais ações da compra"
+                      items={[
+                        {
+                          label: "Excluir compra",
+                          icon: <Trash2 />,
+                          danger: true,
+                          onSelect: () => void remove(p.id),
+                        },
+                      ]}
+                    />
+                  </div>
                 </td>
               </tr>
             ))}
@@ -9800,14 +9843,14 @@ function Clients({
         a.client.name.localeCompare(b.client.name, "pt-BR"),
     );
 
-  function remove(id: number) {
+  async function remove(id: number) {
     if (d.sales.some((s) => s.clientId === id)) {
-      window.alert(
+      void showAlert(
         "Este cliente possui vendas registradas e não pode ser excluído.",
       );
       return;
     }
-    if (!window.confirm("Excluir este cliente?")) return;
+    if (!(await askConfirm("Excluir este cliente?"))) return;
     set((x: D) => ({ ...x, clients: x.clients.filter((c) => c.id !== id) }));
     notify("Cliente excluído.");
   }
@@ -9879,12 +9922,7 @@ function Clients({
       <div className="clients">
         {clients.map((c) => (
           <div key={c.id}>
-            <i>
-              {c.name
-                .split(" ")
-                .map((x) => x[0])
-                .slice(0, 2)}
-            </i>
+            <i>{nameInitials(c.name)}</i>
             <h3>{c.name}</h3>
             <p>
               {c.phone || "Sem telefone"} · {c.cep ? `CEP ${c.cep}` : "CEP não informado"}
@@ -9997,14 +10035,14 @@ function Suppliers({
   const suppliers = d.suppliers
     .map((name, index) => ({ name, index }))
     .filter(({ name }) => smartSearchMatch(query, name));
-  function remove(index: number, name: string) {
+  async function remove(index: number, name: string) {
     if (d.purchases.some((purchase) => purchase.supplier === name)) {
-      window.alert(
+      void showAlert(
         "Este fornecedor possui compras registradas e não pode ser excluído.",
       );
       return;
     }
-    if (!window.confirm("Excluir este fornecedor?")) return;
+    if (!(await askConfirm("Excluir este fornecedor?"))) return;
     set((state: D) => ({
       ...state,
       suppliers: state.suppliers.filter((_, current) => current !== index),
@@ -11658,26 +11696,26 @@ async function downloadAchievementPlaque(achievement: AchievementDefinition) {
 }
 
 const REVENUE_BADGE_PNGS: Record<string, string> = {
-  "30K": "/achievements/faturados-30k.png",
-  "50K": "/achievements/faturados-50k.png",
-  "100K": "/achievements/faturados-100k.png",
-  "150K": "/achievements/faturados-150k.png",
-  "200K": "/achievements/faturados-200k.png",
-  "350K": "/achievements/faturados-350k.png",
-  "500K": "/achievements/faturados-500k.png",
-  "800K": "/achievements/faturados-800k.png",
-  "1M": "/achievements/faturados-1m.png",
+  "30K": "/achievements/faturados-30k.webp",
+  "50K": "/achievements/faturados-50k.webp",
+  "100K": "/achievements/faturados-100k.webp",
+  "150K": "/achievements/faturados-150k.webp",
+  "200K": "/achievements/faturados-200k.webp",
+  "350K": "/achievements/faturados-350k.webp",
+  "500K": "/achievements/faturados-500k.webp",
+  "800K": "/achievements/faturados-800k.webp",
+  "1M": "/achievements/faturados-1m.webp",
 };
 
 const ORDER_BADGE_PNGS: Record<string, string> = {
-  "100": "/achievements/pedidos-100.png",
-  "150": "/achievements/pedidos-150.png",
-  "300": "/achievements/pedidos-300.png",
-  "500": "/achievements/pedidos-500.png",
-  "1000": "/achievements/pedidos-1000.png",
-  "2000": "/achievements/pedidos-2000.png",
-  "3500": "/achievements/pedidos-3500.png",
-  "5000": "/achievements/pedidos-5000.png",
+  "100": "/achievements/pedidos-100.webp",
+  "150": "/achievements/pedidos-150.webp",
+  "300": "/achievements/pedidos-300.webp",
+  "500": "/achievements/pedidos-500.webp",
+  "1000": "/achievements/pedidos-1000.webp",
+  "2000": "/achievements/pedidos-2000.webp",
+  "3500": "/achievements/pedidos-3500.webp",
+  "5000": "/achievements/pedidos-5000.webp",
 };
 
 function AchievementBadge({
@@ -12204,7 +12242,7 @@ function MarketplaceForecast({
     const form = Object.fromEntries(new FormData(event.currentTarget));
     const next = { Shopee: Number(form.shopee), "TikTok Shop": Number(form.tiktok) };
     if (!Number.isFinite(next.Shopee) || !Number.isFinite(next["TikTok Shop"]) || next.Shopee < 0 || next["TikTok Shop"] < 0) {
-      window.alert("Informe prazos válidos em dias.");
+      void showAlert("Informe prazos válidos em dias.");
       return;
     }
     set((state: D) => ({ ...state, marketplacePayoutDays: next }));
@@ -13370,7 +13408,7 @@ function Form({
           perfumeIdentity(brand, perfumeName),
       );
       if (matchingProducts.length > 1) {
-        window.alert(
+        void showAlert(
           "Há mais de um cadastro para este perfume. Confira as identidades antes de registrar a compra.",
         );
         return state;
@@ -13469,7 +13507,7 @@ function Form({
           ),
       ).length > 1;
     if (ambiguous) {
-      window.alert(
+      void showAlert(
         "Há mais de um produto com esta marca e nome. Confira as identidades antes de lançar esta operação.",
       );
       return;
@@ -13484,7 +13522,7 @@ function Form({
         }),
       );
       if (invalid) {
-        window.alert(
+        void showAlert(
           `O perfume “${invalid}” não foi encontrado no estoque. Selecione uma opção da busca.`,
         );
         return;
@@ -13515,7 +13553,7 @@ function Form({
         });
       }).filter(Boolean) as P[];
       if (new Set(apcProducts.map((p) => p.id)).size !== apcProducts.length) {
-        window.alert("Só é possível vender um APC de cada perfume por pedido.");
+        void showAlert("Só é possível vender um APC de cada perfume por pedido.");
         return;
       }
       const unavailable = apcProducts.find(
@@ -13524,7 +13562,7 @@ function Form({
           !existingSale?.items.some((i) => i.productId === p.id && i.isApc),
       );
       if (unavailable) {
-        window.alert(
+        void showAlert(
           `O APC de ${unavailable.brand} ${unavailable.name} não está disponível.`,
         );
         return;
@@ -13533,7 +13571,7 @@ function Form({
     if (type === "supplier") {
       const supplierName = String(f.name || "").trim();
       if (!supplierName) {
-        window.alert("Informe o nome do fornecedor.");
+        void showAlert("Informe o nome do fornecedor.");
         return;
       }
       const duplicated = d.suppliers.some(
@@ -13542,7 +13580,7 @@ function Form({
           name.trim().toLowerCase() === supplierName.toLowerCase(),
       );
       if (duplicated) {
-        window.alert("Este fornecedor já está cadastrado.");
+        void showAlert("Este fornecedor já está cadastrado.");
         return;
       }
     }
@@ -15429,7 +15467,7 @@ function BrandFields({
         brand.localeCompare(clean, "pt-BR", { sensitivity: "base" }) === 0,
     );
     if (duplicated) {
-      window.alert("Esta marca já está cadastrada.");
+      void showAlert("Esta marca já está cadastrada.");
       setCurrentBrand(
         sortedBrands.find(
           (brand) =>
