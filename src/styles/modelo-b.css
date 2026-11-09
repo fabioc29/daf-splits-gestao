@@ -1,0 +1,1159 @@
+/* =====================================================================
+   DAF Splits — Modelo B ("painel de negócios")
+   ---------------------------------------------------------------------
+   Camada de design carregada depois de index.css (ver main.tsx).
+   Cores: variáveis do :root definidas em App.tsx
+     - modo claro: cinza-claro + cards brancos + azul-cobalto
+     - modo noturno: preto + dourado, como o logo da DAF
+   Estrutura: menu lateral com ícones e grupos, barra superior fixa,
+   cards brancos com borda fina, tabelas com cabeçalho cinza, botões e
+   etiquetas retangulares com cantos suaves. Fonte única: Manrope.
+   ===================================================================== */
+
+:root {
+  --font-ui: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius-card: 14px;
+  --radius-control: 10px;
+  --radius-chip: 7px;
+  --on-accent: #ffffff;
+  --card-shadow: 0 1px 2px rgb(20 24 36 / 4%);
+  --nav-text: #4b5161;
+  --nav-muted: #7a8091;
+  --nav-hover: #f0f2f6;
+  --nav-active-bg: color-mix(in srgb, var(--accent) 10%, #ffffff);
+  --nav-active-text: var(--accent);
+  --table-head: #f8f9fb;
+}
+:root[data-theme="dark"] {
+  --on-accent: #120d02;
+  --card-shadow: 0 1px 0 rgb(255 255 255 / 3%) inset;
+  --nav-text: #b8b1a3;
+  --nav-muted: #7d776c;
+  --nav-hover: #141414;
+  --nav-active-bg: color-mix(in srgb, var(--accent) 14%, #000000);
+  --nav-active-text: var(--accent);
+  --table-head: #111111;
+}
+
+/* ---------- Base ---------- */
+html,
+body {
+  background: var(--bg) !important;
+}
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-ui) !important;
+  letter-spacing: 0;
+}
+body {
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+table,
+.metricCard,
+.saleBadge {
+  font-variant-numeric: tabular-nums;
+}
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* Rótulos sem caixa alta e sem "sobretítulos" decorativos. */
+.eyebrow,
+.stockHealthBadge,
+.healthGaugeScore span,
+.panelHeading small,
+.systemDialog header small {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+.eyebrow {
+  color: var(--muted) !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+}
+
+/* ---------- Menu lateral ---------- */
+.shell > aside {
+  background: var(--sidebar) !important;
+  border-right: 1px solid var(--line) !important;
+  box-shadow: none !important;
+  color: var(--nav-text) !important;
+}
+.shell > aside .sidebarLogo,
+.shell > aside > img {
+  border-radius: 10px !important;
+}
+.shell > aside nav {
+  gap: 2px !important;
+}
+.shell > aside nav > button,
+.shell > aside nav .stockNavGroup > button {
+  min-height: 40px !important;
+  padding: 0 12px !important;
+  border: 0 !important;
+  border-radius: 9px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--nav-text) !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+.shell > aside nav > button svg,
+.shell > aside nav .stockNavGroup > button svg {
+  width: 18px !important;
+  height: 18px !important;
+  color: currentColor !important;
+}
+.shell > aside nav > button:hover,
+.shell > aside nav .stockNavGroup > button:hover {
+  background: var(--nav-hover) !important;
+  color: var(--text) !important;
+  filter: none !important;
+}
+.shell > aside nav > button.on {
+  background: var(--nav-active-bg) !important;
+  color: var(--nav-active-text) !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+/* Grupo com submenu: o pai ativo só escurece o texto; o filho ativo leva a cor. */
+.shell > aside nav .stockNavGroup > button.on {
+  background: transparent !important;
+  color: var(--text) !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+.shell > aside .stockSubnav {
+  margin: 2px 0 6px 21px !important;
+  padding: 2px 0 2px 12px !important;
+  border-left: 1px solid var(--line) !important;
+  gap: 1px !important;
+  background: transparent !important;
+}
+.shell > aside .stockSubnav > button {
+  min-height: 32px !important;
+  padding: 0 10px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--nav-muted) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+.shell > aside .stockSubnav > button:hover {
+  color: var(--text) !important;
+  background: var(--nav-hover) !important;
+}
+.shell > aside .stockSubnav > button.on {
+  color: var(--nav-active-text) !important;
+  background: var(--nav-active-bg) !important;
+}
+.shell > aside .navAlert,
+.shell > aside .subnavCount {
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+  color: var(--accent) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+  display: inline-grid;
+  place-items: center;
+}
+.shell > aside .stockSubnav .subnavCount {
+  background: color-mix(in srgb, var(--danger) 12%, transparent) !important;
+  color: var(--danger) !important;
+}
+.shell > aside > footer,
+.shell > aside footer {
+  border-top: 1px solid var(--line) !important;
+  color: var(--nav-muted) !important;
+}
+.shell > aside footer b,
+.shell > aside footer strong {
+  color: var(--text) !important;
+}
+
+/* ---------- Barra superior ---------- */
+.shell main > header {
+  min-height: 68px;
+  background: var(--panel) !important;
+  border-bottom: 1px solid var(--line) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+.shell main > header .mainHeaderTitle small {
+  color: var(--muted) !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+.shell main > header .mainHeaderTitle h1 {
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--text) !important;
+}
+.shell main > header .headerActions {
+  gap: 10px !important;
+  align-items: center !important;
+}
+.shell main > header .headerActions > button {
+  min-height: 40px !important;
+  padding: 0 16px !important;
+  border-radius: var(--radius-control) !important;
+  font-size: 14px !important;
+}
+.themeToggleButton {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+}
+.themeToggleButton svg {
+  width: 17px;
+  height: 17px;
+  color: var(--accent) !important;
+}
+
+/* ---------- Área de conteúdo ---------- */
+.shell .content {
+  padding: 28px 32px 56px !important;
+  gap: 20px !important;
+}
+
+/* ---------- Cards ---------- */
+.panel,
+.card,
+.chart,
+.dashboardMetricPanel,
+.metricCard,
+.companyHealthPanel,
+.leadRankingPanel,
+.partnerRankingPanel,
+.dashboardStockSnapshot,
+.regionSalesPanel,
+.cards > div {
+  background: var(--panel) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-card) !important;
+  box-shadow: var(--card-shadow) !important;
+  background-image: none !important;
+}
+.panel h2,
+.card h2,
+.chart h2,
+.dashboardMetricPanel h2,
+.dashboardStockSnapshot h2,
+.leadRankingPanel h2,
+.partnerRankingPanel h2,
+.regionSalesPanel h2 {
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--text) !important;
+}
+.panel p,
+.card p,
+.dashboardMetricPanel p {
+  color: var(--muted);
+}
+
+/* Barra do período na visão geral/financeiro: título solto, sem card. */
+.workspaceToolbar {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.workspaceToolbar h2 {
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--text) !important;
+}
+.workspaceToolbar p {
+  font-size: 14px !important;
+  color: var(--muted) !important;
+}
+
+/* ---------- Indicadores ---------- */
+.executiveMetricGrid {
+  display: grid !important;
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 16px !important;
+}
+@media (max-width: 1280px) {
+  .executiveMetricGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 640px) {
+  .executiveMetricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+.metricCard {
+  padding: 16px 18px !important;
+  gap: 4px !important;
+  border-left-width: 1px !important;
+  border-left-color: var(--line) !important;
+  min-height: 0 !important;
+  overflow: visible;
+}
+.metricCard::before,
+.metricCard::after {
+  display: none !important;
+}
+.metricCard > span:first-child {
+  color: var(--muted) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+.metricCard > b {
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--text) !important;
+}
+.metricCard > small {
+  color: var(--muted) !important;
+  font-size: 12.5px !important;
+}
+.metricDelta {
+  font-weight: 700 !important;
+  font-size: 13px !important;
+}
+
+/* ---------- Grade da visão geral ---------- */
+.dashboardTopGrid {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) !important;
+  gap: 20px !important;
+}
+.dashboardLowerGrid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 20px !important;
+}
+.dashboardRegionGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
+}
+.dashboardRankingGrid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) !important;
+  gap: 20px !important;
+  align-items: stretch;
+}
+.dashboardRankingGrid > .dashboardStockSnapshot {
+  margin: 0 !important;
+}
+@media (max-width: 1100px) {
+  .dashboardTopGrid,
+  .dashboardRegionGrid,
+  .dashboardRankingGrid,
+  .dashboardLowerGrid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* Gráfico de faturamento diário */
+.dashboardRevenueChart .stats {
+  background: var(--panel-2) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 8px !important;
+  color: var(--muted) !important;
+}
+.dashboardRevenueChart .stats b {
+  color: var(--text) !important;
+}
+.bars i {
+  background: var(--accent) !important;
+  border-radius: 4px 4px 2px 2px !important;
+}
+.bars i.future {
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel-3)) !important;
+}
+.bars small {
+  color: var(--muted) !important;
+}
+
+/* ---------- Distribuições: total + barra empilhada ---------- */
+.dashboardMetricPanel {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  padding: 20px 22px !important;
+}
+.dashboardMiniVisual {
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  display: block !important;
+  margin: 0 !important;
+}
+.stackedBreakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.stackedBreakdownTotal {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.stackedBreakdownTotal small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+.stackedBreakdownTotal b {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.stackedBreakdownBar {
+  display: flex;
+  gap: 2px;
+  height: 12px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel-3);
+}
+.stackedBreakdownBar > button {
+  flex-basis: 0;
+  min-width: 4px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.stackedBreakdownBar > button.inactive {
+  opacity: 0.35;
+}
+.stackedBreakdownBar > button:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+.stackedBreakdownEmpty {
+  flex: 1;
+}
+.stackedBreakdownInfo {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.stackedBreakdownInfo b {
+  color: var(--text);
+}
+.stackedBreakdownInfo span {
+  margin-left: auto;
+  font-weight: 800;
+  color: var(--text);
+}
+.dashboardMiniLegend {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  width: 100% !important;
+}
+.dashboardMiniLegend > p,
+.dashboardMiniLegend > div {
+  margin: 0 !important;
+  padding: 9px 0 !important;
+  border: 0 !important;
+  border-top: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ---------- Tabelas ---------- */
+.panel table th,
+.table table th,
+table thead th {
+  background: var(--table-head) !important;
+  color: var(--muted) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  border-bottom: 1px solid var(--line) !important;
+  padding-top: 11px !important;
+  padding-bottom: 11px !important;
+  white-space: nowrap;
+}
+.panel table td,
+.table table td {
+  border-bottom: 1px solid var(--line) !important;
+  border-top: 0 !important;
+  font-size: 14px !important;
+  color: var(--text);
+  background: transparent;
+}
+.panel table tbody tr:hover > td,
+.table table tbody tr:hover > td {
+  background: var(--hover) !important;
+}
+.panel table td small,
+.table table td small {
+  color: var(--muted) !important;
+  font-size: 12.5px !important;
+}
+.panel table tbody tr:last-child > td,
+.table table tbody tr:last-child > td {
+  border-bottom: 0 !important;
+}
+
+/* ---------- Botões ---------- */
+button.primary,
+.primary {
+  background: var(--accent) !important;
+  color: var(--on-accent) !important;
+  border: 1px solid transparent !important;
+  border-radius: var(--radius-control) !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+button.primary:hover,
+.primary:hover {
+  background: var(--accent-strong) !important;
+  filter: none !important;
+}
+button.primary svg {
+  color: currentColor !important;
+}
+.secondary,
+.iconButton,
+.filterButton,
+.overdueFilter,
+.calendarFilterButton,
+.clientRankingButton,
+.supplierRankingButton {
+  background: var(--panel) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-control) !important;
+  color: var(--text) !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+.secondary:hover,
+.iconButton:hover,
+.filterButton:hover,
+.overdueFilter:hover,
+.calendarFilterButton:hover,
+.clientRankingButton:hover,
+.supplierRankingButton:hover {
+  border-color: var(--line-strong) !important;
+  background: var(--hover) !important;
+  filter: none !important;
+}
+.iconButton {
+  border-radius: 8px !important;
+}
+.iconButton svg,
+.secondary svg,
+.filterButton svg {
+  color: var(--muted);
+}
+.iconButton.danger {
+  color: var(--danger) !important;
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--line)) !important;
+}
+.iconButton.danger svg {
+  color: var(--danger) !important;
+}
+
+/* ---------- Campos ---------- */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+select,
+textarea {
+  background: var(--input) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-control) !important;
+  color: var(--text) !important;
+  box-shadow: none !important;
+}
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):focus,
+select:focus,
+textarea:focus {
+  outline: none !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent) !important;
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted) !important;
+  opacity: 0.8;
+}
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--accent);
+}
+.salesSearch,
+.clientSearch {
+  border-radius: var(--radius-control) !important;
+}
+
+/* ---------- Seletor de mês e abas ---------- */
+.monthPicker {
+  background: var(--panel) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-control) !important;
+}
+.monthPicker b {
+  font-weight: 800 !important;
+  font-size: 14px !important;
+}
+.monthPicker button {
+  background: transparent !important;
+  color: var(--muted) !important;
+}
+.segmented,
+.groupRankingMetricButtons {
+  background: var(--panel) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-control) !important;
+  padding: 4px !important;
+  gap: 2px !important;
+}
+.segmented > button,
+.groupRankingMetricButtons > button {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  color: var(--muted) !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+.segmented > button.on,
+.segmented > button.active,
+.groupRankingMetricButtons > button.active,
+.groupRankingMetricButtons > button.on {
+  background: var(--text) !important;
+  color: var(--panel) !important;
+  box-shadow: none !important;
+}
+:root[data-theme="dark"] .segmented > button.on,
+:root[data-theme="dark"] .segmented > button.active,
+:root[data-theme="dark"] .groupRankingMetricButtons > button.active,
+:root[data-theme="dark"] .groupRankingMetricButtons > button.on {
+  background: var(--accent) !important;
+  color: var(--on-accent) !important;
+}
+
+/* ---------- Etiquetas ---------- */
+.saleBadge,
+.stockHealthBadge {
+  --tone: var(--muted);
+  display: inline-flex !important;
+  align-items: center;
+  padding: 3px 9px !important;
+  border: 0 !important;
+  border-radius: var(--radius-chip) !important;
+  background: color-mix(in srgb, var(--tone) 13%, transparent) !important;
+  color: var(--tone) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  white-space: nowrap;
+}
+.saleBadge.pago,
+.stockHealthBadge.healthy {
+  --tone: var(--success);
+}
+.saleBadge.aprazo,
+.stockHealthBadge.moderate {
+  --tone: var(--warning);
+}
+.saleBadge.cancelada,
+.stockHealthBadge.critical {
+  --tone: var(--danger);
+}
+.saleBadge.marketplace {
+  --tone: var(--chart-payment-marketplace, #8b6fe0);
+}
+.saleBadge.semcusto {
+  --tone: var(--cyan);
+}
+.shippingMethod.shippingMethod {
+  border-radius: var(--radius-chip) !important;
+}
+
+/* ---------- Diálogos ---------- */
+.overlay {
+  background: rgb(10 12 18 / 55%) !important;
+  backdrop-filter: blur(3px) !important;
+}
+:root[data-theme="dark"] .overlay {
+  background: rgb(0 0 0 / 70%) !important;
+}
+.overlay > form,
+.overlay > .systemDialog,
+.overlay .systemDialog,
+.overlay > .history {
+  background: var(--panel) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 24px 60px -20px rgb(0 0 0 / 35%) !important;
+}
+.overlay h2,
+.systemDialog h2 {
+  font-weight: 800 !important;
+  letter-spacing: -0.01em !important;
+}
+.appDialog footer button.primary {
+  color: var(--on-accent) !important;
+}
+.rowMenu {
+  border-radius: 12px !important;
+  border-color: var(--line) !important;
+}
+
+/* ---------- Avisos rápidos ---------- */
+.toast {
+  background: var(--text) !important;
+  color: var(--panel) !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  font-weight: 700 !important;
+}
+
+/* ---------- Tela de login (antes do tema carregar) ---------- */
+.authPage {
+  background: #f4f5f7 !important;
+}
+:root[data-theme="dark"] .authPage {
+  background: #0a0a0a !important;
+}
+.authCard {
+  background: #ffffff !important;
+  color: #141824 !important;
+  border: 1px solid #e6e8ec !important;
+  border-radius: 18px !important;
+  box-shadow: 0 24px 60px -30px rgb(20 24 36 / 30%) !important;
+  padding: 36px 32px !important;
+}
+:root[data-theme="dark"] .authCard {
+  background: #141414 !important;
+  color: #f4efe4 !important;
+  border-color: #272727 !important;
+}
+.authCard h1 {
+  font-size: 24px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  color: inherit !important;
+}
+.authCard small {
+  color: #5e6476 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-weight: 700 !important;
+}
+:root[data-theme="dark"] .authCard small {
+  color: #d4a73c !important;
+}
+.authCard label > span {
+  font-weight: 700 !important;
+  color: inherit !important;
+}
+.authCard input {
+  background: transparent !important;
+  color: inherit !important;
+  border: 1px solid #d5d9e0 !important;
+  border-radius: 10px !important;
+}
+:root[data-theme="dark"] .authCard input {
+  border-color: #383838 !important;
+}
+.authCard .primary {
+  min-height: 44px !important;
+  background: #2b50d6 !important;
+  color: #ffffff !important;
+}
+:root[data-theme="dark"] .authCard .primary {
+  background: #d4a73c !important;
+  color: #120d02 !important;
+}
+
+/* ---------- Celular ---------- */
+@media (max-width: 900px) {
+  .shell .content {
+    padding: 16px 14px 40px !important;
+  }
+  .themeToggleButton span {
+    display: none;
+  }
+}
+
+/* ---------- Movimento reduzido ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* ---------- Financeiro: tabela de margem por pedido ----------
+   Os detalhamentos "Ver custos" e "Ver despesas" agora cabem dentro da
+   própria coluna (antes o conteúdo transbordava para a coluna vizinha). */
+.profitOrdersTableWrap {
+  overflow-x: auto !important;
+}
+.profitOrdersTable {
+  min-width: 880px;
+  table-layout: fixed !important;
+}
+.profitOrdersTable th,
+.profitOrdersTable td {
+  vertical-align: top !important;
+  padding: 14px 12px !important;
+}
+.profitOrdersTable td.profitMargin,
+.profitOrdersTable td:nth-child(7) {
+  vertical-align: top !important;
+}
+.profitOrdersTable th:nth-child(1),
+.profitOrdersTable td:nth-child(1) { width: 8% !important; }
+.profitOrdersTable th:nth-child(2),
+.profitOrdersTable td:nth-child(2) { width: 10% !important; }
+.profitOrdersTable th:nth-child(3),
+.profitOrdersTable td:nth-child(3) { width: 24% !important; }
+.profitOrdersTable th:nth-child(4),
+.profitOrdersTable td:nth-child(4) { width: 24% !important; }
+.profitOrdersTable th:nth-child(5),
+.profitOrdersTable td:nth-child(5) { width: 11% !important; }
+.profitOrdersTable th:nth-child(6),
+.profitOrdersTable td:nth-child(6) { width: 11% !important; }
+.profitOrdersTable th:nth-child(7),
+.profitOrdersTable td:nth-child(7) { width: 12% !important; }
+.profitOrdersTable .expenseBreakdownDetails {
+  min-width: 0 !important;
+  max-width: 100%;
+  margin-top: 6px;
+}
+.profitOrdersTable .expenseBreakdownDetails summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  list-style: none;
+}
+.profitOrdersTable .expenseBreakdownDetails summary::-webkit-details-marker {
+  display: none;
+}
+.profitOrdersTable .expenseBreakdownDetails summary::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+.profitOrdersTable .expenseBreakdownDetails[open] summary::before {
+  transform: rotate(45deg);
+}
+.profitOrdersTable .expenseBreakdownSupplies,
+.profitCostDetails .expenseBreakdownSupplies {
+  min-width: 0 !important;
+  padding: 8px 0 8px 10px !important;
+  border-left: 2px solid var(--line-strong) !important;
+}
+.profitOrdersTable .profitPerfumeLine {
+  display: grid !important;
+  gap: 2px;
+  margin: 4px 0;
+  white-space: normal !important;
+}
+.profitOrdersTable .profitPerfumeLine strong {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  overflow-wrap: anywhere;
+}
+.profitOrdersTable .profitPerfumeLine span,
+.profitOrdersTable .expenseBreakdownSupplies > small {
+  font-size: 12px !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+.profitOrdersTable .expenseBreakdownLine,
+.profitOrdersTable .expenseBreakdownTotal {
+  font-size: 12px !important;
+  gap: 10px;
+  white-space: normal;
+}
+.profitOrdersTable .expenseBreakdownLine span,
+.profitOrdersTable .expenseBreakdownTotal span {
+  min-width: 0;
+}
+
+/* ---------- Clientes e fornecedores em tabela ---------- */
+.directoryTablePanel {
+  padding: 0 !important;
+  overflow: hidden;
+}
+.directoryTable {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+}
+.directoryTable th,
+.directoryTable td {
+  padding: 12px 16px !important;
+  text-align: left;
+  vertical-align: middle;
+}
+.directoryTable th:first-child,
+.directoryTable td:first-child {
+  padding-left: 20px !important;
+}
+.directoryTable .alignRight,
+.directoryTable th.alignRight {
+  text-align: right;
+}
+.directoryTable th.alignRight .sortButton {
+  margin-left: auto;
+}
+.directoryName {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.directoryName > i {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel-2));
+  color: var(--accent);
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 700;
+}
+.directoryName > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.directoryName b {
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.directoryName small {
+  color: var(--muted) !important;
+  font-size: 12px !important;
+}
+.mutedText {
+  color: var(--muted);
+}
+.directoryTable .leadSourceBadge {
+  display: inline-flex;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 0;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.directoryTable .leadSourceBadge.empty {
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.sortableTh {
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.sortButton:hover {
+  color: var(--text);
+  background: var(--panel-2);
+  filter: none;
+}
+.sortButton.active {
+  color: var(--text);
+}
+.sortButton svg {
+  width: 13px;
+  height: 13px;
+  opacity: 0.55;
+}
+.sortButton.active svg {
+  opacity: 1;
+  color: var(--accent);
+}
+.clientsTopRow,
+.suppliersTopRow {
+  align-items: stretch;
+}
+
+/* ---------- Configurações: aparência ---------- */
+.appearanceRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.appearanceRow > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+.appearanceRow b {
+  font-weight: 600;
+}
+.appearanceRow small {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.appearanceRowStacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+.themeChoice {
+  display: inline-flex !important;
+}
+.themeChoice > button {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px !important;
+}
+.themeChoice > button svg {
+  width: 15px;
+  height: 15px;
+}
+.accentChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.accentChoice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-weight: 600;
+  font-size: 13px;
+}
+.accentChoice i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 18%);
+}
+.accentChoice.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.menuZoomControl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---------- Modo noturno: contornos discretos ----------
+   O CSS antigo desenhava contornos brancos fortes em todo box escuro;
+   no modo noturno preto e dourado as bordas ficam em grafite. */
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .cards > div,
+:root[data-theme="dark"] .products > div,
+:root[data-theme="dark"] .clients > div,
+:root[data-theme="dark"] .overlay > form,
+:root[data-theme="dark"] .overlay > .systemDialog,
+:root[data-theme="dark"] .overlay > .history,
+:root[data-theme="dark"] .overlay .systemDialog,
+:root[data-theme="dark"] .costEditor,
+:root[data-theme="dark"] .clientHistory,
+:root[data-theme="dark"] .supplierHistory,
+:root[data-theme="dark"] .stockReportDialog,
+:root[data-theme="dark"] .productSalesHistoryDialog,
+:root[data-theme="dark"] .simplifiedPrepareDialog {
+  border: 1px solid var(--line) !important;
+  box-shadow: var(--card-shadow) !important;
+}
+:root[data-theme="dark"] .prepare > div,
+:root[data-theme="dark"] .shipping details,
+:root[data-theme="dark"] .forecastList > div,
+:root[data-theme="dark"] .brandProductsList > div,
+:root[data-theme="dark"] .brandProductsSummary > div,
+:root[data-theme="dark"] .quickQuoteCard,
+:root[data-theme="dark"] .saleSupplies,
+:root[data-theme="dark"] .saleSupplyList > div,
+:root[data-theme="dark"] .shippingCostBox,
+:root[data-theme="dark"] .installmentSummary,
+:root[data-theme="dark"] .costEditorSection,
+:root[data-theme="dark"] .clientHistoryStats > div,
+:root[data-theme="dark"] .supplierHistoryStats > div,
+:root[data-theme="dark"] .profitControl > .cards > div {
+  border: 1px solid var(--line) !important;
+}
+:root[data-theme="dark"] .shell > aside nav > button.on {
+  box-shadow: inset 2px 0 0 var(--accent) !important;
+}
+:root[data-theme="light"] .primary {
+  color: var(--on-accent) !important;
+}
+:root[data-theme="light"] main > header,
+:root[data-theme="dark"] main > header {
+  background: var(--panel) !important;
+}

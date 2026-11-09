@@ -314,84 +314,84 @@ type SystemPalette = {
   categoryDesigner: string;
 };
 
-// Visual "Atelier": superfícies grafite/ameixa e o dourado champanhe do logo como destaque.
+// Modelo B: tema claro (painel de negócios) e modo noturno preto e dourado, como o logo da DAF.
 const DARK_SYSTEM_PALETTE: SystemPalette = {
-  background: "#121017",
-  panel: "#1a1720",
-  panel2: "#211d29",
-  panel3: "#2a2533",
-  sidebar: "#0e0c12",
-  input: "#16131c",
-  hover: "#262130",
-  line: "#2f2a38",
-  lineStrong: "#423b4d",
-  text: "#f3efe7",
-  muted: "#a39cae",
-  accent: "#d0ab63",
-  accentStrong: "#b8934c",
-  gold: "#d0ab63",
-  success: "#4cb98a",
-  warning: "#e3a948",
-  danger: "#e2686e",
-  cyan: "#6fc3c9",
-  healthCritical: "#e2686e",
-  healthModerate: "#e3a948",
-  healthHealthy: "#4cb98a",
-  paymentPix: "#4cb98a",
-  paymentCard: "#7c9be3",
-  paymentInstallment: "#d0ab63",
-  paymentMarketplace: "#a283d9",
-  orderDirect: "#4cb98a",
-  orderTiktok: "#6fc3c9",
-  orderShopee: "#e8774f",
-  orderCancelled: "#5b5466",
-  categoryNiche: "#d0ab63",
-  categoryArabic: "#a283d9",
-  categoryDesigner: "#7c9be3",
+  background: "#0a0a0a",
+  panel: "#141414",
+  panel2: "#1a1a1a",
+  panel3: "#222222",
+  sidebar: "#000000",
+  input: "#101010",
+  hover: "#1f1f1f",
+  line: "#272727",
+  lineStrong: "#383838",
+  text: "#f4efe4",
+  muted: "#a39d91",
+  accent: "#d4a73c",
+  accentStrong: "#e2bb5a",
+  gold: "#d4a73c",
+  success: "#4fbf8a",
+  warning: "#e3b04b",
+  danger: "#ec6b62",
+  cyan: "#5fc4c0",
+  healthCritical: "#ec6b62",
+  healthModerate: "#e3b04b",
+  healthHealthy: "#4fbf8a",
+  paymentPix: "#d4a73c",
+  paymentCard: "#8a7b5a",
+  paymentInstallment: "#f0d79a",
+  paymentMarketplace: "#5fc4c0",
+  orderDirect: "#d4a73c",
+  orderTiktok: "#5fc4c0",
+  orderShopee: "#ec7a4f",
+  orderCancelled: "#4a4640",
+  categoryNiche: "#f0d79a",
+  categoryArabic: "#d4a73c",
+  categoryDesigner: "#8a7b5a",
 };
 
 const LIGHT_SYSTEM_PALETTE: SystemPalette = {
-  background: "#f4f3f6",
+  background: "#f4f5f7",
   panel: "#ffffff",
-  panel2: "#f8f7fa",
-  panel3: "#efedf2",
-  sidebar: "#141118",
-  input: "#fbfafc",
-  hover: "#f0eef3",
-  line: "#e4e0e9",
-  lineStrong: "#d1ccd8",
-  text: "#1d1923",
-  muted: "#6c6577",
-  accent: "#9b7531",
-  accentStrong: "#83611f",
-  gold: "#9b7531",
-  success: "#1f8a5e",
-  warning: "#a86e12",
-  danger: "#c2434e",
-  cyan: "#1d8a92",
-  healthCritical: "#c2434e",
-  healthModerate: "#c48a1c",
-  healthHealthy: "#1f8a5e",
-  paymentPix: "#1f8a5e",
-  paymentCard: "#4a6fc4",
-  paymentInstallment: "#b8893a",
-  paymentMarketplace: "#7a58b8",
-  orderDirect: "#1f8a5e",
-  orderTiktok: "#1d8a92",
-  orderShopee: "#d2602f",
-  orderCancelled: "#9a93a3",
-  categoryNiche: "#b8893a",
-  categoryArabic: "#7a58b8",
-  categoryDesigner: "#4a6fc4",
+  panel2: "#f8f9fb",
+  panel3: "#eef0f3",
+  sidebar: "#ffffff",
+  input: "#ffffff",
+  hover: "#f0f2f6",
+  line: "#e6e8ec",
+  lineStrong: "#d5d9e0",
+  text: "#141824",
+  muted: "#5e6476",
+  accent: "#2b50d6",
+  accentStrong: "#1d3aa8",
+  gold: "#2b50d6",
+  success: "#067647",
+  warning: "#b7791f",
+  danger: "#b42318",
+  cyan: "#0f6f6a",
+  healthCritical: "#d64545",
+  healthModerate: "#e0a100",
+  healthHealthy: "#12a150",
+  paymentPix: "#2b50d6",
+  paymentCard: "#9fb3ee",
+  paymentInstallment: "#e0a100",
+  paymentMarketplace: "#8b6fe0",
+  orderDirect: "#2b50d6",
+  orderTiktok: "#1aa7a1",
+  orderShopee: "#ee6a3c",
+  orderCancelled: "#b6bccb",
+  categoryNiche: "#8b6fe0",
+  categoryArabic: "#b8862b",
+  categoryDesigner: "#2b50d6",
 };
 
-// Cores de destaque oferecidas em Configurações (tema escuro / tema claro).
+// Cores de destaque oferecidas em Configurações (modo noturno / modo claro).
 const ACCENT_PRESETS = [
-  { id: "champagne", label: "Champanhe", dark: "#d0ab63", light: "#9b7531" },
-  { id: "rose", label: "Rosé", dark: "#d98e9c", light: "#a8505f" },
-  { id: "amethyst", label: "Ametista", dark: "#a98ce0", light: "#6b4fae" },
-  { id: "sage", label: "Sálvia", dark: "#8fbf9f", light: "#3f7a55" },
-  { id: "ocean", label: "Oceano", dark: "#7fb3e0", light: "#2f69a3" },
+  { id: "daf", label: "Padrão DAF", dark: "#d4a73c", light: "#2b50d6" },
+  { id: "gold", label: "Dourado", dark: "#d4a73c", light: "#9a7426" },
+  { id: "emerald", label: "Esmeralda", dark: "#4fbf8a", light: "#0f7a52" },
+  { id: "violet", label: "Violeta", dark: "#a78bfa", light: "#6d4fd1" },
+  { id: "graphite", label: "Grafite", dark: "#d9d4c7", light: "#141824" },
 ] as const;
 type AccentPresetId = (typeof ACCENT_PRESETS)[number]["id"];
 
@@ -404,8 +404,13 @@ function shadeHex(hex: string, amount: number) {
   return "#" + next.map((channel) => channel.toString(16).padStart(2, "0")).join("");
 }
 
-function paletteWithAccent(base: SystemPalette, accent: string): SystemPalette {
-  return { ...base, accent, gold: accent, accentStrong: shadeHex(accent, -0.14) };
+function paletteWithAccent(base: SystemPalette, accent: string, darkMode = false): SystemPalette {
+  return {
+    ...base,
+    accent,
+    gold: accent,
+    accentStrong: shadeHex(accent, darkMode ? 0.18 : -0.18),
+  };
 }
 
 type LocalUiSettings = {
@@ -421,7 +426,7 @@ type LocalUiSettings = {
 
 // Versão das preferências visuais. Ao mudar o visual base, preferências antigas
 // de cor deixam de valer e o sistema volta para o padrão novo.
-const LOCAL_UI_VERSION = 2;
+const LOCAL_UI_VERSION = 3;
 const DEFAULT_PANEL_LABEL = "DAF Splits";
 const LEGACY_PANEL_LABELS = ["PAINEL ADMINISTRATIVO", "Painel administrativo"];
 
@@ -436,7 +441,7 @@ function buildLocalUiSettings(
     menuOrder: values.menuOrder ? [...values.menuOrder] : [...DEFAULT_MENU_ORDER],
     menuZoom: values.menuZoom ?? 100,
     accentId: accent.id,
-    darkPalette: paletteWithAccent(DARK_SYSTEM_PALETTE, accent.dark),
+    darkPalette: paletteWithAccent(DARK_SYSTEM_PALETTE, accent.dark, true),
     lightPalette: paletteWithAccent(LIGHT_SYSTEM_PALETTE, accent.light),
   };
 }
@@ -943,15 +948,15 @@ const BRAZIL_REGION_STATES: Record<Exclude<BrazilRegion, "Não informado">, stri
 };
 
 const REGION_STATE_COLORS = [
-  "#d0ab63",
-  "#6fc3c9",
-  "#4cb98a",
-  "#a283d9",
-  "#7c9be3",
-  "#e2686e",
-  "#c9b28f",
-  "#c78bb8",
-  "#9bb86a",
+  "#2b50d6",
+  "#1aa7a1",
+  "#d4a73c",
+  "#8b6fe0",
+  "#ee6a3c",
+  "#12a150",
+  "#9fb3ee",
+  "#c77dba",
+  "#7a8091",
 ];
 const isMarketplaceSale = (sale: V) =>
   sale.channel === "marketplace" || Boolean(sale.marketplace);
@@ -1321,9 +1326,9 @@ function System({ session }: { session: Session }) {
       if (typeof window === "undefined") return "dark";
       const stored = optionalLocalGet("daf-theme");
       if (stored === "light" || stored === "dark") return stored;
-      return window.matchMedia?.("(prefers-color-scheme: light)").matches
-        ? "light"
-        : "dark";
+      return window.matchMedia?.("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
     }),
     [modal, setModal] = useState<Modal>(null),
     [history, setHistory] = useState(0),
@@ -1960,6 +1965,16 @@ const action =
             <h1>{pageTitle}</h1>
           </div>
           <div className="headerActions">
+            <button
+              type="button"
+              className="secondary themeToggleButton"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"}
+              title={theme === "dark" ? "Ativar modo claro" : "Ativar modo noturno"}
+            >
+              {theme === "dark" ? <Sun /> : <Moon />}
+              <span>{theme === "dark" ? "Modo claro" : "Modo noturno"}</span>
+            </button>
             {page === "finance" ? (
               <button
                 className="secondary revenueHistoryButton"
@@ -2899,7 +2914,7 @@ function SettingsPage({
                 className={theme === "dark" ? "on" : ""}
                 onClick={() => setTheme("dark")}
               >
-                <Moon /> Escuro
+                <Moon /> Noturno
               </button>
               <button
                 type="button"
@@ -2916,7 +2931,7 @@ function SettingsPage({
           <div className="appearanceRow appearanceRowStacked">
             <div>
               <b>Cor de destaque</b>
-              <small>Usada em botões, seleção e indicadores.</small>
+              <small>Usada em botões, seleção e indicadores. "Padrão DAF" é azul no modo claro e dourado no noturno.</small>
             </div>
             <div className="accentChoices" role="radiogroup" aria-label="Cor de destaque">
               {ACCENT_PRESETS.map((preset) => {
@@ -3143,76 +3158,51 @@ function InteractiveDonutChart({
     };
   });
 
+  // Modelo B: o antigo gráfico de rosca vira um total + barra empilhada horizontal.
   return (
-    <div className={`interactiveSvgDonut ${className}`}>
-      <svg
-        viewBox="0 0 120 120"
-        role="img"
-        aria-label="Gráfico interativo. Passe o mouse ou toque em uma cor para ver a porcentagem."
+    <div className={`stackedBreakdown ${className}`}>
+      <div className="stackedBreakdownTotal">
+        <small>{centerTop}</small>
+        <b>{centerBottom}</b>
+      </div>
+      <div
+        className="stackedBreakdownBar"
+        role="group"
+        aria-label="Distribuição. Passe o mouse ou toque em uma cor para ver a porcentagem."
         onMouseLeave={() => setHovered(null)}
       >
         {total ? (
           slices.map((slice) =>
             slice.value > 0 ? (
-              <g key={slice.label}>
-                <path
-                  d={donutArcPath(slice.startAngle, slice.endAngle)}
-                  fill={slice.color}
-                  className={
-                    "interactiveDonutSlice" +
-                    (active === slice.index ? " active" : "") +
-                    (active !== null && active !== slice.index
-                      ? " inactive"
-                      : "")
-                  }
-                  transform={`translate(${slice.dx} ${slice.dy})`}
-                  onMouseEnter={() => setHovered(slice.index)}
-                  onClick={() =>
-                    setSelected((current) =>
-                      current === slice.index ? null : slice.index,
-                    )
-                  }
-                />
-                {active === slice.index ? (
-                  <text
-                    x={slice.labelPoint.x + slice.dx}
-                    y={slice.labelPoint.y + slice.dy}
-                    className="donutSlicePercentage"
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    pointerEvents="none"
-                  >
-                    {Math.round(slice.share * 100)}%
-                  </text>
-                ) : null}
-              </g>
+              <button
+                type="button"
+                key={slice.label}
+                style={{ flexGrow: slice.share, background: slice.color }}
+                className={
+                  (active === slice.index ? "active" : "") +
+                  (active !== null && active !== slice.index ? " inactive" : "")
+                }
+                aria-label={`${slice.label}: ${Math.round(slice.share * 100)}%`}
+                onMouseEnter={() => setHovered(slice.index)}
+                onFocus={() => setHovered(slice.index)}
+                onBlur={() => setHovered(null)}
+                onClick={() =>
+                  setSelected((current) =>
+                    current === slice.index ? null : slice.index,
+                  )
+                }
+              />
             ) : null,
           )
         ) : (
-          <circle cx="60" cy="60" r="41" className="interactiveDonutEmpty" />
+          <span className="stackedBreakdownEmpty" />
         )}
-        <circle cx="60" cy="60" r="29" className="interactiveDonutHole" />
-        <text
-          x="60"
-          y="56"
-          textAnchor="middle"
-          className="interactiveDonutCenterTop"
-        >
-          {centerTop}
-        </text>
-        <text
-          x="60"
-          y="69"
-          textAnchor="middle"
-          className="interactiveDonutCenterBottom"
-        >
-          {centerBottom}
-        </text>
-      </svg>
+      </div>
       {activeSegment ? (
-        <div className="interactiveDonutInfo" role="status">
+        <div className="stackedBreakdownInfo" role="status">
           <small>{infoPrefix}</small>
           <b>{activeSegment.label}</b>
+          <span>{Math.round((Math.max(0, activeSegment.value) / (total || 1)) * 100)}%</span>
         </div>
       ) : null}
     </div>
@@ -4692,20 +4682,20 @@ function Dash({ d, set }: { d: D; set: any }) {
         <OrderSummaryChart sales={periodSales} />
         <PaymentBreakdown d={d} sales={activeSales} compact />
         <CategoryChart d={d} sales={activeSales} />
+      </div>
+
+      <div className="dashboardRegionGrid">
         <RegionChart d={d} set={set} sales={activeSales} />
+        <LeadRanking d={d} start={rangeStart} end={rangeEnd} />
       </div>
 
       <div className="dashboardRankingGrid">
-        <LeadRanking d={d} start={rangeStart} end={rangeEnd} />
         <PartnerRanking d={d} start={rangeStart} end={rangeEnd} />
-      </div>
-
       <div className="panel dashboardStockSnapshot">
         <div className="dashboardStockSnapshotHead">
           <div>
-            <span className="eyebrow">Estoque operacional</span>
-            <h2>Relatório rápido de insumos</h2>
-            <p>Itens escolhidos para acompanhamento diário.</p>
+            <h2>Insumos</h2>
+            <p>Nível de cada item em relação à referência de reposição.</p>
           </div>
           <button
             type="button"
@@ -4778,14 +4768,14 @@ function Dash({ d, set }: { d: D; set: any }) {
           ) : null}
         </div>
       </div>
+      </div>
 
       {stockReportEditOpen ? (
         <div className="overlay">
           <div className="systemDialog dashboardStockEditor">
             <header>
               <div>
-                <small>VISÃO GERAL</small>
-                <h2>Editar relatório de estoque</h2>
+                <h2>Escolher insumos da visão geral</h2>
                 <p>Escolha quais insumos deseja acompanhar no dashboard.</p>
               </div>
               <button type="button" onClick={() => setStockReportEditOpen(false)}>
