@@ -7,9 +7,11 @@ import { FabioStateWriter } from "./crm/fabio-persistence";
 import { LocalRecovery, optionalLocalGet, optionalLocalSet, optionalLocalRemove } from "./crm/local-recovery";
 import { CRMFeedPanel } from "./crm/CRMFeedPanel";
 import { SortableHeader, compareValues, useTableSort } from "./ui/SortableHeader";
+import { askConfirm } from "./ui/dialogs";
 import {
   LayoutDashboard,
   ShoppingBag,
+  UserRound,
   ClipboardCheck,
   Box,
   ShoppingCart,
@@ -178,6 +180,8 @@ type V = SourceIdentity & {
     | "Shopee";
   accumulatingDecants?: boolean;
   preparationStatus?: "preparing" | "accumulating" | "waiting";
+  // Índices dos itens (decantes) já feitos durante o preparo do pedido.
+  preparedItems?: number[];
   mandaBem?: {
     envioId?: string;
     service?: string;
@@ -324,9 +328,10 @@ const DARK_SYSTEM_PALETTE: SystemPalette = {
   lineStrong: "#354256",
   text: "#f4f7fb",
   muted: "#8c98aa",
-  accent: "#7186ff",
-  accentStrong: "#5b6ef5",
-  gold: "#7186ff",
+  // Modo noturno: destaque no dourado da identidade visual (antes era azul).
+  accent: "#d5aa3d",
+  accentStrong: "#b8902c",
+  gold: "#d5aa3d",
   success: "#32bf8a",
   warning: "#f2b84b",
   danger: "#ef6670",
@@ -432,6 +437,19 @@ function readLocalUiSettings(): LocalUiSettings {
         : {}),
       ...(legacyGold ? { gold: legacyGold } : {}),
     };
+    // Quem ainda usa o azul antigo (padrão anterior) no modo noturno passa a
+    // usar o dourado da marca. Cores escolhidas manualmente são mantidas.
+    const legacyDarkAccents = ["#7186ff", "#5b6ef5"];
+    if (legacyDarkAccents.includes(String(darkPalette.accent).toLowerCase())) {
+      darkPalette.accent = DARK_SYSTEM_PALETTE.accent;
+      darkPalette.gold = DARK_SYSTEM_PALETTE.gold;
+    }
+    if (legacyDarkAccents.includes(String(darkPalette.accentStrong).toLowerCase())) {
+      darkPalette.accentStrong = DARK_SYSTEM_PALETTE.accentStrong;
+    }
+    if (String(darkPalette.gold).toLowerCase() === "#7186ff") {
+      darkPalette.gold = DARK_SYSTEM_PALETTE.gold;
+    }
     const lightPalette = {
       ...LIGHT_SYSTEM_PALETTE,
       ...(stored?.lightPalette && typeof stored.lightPalette === "object"
@@ -1311,6 +1329,7 @@ function System({ session }: { session: Session }) {
     [supplierHistory, setSupplierHistory] = useState(""),
     [toast, setToast] = useState("");
   const modalRef = useRef(modal); modalRef.current = modal;
+  const [saleTypeChooserOpen, setSaleTypeChooserOpen] = useState(false);
   const [stockMenuOpen, setStockMenuOpen] = useState(false);
   const [registrationsMenuOpen, setRegistrationsMenuOpen] = useState(false);
   const [financeMenuOpen, setFinanceMenuOpen] = useState(false);
@@ -1948,15 +1967,6 @@ const action =
                 <Printer /> Capturar relatório (PNG)
               </button>
             ) : null}
-            {page === "sales" ? (
-              <button
-                className="secondary marketplaceButton"
-                disabled={editingBlocked}
-                onClick={() => setModal({ type: "marketplace" })}
-              >
-                <ShoppingBag /> Marketplace
-              </button>
-            ) : null}
             {page === "stock" ? (
               <button
                 className="secondary stockReportHeaderButton"
@@ -1969,7 +1979,11 @@ const action =
               <button
                 className="primary"
                 disabled={editingBlocked}
-                onClick={() => setModal({ type: action[1] })}
+                onClick={() =>
+                  action[1] === "sale"
+                    ? setSaleTypeChooserOpen(true)
+                    : setModal({ type: action[1] })
+                }
               >
                 <Plus />
                 {action[0]}
@@ -1977,6 +1991,63 @@ const action =
             ) : null}
           </div>
         </header>
+        {saleTypeChooserOpen ? (
+          <div
+            className="overlay saleTypeChooserOverlay"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setSaleTypeChooserOpen(false);
+            }}
+          >
+            <div
+              className="systemDialog saleTypeChooser"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") setSaleTypeChooserOpen(false);
+              }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="sale-type-chooser-title"
+            >
+              <header>
+                <div>
+                  <h2 id="sale-type-chooser-title">Novo lançamento</h2>
+                  <p>Esta venda é direta ou veio de um marketplace?</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSaleTypeChooserOpen(false)}
+                  aria-label="Fechar"
+                >
+                  <X />
+                </button>
+              </header>
+              <div className="saleTypeOptions">
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => {
+                    setSaleTypeChooserOpen(false);
+                    setModal({ type: "sale" });
+                  }}
+                >
+                  <UserRound />
+                  <b>Venda direta</b>
+                  <small>Cliente da DAF, com pagamento e entrega combinados por vocês.</small>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSaleTypeChooserOpen(false);
+                    setModal({ type: "marketplace" });
+                  }}
+                >
+                  <ShoppingBag />
+                  <b>Venda de marketplace</b>
+                  <small>Pedido do TikTok Shop ou da Shopee, com taxa e repasse da plataforma.</small>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <section className={"content contentPage-" + page}>
           {saveNotice && <div className="card" role="alert"><p>{saveNotice}</p><button onClick={exportDraft}>Exportar rascunho</button><button onClick={loadCurrent}>Carregar estado salvo</button></div>}
           <div inert={editingBlocked} style={{display:"contents"}}>
@@ -5299,10 +5370,46 @@ function Prepare({
     tab === "done"
       ? doneGroups
       : pendingGroups.filter((group) =>
-          tab === "accumulating"
-            ? group.status === "accumulating"
-            : group.status !== "accumulating",
+          tab === "waiting"
+            ? group.status === "accumulating" || group.status === "waiting"
+            : group.status === "preparing",
         );
+  const waitingCount = pendingGroups.filter(
+    (group) => group.status === "accumulating" || group.status === "waiting",
+  ).length;
+  const preparingCount = pendingGroups.filter(
+    (group) => group.status === "preparing",
+  ).length;
+
+  async function reopenGroup(group: PreparationGroup) {
+    const orders = group.sales.map((sale) => "#" + orderNo(sale.id)).join(", ");
+    const confirmed = await askConfirm(
+      `Tem certeza que deseja reverter ${group.sales.length > 1 ? "os pedidos" : "o pedido"} ${orders} de ${group.customer}? ${group.sales.length > 1 ? "Eles voltam" : "Ele volta"} para A preparar e sai${group.sales.length > 1 ? "m" : ""} da lista de envios.`,
+      {
+        title: "Reverter pedido finalizado",
+        confirmLabel: "Sim, reverter",
+        cancelLabel: "Manter finalizado",
+        danger: true,
+      },
+    );
+    if (confirmed) toggleGroup(group);
+  }
+
+  function toggleItemDone(saleId: number, itemIndex: number) {
+    set((state: D) => ({
+      ...state,
+      sales: state.sales.map((sale) => {
+        if (sale.id !== saleId) return sale;
+        const current = new Set(sale.preparedItems || []);
+        if (current.has(itemIndex)) current.delete(itemIndex);
+        else current.add(itemIndex);
+        return {
+          ...sale,
+          preparedItems: Array.from(current).sort((a, b) => a - b),
+        };
+      }),
+    }));
+  }
 
   function toggleGroup(group: PreparationGroup) {
     const saleIds = new Set(group.sales.map((sale) => sale.id));
@@ -5439,13 +5546,13 @@ function Prepare({
           className={tab === "pending" ? "active" : ""}
           onClick={() => setTab("pending")}
         >
-          A preparar
+          A preparar{preparingCount ? ` (${preparingCount})` : ""}
         </button>
         <button
-          className={tab === "accumulating" ? "active" : ""}
-          onClick={() => setTab("accumulating")}
+          className={tab === "waiting" ? "active" : ""}
+          onClick={() => setTab("waiting")}
         >
-          Vai acumular
+          Em espera{waitingCount ? ` (${waitingCount})` : ""}
         </button>
         <button
           className={tab === "done" ? "active" : ""}
@@ -5461,6 +5568,11 @@ function Prepare({
             sale.items.map((item) => ({ sale, item })),
           );
           const done = group.sales.every((sale) => sale.prepared);
+          // Pedidos com mais de um decante permitem marcar cada um ao ser feito.
+          const itemChecklist = !done && items.length > 1;
+          const itemsDone = items.filter(({ sale, item }) =>
+            (sale.preparedItems || []).includes(sale.items.indexOf(item)),
+          ).length;
           const shippingMethods = Array.from(
             new Set(group.sales.map(saleShippingLabel).filter(Boolean)),
           );
@@ -5470,7 +5582,7 @@ function Prepare({
                 className="checkButton"
                 aria-label={done ? "Reabrir pedido" : "Finalizar pedido"}
                 onClick={() =>
-                  done ? toggleGroup(group) : prepareGroup(group)
+                  done ? void reopenGroup(group) : prepareGroup(group)
                 }
               >
                 {done ? <Check /> : null}
@@ -5485,12 +5597,31 @@ function Prepare({
                       .join(" · ")}
                   </small>
                 ) : null}
-                {items.map(({ sale, item }, index) => (
-                  <small key={`${sale.id}-${index}`}>
-                    {d.products.find((p) => p.id === item.productId)?.name} —{" "}
-                    {item.ml} ml{item.isApc ? " · APC" : ""}
+                {itemChecklist ? (
+                  <small className="prepareItemProgress">
+                    {itemsDone} de {items.length} decantes feitos
                   </small>
-                ))}
+                ) : null}
+                {items.map(({ sale, item }, index) => {
+                  const label = `${d.products.find((p) => p.id === item.productId)?.name || "Perfume"} — ${item.ml} ml${item.isApc ? " · APC" : ""}`;
+                  if (!itemChecklist)
+                    return <small key={`${sale.id}-${index}`}>{label}</small>;
+                  const itemIndex = sale.items.indexOf(item);
+                  const itemDone = (sale.preparedItems || []).includes(itemIndex);
+                  return (
+                    <label
+                      key={`${sale.id}-${index}`}
+                      className={"prepareItemCheck" + (itemDone ? " itemDone" : "")}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={itemDone}
+                        onChange={() => toggleItemDone(sale.id, itemIndex)}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  );
+                })}
               </span>
               <div className="prepareBadges">
                 {shippingMethods.length ? (
