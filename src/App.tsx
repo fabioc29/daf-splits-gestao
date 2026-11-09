@@ -2812,7 +2812,7 @@ function Auth() {
     <div className="authPage">
       <form className="authCard" onSubmit={submit}>
         <img src={LOGO} alt="DAF Splits" />
-        <small>SISTEMA DE GESTÃO</small>
+        <small>Sistema de gestão</small>
         <h1>Entrar no sistema</h1>
         <label>
           <span>E-mail</span>
