@@ -14736,9 +14736,11 @@ main > header {
 }
 .tableActions.rowActions .iconButton {
   min-height: 34px;
+  padding: 0 11px;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
-.tableActions.rowActions .iconButton:not(:has(> :not(svg))) {
+.tableActions.rowActions .iconButton.iconOnly {
   width: 34px;
   min-width: 34px;
   padding: 0;
@@ -15062,4 +15064,11 @@ aside > img.sidebarLogo,
   aspect-ratio: 308 / 166;
   object-fit: contain;
   border-radius: 12px;
+}
+.directoryTable td.noWrap,
+.directoryTable .leadSourceBadge {
+  white-space: nowrap;
+}
+.profitOrdersTable td:nth-child(7) .iconButton {
+  white-space: nowrap;
 }

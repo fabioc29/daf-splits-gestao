@@ -9806,7 +9806,7 @@ function Clients({
       const { key, direction } = clientSort.sort;
       const value = (item: typeof a) =>
         key === "name"
-          ? item.client.name
+          ? item.client.name.trim()
           : key === "source"
             ? item.client.leadSource || "~"
             : key === "orders"
@@ -9816,7 +9816,7 @@ function Clients({
                 : item.last || "0000";
       return (
         compareValues(value(a), value(b), direction) ||
-        a.client.name.localeCompare(b.client.name, "pt-BR")
+        a.client.name.trim().localeCompare(b.client.name.trim(), "pt-BR")
       );
     });
 
@@ -9954,7 +9954,7 @@ function Clients({
                       </div>
                     </div>
                   </td>
-                  <td>
+                  <td className="noWrap">
                     {c.phone && c.phone !== "n/a" ? c.phone : <span className="mutedText">Sem telefone</span>}
                   </td>
                   <td>
@@ -9971,10 +9971,10 @@ function Clients({
                         <ReceiptText />
                         Histórico
                       </button>
-                      <button className="iconButton" onClick={() => edit(c.id)} aria-label={`Editar ${c.name}`} title="Editar">
+                      <button className="iconButton iconOnly" onClick={() => edit(c.id)} aria-label={`Editar ${c.name}`} title="Editar">
                         <Pencil />
                       </button>
-                      <button className="iconButton danger" onClick={() => remove(c.id)} aria-label={`Excluir ${c.name}`} title="Excluir">
+                      <button className="iconButton danger iconOnly" onClick={() => remove(c.id)} aria-label={`Excluir ${c.name}`} title="Excluir">
                         <Trash2 />
                       </button>
                     </div>
@@ -10093,7 +10093,7 @@ function Suppliers({
       const { key, direction } = supplierSort.sort;
       const value = (item: typeof a) =>
         key === "name"
-          ? item.name
+          ? item.name.trim()
           : key === "type"
             ? item.type || "~"
             : key === "purchases"
@@ -10183,10 +10183,10 @@ function Suppliers({
                         <ReceiptText />
                         Histórico
                       </button>
-                      <button className="iconButton" onClick={() => edit(index)} aria-label={`Editar ${name}`} title="Editar">
+                      <button className="iconButton iconOnly" onClick={() => edit(index)} aria-label={`Editar ${name}`} title="Editar">
                         <Pencil />
                       </button>
-                      <button className="iconButton danger" onClick={() => remove(index, name)} aria-label={`Excluir ${name}`} title="Excluir">
+                      <button className="iconButton danger iconOnly" onClick={() => remove(index, name)} aria-label={`Excluir ${name}`} title="Excluir">
                         <Trash2 />
                       </button>
                     </div>
