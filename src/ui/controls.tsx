@@ -465,6 +465,8 @@ export function DateInput({
   const [inner, setInner] = useState(defaultValue || "");
   const current = controlled ? value || "" : inner;
   const [text, setText] = useState(isoToBr(current));
+  const latest = useRef({ text, current });
+  latest.current = { text, current };
   const [open, setOpen] = useState(false);
   const initialView = current || localTodayIso();
   const [view, setView] = useState({ year: Number(initialView.slice(0, 4)), month: Number(initialView.slice(5, 7)) - 1 });
@@ -542,7 +544,8 @@ export function DateInput({
         onBlur={() => {
           // Texto incompleto volta para a última data válida.
           window.setTimeout(() => {
-            if (!brToIso(text)) setText(isoToBr(current));
+            const { text: typed, current: saved } = latest.current;
+            if (!brToIso(typed)) setText(isoToBr(saved));
           }, 0);
         }}
         onKeyDown={(event) => {

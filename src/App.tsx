@@ -4184,7 +4184,7 @@ function RegionChart({
                   <small>{percentage}%</small>
                 </span>
                 <b>{brl(value)}</b>
-                {empty && !selectedRegion ? <span className="regionLegendChevronSpace" /> : null}
+                {empty && !selectedRegion ? <em className="regionLegendChevronSpace" aria-hidden="true" /> : null}
               </div>
             ) : (
               <button
@@ -8440,7 +8440,8 @@ function PartnerEquityPie({ partners }: { partners: TeamMember[] }) {
     }))
     .filter((slice) => slice.value > 0);
   const assigned = slices.reduce((sum, slice) => sum + slice.value, 0);
-  if (assigned < 99.99) {
+  // Diferenças de arredondamento (ex.: 3 × 31,66% + 5% = 99,98%) não viram fatia.
+  if (assigned < 99.5) {
     slices.push({
       key: "free",
       label: "Não distribuído",

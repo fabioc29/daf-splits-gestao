@@ -15389,9 +15389,19 @@ aside > img.sidebarLogo,
   --sys-scroll-thumb: color-mix(in srgb, var(--muted) 45%, transparent);
   --sys-scroll-thumb-hover: color-mix(in srgb, var(--accent) 70%, transparent);
 }
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--sys-scroll-thumb) transparent;
+/* Chrome/Edge/Safari: as propriedades padrão desligam o estilo ::-webkit-scrollbar
+   (e mostram as setas do Windows), então nelas usamos só o estilo próprio. */
+@supports selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: auto !important;
+    scrollbar-color: auto !important;
+  }
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--sys-scroll-thumb) transparent;
+  }
 }
 *::-webkit-scrollbar {
   width: 10px;
@@ -16213,4 +16223,18 @@ select.sysInvalid {
   .partnerEquityPie {
     max-width: 200px;
   }
+}
+.partnerEquityPanel .dashboardMiniHeader h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.partnerEquityPanel .dashboardMiniHeader p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+/* Avisos e confirmações do sistema centralizados na tela */
+.overlay.appDialogOverlay {
+  align-items: center !important;
+  place-items: center !important;
 }
