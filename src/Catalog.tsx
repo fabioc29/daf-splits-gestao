@@ -15,6 +15,7 @@ import {
   Search,
   X,
 } from "lucide-react";
+import { ColorInput } from "./ui/controls";
 import "./catalog.css";
 
 export type CatalogItem = {
@@ -850,8 +851,7 @@ function CatalogColorField({
     <label className="catalogColorField">
       <span>{label}</span>
       <div>
-        <input
-          type="color"
+        <ColorInput
           value={normalizeHex(value, "#000000")}
           onChange={(event) => onChange(event.target.value)}
           aria-label={`Selecionar cor de ${label}`}

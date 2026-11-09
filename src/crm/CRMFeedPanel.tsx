@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import { askConfirm } from '../ui/dialogs';
 import {supabase} from '../supabase';
 import {crmProjection} from './projection';
 import {feedErrorMessage} from './feed-status';
@@ -40,7 +41,7 @@ export function CRMFeedPanel({userId,synced}:{userId:string;synced:boolean}) {
   <hr/><h3>Conexão de leitura automática</h3>
   <p>Após instalar a função no banco autorizado, gere uma chave exclusiva para o CRM. Ela aparece somente nesta sessão e deve ficar no servidor.</p>
   <button disabled={!!busy} onClick={()=>setConfirm(true)}>Criar / substituir chave de leitura</button>
-  <button disabled={!!busy} onClick={()=>{if(window.confirm('Revogar a leitura do CRM? O CRM manterá a última consulta, sem novas atualizações.'))run('revoke');}}>{busy==='revoke'?'Revogando…':'Revogar acesso'}</button>
+  <button disabled={!!busy} onClick={async()=>{if((await askConfirm('Revogar a leitura do CRM? O CRM manterá a última consulta, sem novas atualizações.')))run('revoke');}}>{busy==='revoke'?'Revogando…':'Revogar acesso'}</button>
   {confirm&&<div role="alert"><p>Uma nova chave invalida a anterior. Continuar?</p><button disabled={!!busy||!synced} onClick={()=>run('issue')}>{busy==='issue'?'Gerando…':'Gerar chave'}</button><button disabled={!!busy} onClick={()=>setConfirm(false)}>Cancelar</button></div>}
   {token&&<label>Chave exibida somente nesta sessão<input type="password" value={token} readOnly autoComplete="off" spellCheck={false}/><button onClick={async()=>{try{await navigator.clipboard.writeText(token);setFailed(false);setNotice('Chave copiada.');}catch{setFailed(true);setNotice('Não foi possível copiar. Selecione a chave no campo.');}}}>Copiar chave</button><button onClick={()=>setToken('')}>Ocultar e limpar</button></label>}
   {notice&&<p role={failed?'alert':'status'}>{notice}</p>}
