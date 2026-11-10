@@ -11853,32 +11853,40 @@ function drawPlaqueLeaf(
   ctx.restore();
 }
 
-const APPROVED_ACHIEVEMENT_PLAQUES: Record<string, string> = {
-  "revenueHistory:100000": "/achievements/plaques/faturados-100k.png",
-  "revenueHistory:200000": "/achievements/plaques/faturados-200k.png",
-  "revenueHistory:350000": "/achievements/plaques/faturados-350k.png",
-  "revenueHistory:500000": "/achievements/plaques/faturados-500k.png",
-  "revenueHistory:800000": "/achievements/plaques/faturados-800k.png",
-  "revenueHistory:1000000": "/achievements/plaques/faturados-1m.png",
-  "ordersHistory:1000": "/achievements/plaques/pedidos-1000.png",
-  "ordersHistory:2000": "/achievements/plaques/pedidos-2000.png",
-  "ordersHistory:3500": "/achievements/plaques/pedidos-3500.png",
-  "ordersHistory:5000": "/achievements/plaques/pedidos-5000.png",
+type AchievementPlaque = { file: string; frame: "30x40" | "25x30" };
+
+// Placas de download (arte para emoldurar). As metas mais difíceis vão em
+// quadros 30x40 cm (proporção 3:4); as demais em quadros 25x30 cm (5:6).
+const APPROVED_ACHIEVEMENT_PLAQUES: Record<string, AchievementPlaque> = {
+  "revenueHistory:100000": { file: "/achievements/plaques/faturados-100k.png", frame: "25x30" },
+  "revenueHistory:200000": { file: "/achievements/plaques/faturados-200k.png", frame: "25x30" },
+  "revenueHistory:350000": { file: "/achievements/plaques/faturados-350k.png", frame: "25x30" },
+  "revenueHistory:500000": { file: "/achievements/plaques/faturados-500k.png", frame: "30x40" },
+  "revenueHistory:800000": { file: "/achievements/plaques/faturados-800k.png", frame: "30x40" },
+  "revenueHistory:1000000": { file: "/achievements/plaques/faturados-1m.png", frame: "30x40" },
+  "ordersHistory:1000": { file: "/achievements/plaques/pedidos-1000.png", frame: "25x30" },
+  "ordersHistory:2000": { file: "/achievements/plaques/pedidos-2000.png", frame: "25x30" },
+  "ordersHistory:3500": { file: "/achievements/plaques/pedidos-3500.png", frame: "30x40" },
+  "ordersHistory:5000": { file: "/achievements/plaques/pedidos-5000.png", frame: "30x40" },
 };
+
+function achievementPlaque(achievement: AchievementDefinition) {
+  return APPROVED_ACHIEVEMENT_PLAQUES[`${achievement.metric}:${achievement.threshold}`];
+}
 
 async function downloadAchievementPlaque(achievement: AchievementDefinition) {
   // Apenas as conquistas históricas explicitamente aprovadas usam artes PNG.
   // Mantém o renderizador atual como fallback para assets ainda não publicados.
-  const approvedFile = APPROVED_ACHIEVEMENT_PLAQUES[`${achievement.metric}:${achievement.threshold}`];
-  if (approvedFile) {
+  const plaque = achievementPlaque(achievement);
+  if (plaque) {
     try {
-      const response = await fetch(approvedFile);
+      const response = await fetch(plaque.file);
       if (response.ok && response.headers.get("content-type")?.includes("image/png")) {
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
-        link.download = `DAF-${achievement.badgeValue}-${achievement.badgeLabel.toLowerCase()}-historico.png`;
+        link.download = `DAF-${achievement.badgeValue}-${achievement.badgeLabel.toLowerCase()}-quadro-${plaque.frame}cm.png`;
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -12184,6 +12192,12 @@ function AchievementDetailModal({
               <small>TIPO</small>
               <p>{achievement.qualifier}</p>
             </div>
+            {achievementPlaque(achievement) ? (
+              <div>
+                <small>QUADRO</small>
+                <p>{achievementPlaque(achievement)!.frame.replace("x", " × ")} cm</p>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -12191,14 +12205,14 @@ function AchievementDetailModal({
           <button type="button" className="secondary" onClick={close}>
             Fechar
           </button>
-          {unlocked && Boolean(APPROVED_ACHIEVEMENT_PLAQUES[`${achievement.metric}:${achievement.threshold}`]) ? (
+          {unlocked && Boolean(achievementPlaque(achievement)) ? (
             <button
               type="button"
               className="primary achievementDownloadModal"
               onClick={() => void downloadAchievementPlaque(achievement)}
             >
               <Download />
-              Baixar PNG para emoldurar
+              Baixar PNG para quadro {achievementPlaque(achievement)?.frame.replace("x", "×")} cm
             </button>
           ) : null}
         </footer>
