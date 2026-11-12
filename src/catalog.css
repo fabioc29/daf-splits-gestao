@@ -5009,7 +5009,7 @@ vercel-toolbar {
   display: none;
 }
 
-@media (max-width: 380px) {
+@media (max-width: 330px) {
   .catalogCard .catalogStockRow {
     grid-template-columns: auto minmax(0, 1fr);
   }
