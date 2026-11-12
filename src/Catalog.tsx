@@ -116,7 +116,23 @@ type ProductLike = {
   stock: number;
   apc: number;
   bottle?: number;
+  bottleHistory?: { ml?: number }[];
 };
+
+/**
+ * Tamanho do frasco atual: usa o campo `bottle` quando existir; senão, os ml do
+ * último frasco comprado (registrado no histórico de frascos da compra).
+ */
+function productBottleSize(product: ProductLike) {
+  const explicit = Number(product.bottle) || 0;
+  if (explicit > 0) return explicit;
+  const history = Array.isArray(product.bottleHistory) ? product.bottleHistory : [];
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const ml = Number(history[index]?.ml) || 0;
+    if (ml > 0) return ml;
+  }
+  return undefined;
+}
 
 type CatalogSettingsEnvelope = {
   __catalogSettings: CatalogSettings;
@@ -558,7 +574,7 @@ export function catalogItemsFromProducts(
         gender: String(product.gender || "Unissex").trim(),
         stock: Math.max(0, Number(product.stock) || 0),
         apc: Number(product.apc || 0) > 0,
-        bottle: Math.max(0, Number(product.bottle) || 0) || undefined,
+        bottle: productBottleSize(product),
       };
       const manualImage = manualImages[String(product.id)]?.trim();
       if (manualImage) {
