@@ -1609,7 +1609,7 @@ const action =
             ? ["Cadastrar venda antiga", "oldSale"]
             : null;
   const stockSectionActive =
-    page === "stock" || page === "stock-supplies";
+    page === "stock" || page === "stock-supplies" || page === "stock-catalog";
   const registrationsSectionActive =
     page === "clients" || page === "suppliers" || page === "brands" || page === "team";
   const financeSectionActive =
@@ -1632,6 +1632,8 @@ const action =
       ? "Estoque de perfumes"
       : page === "stock-supplies"
         ? "Estoque de insumos"
+        : page === "stock-catalog"
+        ? "Catálogo"
         : page === "clients"
             ? "Clientes"
             : page === "suppliers"
@@ -1710,6 +1712,12 @@ const action =
                         onClick={() => setPage("stock-supplies")}
                       >
                         Insumos
+                      </button>
+                      <button
+                        className={page === "stock-catalog" ? "on" : ""}
+                        onClick={() => setPage("stock-catalog")}
+                      >
+                        Catálogo
                       </button>
                     </div>
                   ) : null}
@@ -2100,6 +2108,8 @@ const action =
               pendingPerfumeCount={pendingPerfumeCount}
               openPendingPerfumes={() => setModal({ type: "pendingPerfumes" })}
             />
+          ) : page === "stock-catalog" ? (
+            <CatalogMirrorPanel d={data} set={setData} />
           ) : page === "purchases" ? (
             <Purchases
               d={data}
@@ -9143,6 +9153,64 @@ function BrandManager({
   );
 }
 
+/** Menu Estoque › Catálogo: prévia do catálogo público, com edição de cores e imagens. */
+function CatalogMirrorPanel({ d, set }: { d: D; set: any }) {
+  return (
+    <div className="catalogMirrorPage">
+      <section className="stockCatalogMirror">
+      <div className="stockCatalogMirrorHead">
+        <div>
+          <small>ESPELHO DO CATÁLOGO</small>
+          <h3>Prévia do catálogo público</h3>
+          <p>Confira como os perfumes e os ml disponíveis aparecem para o cliente.</p>
+        </div>
+        <div className="stockCatalogMirrorActions">
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => window.dispatchEvent(new CustomEvent("daf:catalog-edit"))}
+          >
+            <Palette /> Editar catálogo
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() => window.dispatchEvent(new CustomEvent("daf:catalog-images"))}
+          >
+            <ImageIcon /> Imagens
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={() =>
+              window.open(
+                import.meta.env.VITE_PUBLIC_CATALOG_URL || "https://www.dafsplits.com.br",
+                "_blank",
+                "noopener,noreferrer",
+              )
+            }
+          >
+            <PackageOpen /> Abrir catálogo público
+          </button>
+        </div>
+      </div>
+      <div className="stockCatalogMirrorViewport">
+        <CatalogAdminPreview
+          products={d.products}
+          settings={d.catalogSettings}
+          onSettingsChange={(catalogSettings) =>
+            set((current: D) => ({
+              ...current,
+              catalogSettings: catalogSettingsForPersistence(catalogSettings),
+            }))
+          }
+        />
+      </div>
+    </section>
+    </div>
+  );
+}
+
 function Stock({
   d,
   mode,
@@ -9167,7 +9235,6 @@ function Stock({
   openPendingPerfumes: () => void;
 }) {
   const [apcOnly, setApcOnly] = useState(false),
-    [catalogMirrorOpen, setCatalogMirrorOpen] = useState(false),
     [category, setCategory] = useState("Todos"),
     [brand, setBrand] = useState("Todas"),
     [query, setQuery] = useState(""),
@@ -9327,16 +9394,6 @@ function Stock({
           {view !== "supplies" ? (
             <button
               type="button"
-              className={"secondary stockCatalogMirrorButton" + (catalogMirrorOpen ? " active" : "")}
-              onClick={() => setCatalogMirrorOpen((current) => !current)}
-            >
-              <PackageOpen />
-              {catalogMirrorOpen ? "Fechar espelho" : "Espelho do catálogo"}
-            </button>
-          ) : null}
-          {view !== "supplies" ? (
-            <button
-              type="button"
               className="secondary stockPendingAction"
               onClick={openPendingPerfumes}
             >
@@ -9358,58 +9415,7 @@ function Stock({
           </button>
         </div>
       </div>
-      {view !== "supplies" && catalogMirrorOpen ? (
-        <section className="stockCatalogMirror">
-          <div className="stockCatalogMirrorHead">
-            <div>
-              <small>ESPELHO DO CATÁLOGO</small>
-              <h3>Prévia do catálogo público</h3>
-              <p>Confira no Estoque como os perfumes e os ml disponíveis aparecem para o cliente.</p>
-            </div>
-            <div className="stockCatalogMirrorActions">
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => window.dispatchEvent(new CustomEvent("daf:catalog-edit"))}
-              >
-                <Palette /> Editar catálogo
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => window.dispatchEvent(new CustomEvent("daf:catalog-images"))}
-              >
-                <ImageIcon /> Imagens
-              </button>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() =>
-                  window.open(
-                    import.meta.env.VITE_PUBLIC_CATALOG_URL || "https://daf-splits-catalogo.vercel.app",
-                    "_blank",
-                    "noopener,noreferrer",
-                  )
-                }
-              >
-                <PackageOpen /> Abrir catálogo público
-              </button>
-            </div>
-          </div>
-          <div className="stockCatalogMirrorViewport">
-            <CatalogAdminPreview
-              products={d.products}
-              settings={d.catalogSettings}
-              onSettingsChange={(catalogSettings) =>
-                set((current: D) => ({
-                  ...current,
-                  catalogSettings: catalogSettingsForPersistence(catalogSettings),
-                }))
-              }
-            />
-          </div>
-        </section>
-      ) : null}
+
       {view !== "supplies" ? (
         <>
           <div className="stockSummaryRow">
