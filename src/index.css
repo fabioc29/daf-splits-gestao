@@ -16333,3 +16333,14 @@ select.sysInvalid {
   min-width: 0 !important;
   box-sizing: border-box;
 }
+.linkPricesActions button {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 120px;
+  padding: 0 18px !important;
+  white-space: nowrap;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
