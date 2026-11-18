@@ -4807,3 +4807,216 @@ vercel-toolbar {
     min-height: 230px !important;
   }
 }
+
+/* =====================================================================
+   Card do catálogo — frasco de escassez e selos (2026-11)
+   ===================================================================== */
+.catalogCard .catalogCardContent {
+  padding: 18px 2px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.catalogCard .catalogCardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.catalogCard .catalogChip {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--catalog-text) 9%, transparent);
+  color: color-mix(in srgb, var(--catalog-text) 82%, transparent);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.catalogCard .catalogChipCategory {
+  border: 1px solid var(--catalog-gold);
+  background: transparent;
+  color: var(--catalog-gold);
+}
+
+.catalogCard .catalogCardRating {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: color-mix(in srgb, var(--catalog-text) 82%, transparent);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.catalogCard .catalogCardRating svg {
+  width: 13px;
+  height: 13px;
+  color: var(--catalog-gold);
+  fill: var(--catalog-gold);
+}
+
+.catalogCard .catalogCardRating small {
+  color: var(--catalog-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.catalogCard .catalogCardIdentity {
+  min-height: 0;
+  margin-top: 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.catalogCard .catalogCardIdentity .catalogCardBrand {
+  order: 0;
+  margin: 0;
+  color: var(--catalog-gold);
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.catalogCard .catalogCardIdentity h3 {
+  order: 1;
+  margin: 3px 0 0;
+  color: var(--catalog-text);
+  font-size: 24px;
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -.03em;
+}
+
+.catalogCard .catalogStockRow {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--catalog-line) 92%, transparent);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.catalogCard .catalogStockBottle {
+  width: 44px;
+  height: 64px;
+  display: block;
+  overflow: visible;
+}
+
+.catalogStockBottleLine {
+  fill: none;
+  stroke: color-mix(in srgb, var(--catalog-text) 88%, transparent);
+  stroke-width: 2.6;
+}
+
+.catalogStockBottleLine.body {
+  stroke-width: 2.8;
+}
+
+.catalogStockBottleLiquid {
+  transition: transform .7s cubic-bezier(.2, .8, .2, 1);
+}
+
+.catalogStockBottleWave {
+  fill: var(--catalog-scarcity);
+  animation: catalogBottleWave 3.2s linear infinite;
+}
+
+@keyframes catalogBottleWave {
+  from { transform: translateX(0); }
+  to { transform: translateX(-40px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catalogStockBottleWave { animation: none; }
+  .catalogStockBottleLiquid { transition: none; }
+}
+
+.catalogCard .catalogStockText {
+  min-width: 0;
+  height: 64px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.catalogCard .catalogStockText small {
+  color: var(--catalog-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+
+.catalogCard .catalogStockText strong {
+  color: var(--catalog-text);
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.catalogCard .catalogStockText strong span {
+  color: color-mix(in srgb, var(--catalog-text) 75%, transparent);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.catalogCard .catalogStockBadges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.catalogCard .catalogApcChip.available {
+  background: color-mix(in srgb, var(--catalog-apc-available) 16%, transparent);
+  color: color-mix(in srgb, var(--catalog-apc-available) 85%, #ffffff);
+}
+
+.catalogCard .catalogApcChip.unavailable {
+  background: color-mix(in srgb, var(--catalog-apc-unavailable) 16%, transparent);
+  color: color-mix(in srgb, var(--catalog-apc-unavailable) 72%, #ffffff);
+}
+
+.catalogCard .catalogLowChip {
+  background: color-mix(in srgb, var(--catalog-scarcity) 18%, transparent);
+  color: color-mix(in srgb, var(--catalog-scarcity) 70%, #ffffff);
+}
+
+.catalogCard .catalogWhatsappButton {
+  min-height: 52px;
+  margin-top: 16px;
+  border-radius: 14px;
+  font-size: 15px;
+}
+
+.catalogCard .catalogApcStatus,
+.catalogCard .catalogScarcity {
+  display: none;
+}
+
+@media (max-width: 330px) {
+  .catalogCard .catalogStockRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .catalogCard .catalogStockBadges {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+  }
+}
