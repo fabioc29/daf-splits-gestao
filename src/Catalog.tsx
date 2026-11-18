@@ -15,6 +15,8 @@ import {
   Save,
   Search,
   X,
+  Tag,
+  CircleSlash,
 } from "lucide-react";
 import { ColorInput } from "./ui/controls";
 import "./catalog.css";
@@ -33,6 +35,14 @@ export type CatalogItem = {
   fragranticaRating?: number;
   fragranticaRatingCount?: number;
   manualImage?: boolean;
+  /** Preços do frasco atual: decantes por volume (ml → R$) e APC. */
+  prices?: CatalogPrices;
+};
+
+export type CatalogPrices = {
+  decants?: Record<string, number>;
+  apc?: number;
+  apcMl?: number;
 };
 
 export type CatalogSettings = {
@@ -116,6 +126,8 @@ type ProductLike = {
   stock: number;
   apc: number;
   bottle?: number;
+  bottleNumber?: number;
+  bottlePrices?: Record<string, CatalogPrices>;
 };
 
 
@@ -564,6 +576,12 @@ export function catalogItemsFromProducts(
         // Qualquer campo a mais faz a publicação do catálogo ser recusada.
         bottle: Math.max(0, Number(product.bottle) || 0) || undefined,
       };
+      // Preços do frasco atual, enviados exatamente como estão guardados: o
+      // banco (daf_public_catalog_base) monta o mesmo objeto e compara os dois.
+      const currentPrices = product.bottlePrices?.[String(product.bottleNumber)];
+      if (currentPrices && typeof currentPrices === "object" && !Array.isArray(currentPrices)) {
+        item.prices = currentPrices;
+      }
       const manualImage = manualImages[String(product.id)]?.trim();
       if (manualImage) {
         return {
@@ -580,6 +598,112 @@ export function catalogItemsFromProducts(
         sensitivity: "base",
       }),
     );
+}
+
+const CATALOG_WHATSAPP = "5531975359963";
+
+function formatCatalogPrice(value: number) {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+/** Box "Ver valores": preços de cada volume e do APC, com o pedido pelo WhatsApp. */
+function CatalogPricesDialog({ item, onClose }: { item: CatalogItem; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const decants = Object.entries(item.prices?.decants || {})
+    .map(([ml, price]) => ({ ml: Number(ml), price: Number(price) }))
+    .filter((row) => row.ml > 0 && row.price > 0)
+    .sort((a, b) => a.ml - b.ml);
+  const apcPrice = Number(item.prices?.apc) || 0;
+  const apcMl = Number(item.prices?.apcMl) || 0;
+  const hasPrices = decants.length > 0 || apcPrice > 0;
+  const message = `Olá! Gostaria de pedir o perfume ${item.name} da marca ${item.brand}. Ainda está disponível?`;
+
+  return (
+    <div
+      className="catalogPricesOverlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="catalogPricesDialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`catalog-prices-${item.id}`}
+      >
+        <header>
+          <div>
+            <span className="catalogPricesBrand">{item.brand}</span>
+            <h2 id={`catalog-prices-${item.id}`}>{item.name}</h2>
+          </div>
+          <button type="button" className="catalogPricesClose" onClick={onClose} aria-label="Fechar valores">
+            <X />
+          </button>
+        </header>
+
+        {hasPrices ? (
+          <ul className="catalogPricesList">
+            {decants.map((row) => {
+              const unavailable = row.ml > item.stock;
+              return (
+                <li key={row.ml} className={unavailable ? "unavailable" : ""}>
+                  <span>{row.ml.toLocaleString("pt-BR")} ml</span>
+                  <i aria-hidden="true" />
+                  <b>{unavailable ? "Indisponível" : formatCatalogPrice(row.price)}</b>
+                </li>
+              );
+            })}
+            <li className={"apc" + (item.apc && apcPrice > 0 ? "" : " unavailable")}>
+              <span>APC{item.apc && apcMl > 0 ? ` (${apcMl.toLocaleString("pt-BR")} ml)` : ""}</span>
+              <i aria-hidden="true" />
+              <b>
+                {!item.apc ? (
+                  <>
+                    <CircleSlash /> Indisponível
+                  </>
+                ) : apcPrice > 0 ? (
+                  formatCatalogPrice(apcPrice)
+                ) : (
+                  "Sob consulta"
+                )}
+              </b>
+            </li>
+          </ul>
+        ) : (
+          <p className="catalogPricesEmpty">
+            Os valores deste perfume estão sendo atualizados. Fale com a gente pelo WhatsApp para saber o preço.
+          </p>
+        )}
+
+        <p className="catalogPricesStock">
+          Restam {item.stock.toLocaleString("pt-BR")} ml deste frasco.
+        </p>
+
+        <a
+          className="catalogWhatsappButton catalogPricesWhatsapp"
+          href={`https://wa.me/${CATALOG_WHATSAPP}?text=${encodeURIComponent(message)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <MessageCircle />
+          <span>Pedir pelo WhatsApp</span>
+        </a>
+      </div>
+    </div>
+  );
 }
 
 /** Frasco usado quando o perfume não tem tamanho cadastrado. */
@@ -655,6 +779,7 @@ function CatalogViewer({
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [headerScrolled, setHeaderScrolled] = useState(false);
+  const [pricesItem, setPricesItem] = useState<CatalogItem | null>(null);
 
   useEffect(() => {
     const onScroll = () => setHeaderScrolled(window.scrollY > 18);
@@ -872,17 +997,14 @@ function CatalogViewer({
                     </div>
                   </div>
 
-                  <a
-                    className="catalogWhatsappButton"
-                    href={`https://wa.me/5531975359963?text=${encodeURIComponent(
-                      `Olá! Gostaria de solicitar MLs do perfume ${item.name} da marca ${item.brand}. Ainda está disponível?!`,
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    className="catalogWhatsappButton catalogPricesButton"
+                    onClick={() => setPricesItem(item)}
                   >
-                    <MessageCircle />
-                    <span>Pedir pelo WhatsApp</span>
-                  </a>
+                    <Tag />
+                    <span>Ver valores</span>
+                  </button>
                 </div>
               </article>
             ))}
@@ -916,6 +1038,9 @@ function CatalogViewer({
           </a>
         </section>
       </main>
+      {pricesItem ? (
+        <CatalogPricesDialog item={pricesItem} onClose={() => setPricesItem(null)} />
+      ) : null}
     </div>
   );
 }
