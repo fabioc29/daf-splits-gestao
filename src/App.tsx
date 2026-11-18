@@ -16217,7 +16217,7 @@ function ProductPricesEditor({ product }: { product?: P }) {
   const draft = drafts[String(bottle)] || toDraft(undefined);
   const serialized = JSON.stringify(
     Object.fromEntries(
-      Object.entries(drafts).map(([number, value]) => [
+      (Object.entries(drafts) as [string, Draft][]).map(([number, value]) => [
         number,
         {
           decants: Object.fromEntries(
