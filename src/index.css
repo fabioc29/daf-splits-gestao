@@ -16325,3 +16325,11 @@ select.sysInvalid {
   gap: 10px;
   padding-top: 12px;
 }
+.productPricesGrid label {
+  min-width: 0;
+}
+.productPricesGrid input {
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
