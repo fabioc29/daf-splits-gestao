@@ -16238,3 +16238,90 @@ select.sysInvalid {
   align-items: center !important;
   place-items: center !important;
 }
+
+/* ---------- Preços por frasco (editar perfume) ---------- */
+.productPricesEditor {
+  display: grid;
+  gap: 12px;
+  margin-top: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.productPricesEditor > header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.productPricesEditor > header > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+.productPricesEditor > header strong {
+  font-size: 14px;
+}
+.productPricesEditor > header span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.productPricesBottle {
+  min-width: 150px;
+  margin: 0 !important;
+}
+.productPricesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+.productPricesGrid label {
+  margin: 0 !important;
+}
+.productPricesGrid label.apc span {
+  color: var(--accent);
+}
+.productPricesCopy {
+  justify-self: start;
+}
+
+/* ---------- Calculadora › Atrelar ao perfume ---------- */
+.linkPricesDialog {
+  width: min(520px, calc(100vw - 32px));
+}
+.linkPricesBody {
+  display: grid;
+  gap: 12px;
+  padding: 4px 0 8px;
+}
+.linkPricesBody label {
+  margin: 0 !important;
+}
+.linkPricesList {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.linkPricesList li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: var(--panel-2);
+  font-size: 13px;
+}
+.linkPricesList li b {
+  font-variant-numeric: tabular-nums;
+}
+.linkPricesActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 12px;
+}

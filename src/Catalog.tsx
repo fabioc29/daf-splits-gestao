@@ -33,6 +33,14 @@ export type CatalogItem = {
   fragranticaRating?: number;
   fragranticaRatingCount?: number;
   manualImage?: boolean;
+  /** Preços do frasco atual: decantes por volume (ml → R$) e APC. */
+  prices?: CatalogPrices;
+};
+
+export type CatalogPrices = {
+  decants?: Record<string, number>;
+  apc?: number;
+  apcMl?: number;
 };
 
 export type CatalogSettings = {
@@ -116,6 +124,8 @@ type ProductLike = {
   stock: number;
   apc: number;
   bottle?: number;
+  bottleNumber?: number;
+  bottlePrices?: Record<string, CatalogPrices>;
 };
 
 
@@ -564,6 +574,12 @@ export function catalogItemsFromProducts(
         // Qualquer campo a mais faz a publicação do catálogo ser recusada.
         bottle: Math.max(0, Number(product.bottle) || 0) || undefined,
       };
+      // Preços do frasco atual, enviados exatamente como estão guardados: o
+      // banco (daf_public_catalog_base) monta o mesmo objeto e compara os dois.
+      const currentPrices = product.bottlePrices?.[String(product.bottleNumber)];
+      if (currentPrices && typeof currentPrices === "object" && !Array.isArray(currentPrices)) {
+        item.prices = currentPrices;
+      }
       const manualImage = manualImages[String(product.id)]?.trim();
       if (manualImage) {
         return {

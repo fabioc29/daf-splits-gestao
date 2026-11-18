@@ -59,6 +59,7 @@ import {
   Trophy,
   Download,
   MapPin,
+  Link2,
   MoreHorizontal,
   PieChart,
 } from "lucide-react";
@@ -97,7 +98,17 @@ type P = SourceIdentity & {
   apc: number;
   bottleNumber?: number;
   bottleHistory?: BottleHistoryEntry[];
+  /** Preços de venda por número de frasco ("3" → preços do frasco nº 3). */
+  bottlePrices?: Record<string, BottlePrice>;
 };
+/** Preços de um frasco: decantes por volume (ml → R$) e o APC. */
+type BottlePrice = {
+  decants: Record<string, number>;
+  apc?: number;
+  apcMl?: number;
+};
+/** Volumes de decante que podem ter preço. */
+const PRICE_VOLUMES = [2, 3, 5, 7, 10, 15];
 type S = {
   id: number;
   name: string;
@@ -523,6 +534,36 @@ const brl = (n: number) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const parseDecimal = (value: unknown) =>
   Number(String(value ?? "").trim().replace(",", ".")) || 0;
+
+/** Remove volumes sem preço; devolve undefined quando não sobra nada. */
+function cleanBottlePrice(price: Partial<BottlePrice> | undefined): BottlePrice | undefined {
+  if (!price) return undefined;
+  const decants: Record<string, number> = {};
+  PRICE_VOLUMES.forEach((ml) => {
+    const value = Math.round((Number(price.decants?.[String(ml)]) || 0) * 100) / 100;
+    if (value > 0) decants[String(ml)] = value;
+  });
+  const apc = Math.round((Number(price.apc) || 0) * 100) / 100;
+  const apcMl = Math.max(0, Math.round(Number(price.apcMl) || 0));
+  if (!Object.keys(decants).length && !(apc > 0)) return undefined;
+  return {
+    decants,
+    ...(apc > 0 ? { apc } : {}),
+    ...(apc > 0 && apcMl > 0 ? { apcMl } : {}),
+  };
+}
+
+function setBottlePrice(
+  current: Record<string, BottlePrice> | undefined,
+  bottleNumber: number,
+  price: Partial<BottlePrice> | undefined,
+) {
+  const next = { ...(current || {}) };
+  const cleaned = cleanBottlePrice(price);
+  if (cleaned) next[String(bottleNumber)] = cleaned;
+  else delete next[String(bottleNumber)];
+  return Object.keys(next).length ? next : undefined;
+}
 
 function normalizeSearchValue(value: unknown) {
   return String(value ?? "")
@@ -2143,7 +2184,7 @@ const action =
               embedded
             />
           ) : page === "finance-pricing" ? (
-            <PricingCalculator d={data} notify={notify} />
+            <PricingCalculator d={data} set={setData} notify={notify} />
           ) : page === "achievements" ? (
             <Achievements d={data} />
           ) : page === "settings" ? (
@@ -10927,13 +10968,159 @@ function pricingApcChoice(value: number) {
   return [20, 30, 40, 50, 60].includes(value) ? String(value) : "Outro valor";
 }
 
+/** Calculadora › Atrelar ao perfume: grava a tabela calculada nos preços de um frasco. */
+function LinkPricesDialog({
+  d,
+  set,
+  notify,
+  close,
+  decants,
+  apc,
+}: {
+  d: D;
+  set: any;
+  notify: (message: string) => void;
+  close: () => void;
+  decants: Record<string, number>;
+  apc?: { ml: number; price: number };
+}) {
+  const products = [...d.products].sort((a, b) =>
+    productDisplayName(a).localeCompare(productDisplayName(b), "pt-BR", { sensitivity: "base" }),
+  );
+  const [productId, setProductId] = useState<number>(0);
+  const product = products.find((item) => item.id === productId);
+  const currentBottle = Math.max(1, Number(product?.bottleNumber) || 1);
+  const bottleOptions = product
+    ? Array.from(
+        new Set([
+          currentBottle,
+          ...(product.bottleHistory || []).map((entry) => Math.max(1, Number(entry.number) || 1)),
+        ]),
+      ).sort((a, b) => b - a)
+    : [];
+  const [bottle, setBottle] = useState(0);
+  const chosenBottle = bottle || currentBottle;
+  const existing = product?.bottlePrices?.[String(chosenBottle)];
+  const money = (value: number) =>
+    value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
+  async function save() {
+    if (!product) {
+      void showAlert("Selecione o perfume.");
+      return;
+    }
+    if (
+      existing &&
+      !(await askConfirm(
+        `O frasco nº ${chosenBottle} de ${productDisplayName(product)} já tem preços. Substituir pelos valores desta tabela?`,
+        { title: "Substituir preços", confirmLabel: "Substituir", cancelLabel: "Voltar" },
+      ))
+    ) {
+      return;
+    }
+    set((state: D) => ({
+      ...state,
+      products: state.products.map((item) =>
+        item.id === product.id
+          ? (() => {
+              const bottlePrices = setBottlePrice(item.bottlePrices, chosenBottle, {
+                decants,
+                apc: apc?.price,
+                apcMl: apc?.ml,
+              });
+              const { bottlePrices: _old, ...rest } = item;
+              return bottlePrices ? { ...rest, bottlePrices } : rest;
+            })()
+          : item,
+      ),
+    }));
+    notify(`Preços atrelados ao frasco nº ${chosenBottle} de ${productDisplayName(product)}.`);
+    close();
+  }
+
+  return (
+    <div className="overlay appDialogOverlay">
+      <div className="systemDialog linkPricesDialog">
+        <header>
+          <div>
+            <small>CALCULADORA DE PRECIFICAÇÃO</small>
+            <h2>Atrelar ao perfume</h2>
+          </div>
+          <button type="button" onClick={close} aria-label="Fechar">
+            <X />
+          </button>
+        </header>
+        <div className="linkPricesBody">
+          <label>
+            <span>Perfume</span>
+            <SysSelect
+              value={productId ? String(productId) : ""}
+              onChange={(event) => {
+                setProductId(Number(event.target.value));
+                setBottle(0);
+              }}
+            >
+              <option value="" disabled>
+                Selecione o perfume
+              </option>
+              {products.map((item) => (
+                <option key={item.id} value={String(item.id)}>
+                  {productDisplayName(item)} · frasco nº {Math.max(1, Number(item.bottleNumber) || 1)}
+                  {item.stock > 0 ? "" : " · sem estoque"}
+                </option>
+              ))}
+            </SysSelect>
+          </label>
+          {product ? (
+            <label>
+              <span>Frasco</span>
+              <SysSelect value={String(chosenBottle)} onChange={(event) => setBottle(Number(event.target.value))}>
+                {bottleOptions.map((number) => (
+                  <option key={number} value={String(number)}>
+                    nº {number}
+                    {number === currentBottle ? " (atual)" : ""}
+                    {product.bottlePrices?.[String(number)] ? " · já tem preços" : ""}
+                  </option>
+                ))}
+              </SysSelect>
+            </label>
+          ) : null}
+          <ul className="linkPricesList">
+            {Object.entries(decants).map(([ml, price]) => (
+              <li key={ml}>
+                <span>{ml} ml</span>
+                <b>{money(price)}</b>
+              </li>
+            ))}
+            <li>
+              <span>APC{apc ? ` ${apc.ml} ml` : ""}</span>
+              <b>{apc ? money(apc.price) : "sem APC nesta tabela"}</b>
+            </li>
+          </ul>
+        </div>
+        <footer className="linkPricesActions">
+          <button type="button" className="secondary" onClick={close}>
+            Cancelar
+          </button>
+          <button type="button" className="primary" onClick={save}>
+            <Check /> Atrelar preços
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function PricingCalculator({
   d,
+  set,
   notify,
 }: {
   d: D;
+  set: any;
   notify: (message: string) => void;
 }) {
+  const [linkOpen, setLinkOpen] = useState(false);
   const [category, setCategory] = useState("Designer");
   const [bottleMl, setBottleMl] = useState(0);
   const [paidInput, setPaidInput] = useState("");
@@ -11196,6 +11383,18 @@ function PricingCalculator({
 
   return (
     <div className="pricingWorkspace">
+      {linkOpen ? (
+        <LinkPricesDialog
+          d={d}
+          set={set}
+          notify={notify}
+          close={() => setLinkOpen(false)}
+          decants={Object.fromEntries(
+            rows.filter((row) => !row.isApc && row.price > 0).map((row) => [String(row.ml), row.price]),
+          )}
+          apc={rows.find((row) => row.isApc && row.price > 0)}
+        />
+      ) : null}
       <div className="pricingSetupGrid">
         <div className="panel pricingInputsPanel">
           <div className="panelHeading">
@@ -11468,6 +11667,20 @@ function PricingCalculator({
             >
               <Copy />
               {copied ? "Copiado" : "Copiar tabela"}
+            </button>
+            <button
+              type="button"
+              className="secondary pricingLinkButton"
+              onClick={() => {
+                if (!rows.some((row) => row.price > 0)) {
+                  notify("Informe o valor pago para gerar a tabela antes de atrelar.");
+                  return;
+                }
+                setLinkOpen(true);
+              }}
+            >
+              <Link2 />
+              Atrelar ao perfume
             </button>
             <span className="pricingPanelIcon" aria-hidden="true">
               <DollarSign />
@@ -14024,11 +14237,24 @@ function Form({
           },
           bottleNumber,
         );
+        let bottlePrices = existingProduct?.bottlePrices;
+        if (typeof f.bottlePricesJson === "string" && f.bottlePricesJson) {
+          try {
+            const edited = JSON.parse(f.bottlePricesJson) as Record<string, Partial<BottlePrice>>;
+            bottlePrices = undefined;
+            Object.entries(edited).forEach(([number, price]) => {
+              bottlePrices = setBottlePrice(bottlePrices, Number(number), price);
+            });
+          } catch {
+            // Mantém os preços anteriores se o campo vier corrompido.
+          }
+        }
         const product: P = {
           ...baseProduct,
           name: parsedName.name,
           bottleNumber,
           bottleHistory,
+          ...(bottlePrices ? { bottlePrices } : {}),
         };
         const brands = x.brands.includes(brand) ? x.brands : [...x.brands, brand];
         const sales =
@@ -15953,7 +16179,131 @@ function ProductFields({
       <small className="fieldHint">
         Você pode corrigir manualmente qual é o frasco atual sem alterar o nome do perfume.
       </small>
+      <ProductPricesEditor product={product} />
     </>
+  );
+}
+
+/**
+ * Preços de venda por frasco, dentro do formulário do perfume. Os valores
+ * de todos os frascos vão num campo oculto (bottlePricesJson) do formulário.
+ */
+function ProductPricesEditor({ product }: { product?: P }) {
+  const currentBottle = Math.max(1, Number(product?.bottleNumber) || 1);
+  const bottleOptions = Array.from(
+    new Set([
+      currentBottle,
+      ...(product?.bottleHistory || []).map((entry) => Math.max(1, Number(entry.number) || 1)),
+      ...Object.keys(product?.bottlePrices || {}).map(Number).filter((n) => n > 0),
+    ]),
+  ).sort((a, b) => b - a);
+  type Draft = { decants: Record<string, string>; apc: string; apcMl: string };
+  const toDraft = (price?: BottlePrice): Draft => ({
+    decants: Object.fromEntries(
+      PRICE_VOLUMES.map((ml) => {
+        const value = price?.decants?.[String(ml)];
+        return [String(ml), value ? String(value).replace(".", ",") : ""];
+      }),
+    ),
+    apc: price?.apc ? String(price.apc).replace(".", ",") : "",
+    apcMl: price?.apcMl ? String(price.apcMl) : "",
+  });
+  const [bottle, setBottle] = useState(currentBottle);
+  const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
+    Object.fromEntries(
+      Object.entries(product?.bottlePrices || {}).map(([number, price]) => [number, toDraft(price)]),
+    ),
+  );
+  const draft = drafts[String(bottle)] || toDraft(undefined);
+  const serialized = JSON.stringify(
+    Object.fromEntries(
+      Object.entries(drafts).map(([number, value]) => [
+        number,
+        {
+          decants: Object.fromEntries(
+            PRICE_VOLUMES.map((ml) => [String(ml), parseDecimal(value.decants[String(ml)])]),
+          ),
+          apc: parseDecimal(value.apc),
+          apcMl: Number(value.apcMl) || 0,
+        },
+      ]),
+    ),
+  );
+  function update(change: Partial<Draft>) {
+    setDrafts((current) => ({
+      ...current,
+      [String(bottle)]: { ...(current[String(bottle)] || toDraft(undefined)), ...change },
+    }));
+  }
+  const previousBottle = bottleOptions.find(
+    (number) => number < bottle && drafts[String(number)],
+  );
+
+  return (
+    <section className="productPricesEditor">
+      <input type="hidden" name="bottlePricesJson" value={serialized} />
+      <header>
+        <div>
+          <strong>Preços de venda</strong>
+          <span>
+            Os preços do frasco atual aparecem no catálogo. Deixe em branco os volumes que não vende.
+          </span>
+        </div>
+        <label className="productPricesBottle">
+          <span>Frasco</span>
+          <SysSelect value={String(bottle)} onChange={(event) => setBottle(Number(event.target.value))}>
+            {bottleOptions.map((number) => (
+              <option key={number} value={String(number)}>
+                nº {number}
+                {number === currentBottle ? " (atual)" : ""}
+              </option>
+            ))}
+          </SysSelect>
+        </label>
+      </header>
+      <div className="productPricesGrid">
+        {PRICE_VOLUMES.map((ml) => (
+          <label key={ml}>
+            <span>{ml} ml</span>
+            <input
+              inputMode="decimal"
+              placeholder="R$ 0,00"
+              value={draft.decants[String(ml)] || ""}
+              onChange={(event) =>
+                update({ decants: { ...draft.decants, [String(ml)]: event.target.value } })
+              }
+            />
+          </label>
+        ))}
+        <label className="apc">
+          <span>APC</span>
+          <input
+            inputMode="decimal"
+            placeholder="R$ 0,00"
+            value={draft.apc}
+            onChange={(event) => update({ apc: event.target.value })}
+          />
+        </label>
+        <label className="apc">
+          <span>ml do APC</span>
+          <input
+            inputMode="numeric"
+            placeholder="ex.: 30"
+            value={draft.apcMl}
+            onChange={(event) => update({ apcMl: event.target.value.replace(/\D/g, "") })}
+          />
+        </label>
+      </div>
+      {previousBottle && !drafts[String(bottle)] ? (
+        <button
+          type="button"
+          className="secondary productPricesCopy"
+          onClick={() => update(drafts[String(previousBottle)])}
+        >
+          <Copy /> Copiar preços do frasco nº {previousBottle}
+        </button>
+      ) : null}
+    </section>
   );
 }
 function ProductSearch({
