@@ -5,6 +5,7 @@ import {
   Image as ImageIcon,
   MessageCircle,
   PackageOpen,
+  Star,
   Upload,
   Trash2,
   Palette,
@@ -14,9 +15,10 @@ import {
   Save,
   Search,
   X,
+  Tag,
+  CircleSlash,
 } from "lucide-react";
-import { supabase } from "./supabase";
-import { PUBLISHED_CATALOG_KEY, readCommittedCatalogCache } from "./crm/fabio-persistence";
+import { ColorInput } from "./ui/controls";
 import "./catalog.css";
 
 export type CatalogItem = {
@@ -33,6 +35,14 @@ export type CatalogItem = {
   fragranticaRating?: number;
   fragranticaRatingCount?: number;
   manualImage?: boolean;
+  /** Preços do frasco atual: decantes por volume (ml → R$) e APC. */
+  prices?: CatalogPrices;
+};
+
+export type CatalogPrices = {
+  decants?: Record<string, number>;
+  apc?: number;
+  apcMl?: number;
 };
 
 export type CatalogSettings = {
@@ -116,7 +126,10 @@ type ProductLike = {
   stock: number;
   apc: number;
   bottle?: number;
+  bottleNumber?: number;
+  bottlePrices?: Record<string, CatalogPrices>;
 };
+
 
 type CatalogSettingsEnvelope = {
   __catalogSettings: CatalogSettings;
@@ -558,8 +571,17 @@ export function catalogItemsFromProducts(
         gender: String(product.gender || "Unissex").trim(),
         stock: Math.max(0, Number(product.stock) || 0),
         apc: Number(product.apc || 0) > 0,
+        // Precisa ser idêntico ao que o banco calcula em daf_public_catalog_base:
+        // só o campo `bottle` do produto entra; o histórico de frascos não.
+        // Qualquer campo a mais faz a publicação do catálogo ser recusada.
         bottle: Math.max(0, Number(product.bottle) || 0) || undefined,
       };
+      // Preços do frasco atual, enviados exatamente como estão guardados: o
+      // banco (daf_public_catalog_base) monta o mesmo objeto e compara os dois.
+      const currentPrices = product.bottlePrices?.[String(product.bottleNumber)];
+      if (currentPrices && typeof currentPrices === "object" && !Array.isArray(currentPrices)) {
+        item.prices = currentPrices;
+      }
       const manualImage = manualImages[String(product.id)]?.trim();
       if (manualImage) {
         return {
@@ -578,6 +600,183 @@ export function catalogItemsFromProducts(
     );
 }
 
+const CATALOG_WHATSAPP = "5531975359963";
+
+function formatCatalogPrice(value: number) {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+/** Box "Ver valores": preços de cada volume e do APC, com o pedido pelo WhatsApp. */
+function CatalogPricesDialog({ item, onClose }: { item: CatalogItem; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  const decants = Object.entries(item.prices?.decants || {})
+    .map(([ml, price]) => ({ ml: Number(ml), price: Number(price) }))
+    .filter((row) => row.ml > 0 && row.price > 0)
+    .sort((a, b) => a.ml - b.ml);
+  const apcPrice = Number(item.prices?.apc) || 0;
+  const apcMl = Number(item.prices?.apcMl) || 0;
+  const hasPrices = decants.length > 0 || apcPrice > 0;
+  const message = `Olá! Gostaria de pedir o perfume ${item.name} da marca ${item.brand}. Ainda está disponível?`;
+
+  return (
+    <div
+      className="catalogPricesOverlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="catalogPricesDialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={`catalog-prices-${item.id}`}
+      >
+        <header>
+          <div>
+            <span className="catalogPricesBrand">{item.brand}</span>
+            <h2 id={`catalog-prices-${item.id}`}>{item.name}</h2>
+          </div>
+          <button type="button" className="catalogPricesClose" onClick={onClose} aria-label="Fechar valores">
+            <X />
+          </button>
+        </header>
+
+        {hasPrices ? (
+          <ul className="catalogPricesList">
+            {decants.map((row) => {
+              const unavailable = row.ml > item.stock;
+              return (
+                <li key={row.ml} className={unavailable ? "unavailable" : ""}>
+                  <span>{row.ml.toLocaleString("pt-BR")} ml</span>
+                  <i aria-hidden="true" />
+                  <b>{unavailable ? "Indisponível" : formatCatalogPrice(row.price)}</b>
+                </li>
+              );
+            })}
+            <li className={"apc" + (item.apc && apcPrice > 0 ? "" : " unavailable")}>
+              <span>APC{item.apc && apcMl > 0 ? ` (${apcMl.toLocaleString("pt-BR")} ml)` : ""}</span>
+              <i aria-hidden="true" />
+              <b>
+                {!item.apc ? (
+                  <>
+                    <CircleSlash /> Indisponível
+                  </>
+                ) : apcPrice > 0 ? (
+                  formatCatalogPrice(apcPrice)
+                ) : (
+                  "Sob consulta"
+                )}
+              </b>
+            </li>
+          </ul>
+        ) : (
+          <>
+            <p className="catalogPricesEmpty">
+              Os valores deste perfume estão sendo atualizados. Fale com a gente pelo WhatsApp para saber o preço.
+            </p>
+            {!item.apc ? (
+              <ul className="catalogPricesList catalogPricesApcOnly">
+                <li className="apc unavailable">
+                  <span>APC</span>
+                  <i aria-hidden="true" />
+                  <b>
+                    <CircleSlash /> Indisponível
+                  </b>
+                </li>
+              </ul>
+            ) : null}
+          </>
+        )}
+
+        <p className="catalogPricesStock">
+          Restam {item.stock.toLocaleString("pt-BR")} ml deste frasco.
+        </p>
+
+        <a
+          className="catalogWhatsappButton catalogPricesWhatsapp"
+          href={`https://wa.me/${CATALOG_WHATSAPP}?text=${encodeURIComponent(message)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <MessageCircle />
+          <span>Pedir pelo WhatsApp</span>
+        </a>
+      </div>
+    </div>
+  );
+}
+
+/** Frasco usado quando o perfume não tem tamanho cadastrado. */
+const DEFAULT_BOTTLE_ML = 100;
+/** "Últimos ml" a partir de 20% do frasco. */
+const LOW_STOCK_RATIO = 0.2;
+
+function catalogStockRatio(stock: number, bottle?: number) {
+  const size = bottle && bottle > 0 ? bottle : DEFAULT_BOTTLE_ML;
+  return Math.max(0, Math.min(1, stock / size));
+}
+
+/**
+ * Indicador de escassez em forma de frasco: o líquido desce conforme os ml
+ * são vendidos (ml restantes ÷ tamanho do frasco).
+ */
+function CatalogStockBottle({ id, stock, bottle }: { id: number | string; stock: number; bottle?: number }) {
+  const ratio = catalogStockRatio(stock, bottle);
+  // Um fundinho sempre visível enquanto houver estoque.
+  const shown = stock > 0 ? Math.max(ratio, 0.07) : 0;
+  const clipId = `catalog-bottle-${String(id).replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const bodyTop = 24;
+  const bodyHeight = 56;
+  return (
+    <svg
+      className="catalogStockBottle"
+      viewBox="0 0 58 84"
+      role="img"
+      aria-label={`Frasco com ${Math.round(ratio * 100)}% restante`}
+    >
+      <defs>
+        <clipPath id={clipId}>
+          <rect x="7" y={bodyTop} width="44" height={bodyHeight} rx="9" />
+        </clipPath>
+      </defs>
+      <rect className="catalogStockBottleLine" x="19" y="2" width="20" height="9" rx="2" />
+      <rect className="catalogStockBottleLine" x="23" y="11" width="12" height="11" />
+      <g clipPath={`url(#${clipId})`}>
+        <g
+          className="catalogStockBottleLiquid"
+          style={{ transform: `translateY(${(bodyHeight * (1 - shown)).toFixed(1)}px)` }}
+        >
+          <path
+            className="catalogStockBottleWave"
+            d={`M0 ${bodyTop + 2} q10 -3 20 0 t20 0 t20 0 t20 0 t20 0 V130 H0Z`}
+          />
+        </g>
+      </g>
+      <rect
+        className="catalogStockBottleLine body"
+        x="7"
+        y={bodyTop}
+        width="44"
+        height={bodyHeight}
+        rx="9"
+      />
+    </svg>
+  );
+}
+
 function CatalogViewer({
   items,
   settings,
@@ -593,6 +792,7 @@ function CatalogViewer({
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [headerScrolled, setHeaderScrolled] = useState(false);
+  const [pricesItem, setPricesItem] = useState<CatalogItem | null>(null);
 
   useEffect(() => {
     const onScroll = () => setHeaderScrolled(window.scrollY > 18);
@@ -761,47 +961,63 @@ function CatalogViewer({
                 </div>
 
                 <div className="catalogCardContent">
+                  <div className="catalogCardMeta">
+                    {item.category ? (
+                      <span className="catalogChip catalogChipCategory">{item.category}</span>
+                    ) : null}
+                    {item.gender ? <span className="catalogChip">{item.gender}</span> : null}
+                    {item.fragranticaRating ? (
+                      <span
+                        className="catalogCardRating"
+                        aria-label={`Nota ${item.fragranticaRating.toLocaleString("pt-BR")} na Fragrantica`}
+                      >
+                        <Star aria-hidden="true" />
+                        {item.fragranticaRating.toLocaleString("pt-BR", {
+                          minimumFractionDigits: 1,
+                          maximumFractionDigits: 1,
+                        })}
+                        {item.fragranticaRatingCount ? (
+                          <small>({item.fragranticaRatingCount.toLocaleString("pt-BR")})</small>
+                        ) : null}
+                      </span>
+                    ) : null}
+                  </div>
+
                   <div className="catalogCardIdentity">
                     <span className="catalogCardBrand">{item.brand}</span>
                     <h3>{item.name}</h3>
                   </div>
 
-                  <div className={item.apc ? "catalogApcStatus available" : "catalogApcStatus unavailable"}>
-                    APC: {item.apc ? "Disponível" : "Indisponível"}
-                  </div>
-
-                  <div className="catalogScarcity">
-                    <div className="catalogScarcityText">
-                      <span>Restam {item.stock.toLocaleString("pt-BR")} ml</span>
+                  <div className="catalogStockRow">
+                    <CatalogStockBottle id={item.id} stock={item.stock} bottle={item.bottle} />
+                    <div className="catalogStockText">
+                      <small>Restam</small>
+                      <strong>
+                        {item.stock.toLocaleString("pt-BR")} <span>ml</span>
+                      </strong>
                     </div>
-                    <div className="catalogScarcityTrack" aria-hidden="true">
-                      <i
-                        style={{
-                          width: `${Math.max(
-                            item.stock > 0 ? 6 : 0,
-                            Math.min(
-                              100,
-                              item.bottle && item.bottle > 0
-                                ? (item.stock / item.bottle) * 100
-                                : Math.min(100, item.stock),
-                            ),
-                          )}%`,
-                        }}
-                      />
+                    <div className="catalogStockBadges">
+                      <span
+                        className={
+                          "catalogChip catalogApcChip " + (item.apc ? "available" : "unavailable")
+                        }
+                      >
+                        APC {item.apc ? "disponível" : "indisponível"}
+                      </span>
+                      {catalogStockRatio(item.stock, item.bottle) <= LOW_STOCK_RATIO ? (
+                        <span className="catalogChip catalogLowChip">Últimos ml</span>
+                      ) : null}
                     </div>
                   </div>
 
-                  <a
-                    className="catalogWhatsappButton"
-                    href={`https://wa.me/5531975359963?text=${encodeURIComponent(
-                      `Olá! Gostaria de solicitar MLs do perfume ${item.name} da marca ${item.brand}. Ainda está disponível?!`,
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    className="catalogWhatsappButton catalogPricesButton"
+                    onClick={() => setPricesItem(item)}
                   >
-                    <MessageCircle />
-                    <span>Solicitar via WhatsApp</span>
-                  </a>
+                    <Tag />
+                    <span>Ver valores</span>
+                  </button>
                 </div>
               </article>
             ))}
@@ -835,6 +1051,9 @@ function CatalogViewer({
           </a>
         </section>
       </main>
+      {pricesItem ? (
+        <CatalogPricesDialog item={pricesItem} onClose={() => setPricesItem(null)} />
+      ) : null}
     </div>
   );
 }
@@ -852,8 +1071,7 @@ function CatalogColorField({
     <label className="catalogColorField">
       <span>{label}</span>
       <div>
-        <input
-          type="color"
+        <ColorInput
           value={normalizeHex(value, "#000000")}
           onChange={(event) => onChange(event.target.value)}
           aria-label={`Selecionar cor de ${label}`}
@@ -1458,116 +1676,3 @@ export function CatalogAdminPreview({
   );
 }
 
-export function PublicCatalog() {
-  useEffect(() => {
-    document.title = "Catálogo | DAF Splits";
-  }, []);
-
-  const [items, setItems] = useState<CatalogItem[]>([]);
-  const [settings, setSettings] = useState<CatalogSettings>(
-    DEFAULT_CATALOG_SETTINGS,
-  );
-  const [updatedAt, setUpdatedAt] = useState("");
-  const [state, setState] = useState<"loading" | "ready" | "empty" | "error">(
-    "loading",
-  );
-
-  useEffect(() => {
-    let active = true;
-
-    async function localCatalogFallback() {
-      try {
-        const stored = readCommittedCatalogCache(window.localStorage.getItem(PUBLISHED_CATALOG_KEY));
-        if (stored) {
-          const snapshot = readCatalogSnapshot(stored.items);
-          if (!active) return true;
-          setItems(snapshot.items);
-          setSettings(snapshot.settings);
-          setUpdatedAt(stored.updatedAt);
-          setState(snapshot.items.length ? "ready" : "empty");
-          return true;
-        }
-      } catch {
-        // Sem dados locais disponíveis.
-      }
-      return false;
-    }
-
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("public_catalogs")
-          .select("items, updated_at")
-          .eq("slug", "daf-splits")
-          .eq("published", true)
-          .maybeSingle();
-
-        if (!active) return;
-
-        const snapshot = !error
-          ? readCatalogSnapshot(data?.items)
-          : { items: [], settings: DEFAULT_CATALOG_SETTINGS };
-        const catalogItems = snapshot.items.map((item) =>
-          applyKnownFragranticaImage(item),
-        );
-
-        if (catalogItems.length) {
-          const resolved = await enrichCatalogItemsWithImages(
-            catalogItems,
-            undefined,
-            snapshot.settings.productOrder === "mostRated",
-          );
-          if (!active) return;
-          setItems(resolved);
-          setSettings(snapshot.settings);
-          setUpdatedAt(String(data?.updated_at || ""));
-          setState("ready");
-          return;
-        }
-
-        if (error && await localCatalogFallback()) return;
-        setItems([]); setSettings(snapshot.settings); setUpdatedAt(String(data?.updated_at || ""));
-        setState(error ? "error" : "empty");
-      } catch {
-        if (!active) return;
-        if (!(await localCatalogFallback())) setState("error");
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  if (state === "loading") {
-    return (
-      <div className="catalogStatePage">
-        <img src="/icon-512.png" alt="DAF Splits" />
-        <PackageOpen />
-        <h1>Carregando catálogo...</h1>
-      </div>
-    );
-  }
-
-  if (state === "error") {
-    return (
-      <div className="catalogStatePage">
-        <img src="/icon-512.png" alt="DAF Splits" />
-        <PackageOpen />
-        <h1>Catálogo em preparação</h1>
-        <p>
-          A estrutura pública já está pronta. Falta apenas ativar a publicação
-          segura do estoque no banco de dados.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <CatalogViewer
-      items={items}
-      settings={settings}
-      updatedAt={updatedAt}
-    />
-  );
-}
