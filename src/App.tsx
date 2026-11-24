@@ -233,6 +233,8 @@ type B = {
   perfumeCategory?: string;
   perfumeGender?: string;
   perfumeApc?: boolean;
+  /** Cadastro escolhido no lançamento (recompra de um perfume que já existe). */
+  perfumeProductId?: number;
 };
 type TeamMemberRole = "partner" | "employee";
 type TeamMember = {
@@ -679,6 +681,47 @@ function pendingPerfumePurchases(d: D) {
     );
 }
 
+/** Todos os cadastros de um mesmo perfume (marca + nome), inclusive duplicados por UUID. */
+function perfumeRecords(products: P[], brand: unknown, name: unknown) {
+  const identity = perfumeIdentity(brand, name);
+  return products.filter(
+    (product) => perfumeIdentity(product.brand, product.name) === identity,
+  );
+}
+
+/** Texto "Entrará como frasco nº 5" / "frascos nº 5 a 6". */
+function bottleNumbersLabel(highest: number, qty: unknown) {
+  const count = Math.max(1, Math.round(Number(qty) || 1));
+  const first = highest + 1;
+  return count === 1
+    ? `Entrará como frasco nº ${first}.`
+    : `Entrará como frascos nº ${first} a ${first + count - 1}.`;
+}
+
+/** Maior número de frasco já usado entre os cadastros de um perfume. */
+function highestBottleNumber(records: P[]) {
+  return records.reduce((max, product) => {
+    const history = (product.bottleHistory || []).map((entry) =>
+      Math.max(0, Number(entry.number) || 0),
+    );
+    return Math.max(max, Number(product.bottleNumber) || 0, ...history);
+  }, 0);
+}
+
+/**
+ * Cadastro que recebe os novos frascos quando o perfume tem mais de um
+ * cadastro: o do frasco mais recente; empate → o que tem estoque; depois o mais novo.
+ */
+function perfumeTargetRecord(records: P[]) {
+  return [...records].sort((a, b) => {
+    const bottleDelta = highestBottleNumber([b]) - highestBottleNumber([a]);
+    if (bottleDelta) return bottleDelta;
+    const activeDelta = Number(b.stock > 0) - Number(a.stock > 0);
+    if (activeDelta) return activeDelta;
+    return Number(b.id) - Number(a.id);
+  })[0];
+}
+
 function receivePerfumePurchase(
   state: D,
   purchaseId: number,
@@ -700,23 +743,18 @@ function receivePerfumePurchase(
   const volume = qty * mlPerBottle;
   if (!brand || !name || volume <= 0) return state;
 
-  const matchingProducts = state.products.filter(
-    (product) =>
-      perfumeIdentity(product.brand, product.name) ===
-      perfumeIdentity(brand, name),
-  );
-  if (matchingProducts.length > 1) {
-    void showAlert(
-      "Há mais de um cadastro para este perfume. A chegada não foi lançada para evitar somar o estoque no item errado.",
-    );
-    return state;
-  }
-
-  const existing = matchingProducts[0];
-  const startingBottleNumber = Math.max(
-    0,
-    Number(existing?.bottleNumber) || 0,
-  );
+  // Recompra: soma no cadastro escolhido no lançamento ou, se houver mais de um
+  // cadastro com o mesmo nome, no do frasco mais recente. A numeração continua
+  // a partir do maior frasco já registrado entre todos os cadastros.
+  const matchingProducts = perfumeRecords(state.products, brand, name);
+  const chosen = purchase.perfumeProductId
+    ? state.products.find((product) => product.id === purchase.perfumeProductId)
+    : undefined;
+  const existing =
+    chosen && perfumeIdentity(chosen.brand, chosen.name) === perfumeIdentity(brand, name)
+      ? chosen
+      : perfumeTargetRecord(matchingProducts);
+  const startingBottleNumber = highestBottleNumber(matchingProducts);
   const bottleNumbers = Array.from(
     { length: qty },
     (_, index) => startingBottleNumber + index + 1,
@@ -8104,17 +8142,7 @@ function PendingPerfumes({
   const [pendingWarning, setPendingWarning] = useState("");
 
   function requestMarkArrived(purchase: B) {
-    const matches = d.products.filter(
-      (product) =>
-        perfumeIdentity(product.brand, product.name) ===
-        perfumeIdentity(purchase.perfumeBrand, purchase.perfumeName),
-    );
-    if (matches.length > 1) {
-      setPendingWarning(
-        "Há mais de um cadastro para este perfume. Corrija a duplicidade antes de confirmar a chegada.",
-      );
-      return;
-    }
+    setPendingWarning("");
     setArrivalConfirm(purchase);
   }
 
@@ -8261,7 +8289,17 @@ function PendingPerfumes({
                       ),
                   )
                     ? "O novo volume será somado ao cadastro já existente, sem criar outro perfume."
-                    : "O perfume será incluído no estoque e passará a ficar disponível no sistema."}
+                    : "O perfume será incluído no estoque e passará a ficar disponível no sistema."}{" "}
+                  {bottleNumbersLabel(
+                    highestBottleNumber(
+                      perfumeRecords(
+                        d.products,
+                        arrivalConfirm.perfumeBrand,
+                        arrivalConfirm.perfumeName,
+                      ),
+                    ),
+                    arrivalConfirm.qty,
+                  )}
                 </p>
               </div>
             </div>
@@ -13990,17 +14028,11 @@ function Form({
         : [];
 
     set((state: D) => {
-      const matchingProducts = state.products.filter(
-        (product) =>
-          perfumeIdentity(product.brand, product.name) ===
-          perfumeIdentity(brand, perfumeName),
-      );
-      if (matchingProducts.length > 1) {
-        void showAlert(
-          "Há mais de um cadastro para este perfume. Confira as identidades antes de registrar a compra.",
-        );
-        return state;
-      }
+      const matchingProducts = perfumeRecords(state.products, brand, perfumeName);
+      const chosenId = Number(f.perfumeProductId) || 0;
+      const target =
+        matchingProducts.find((product) => product.id === chosenId) ||
+        perfumeTargetRecord(matchingProducts);
 
       const purchaseId = Math.max(
         Date.now(),
@@ -14021,9 +14053,10 @@ function Form({
         arrivalStatus: "pending",
         perfumeBrand: brand,
         perfumeName,
-        perfumeCategory: String(f.category || "Designer"),
-        perfumeGender: String(f.gender || "Unissex"),
+        perfumeCategory: String(target?.category || f.category || "Designer"),
+        perfumeGender: String(target?.gender || f.gender || "Unissex"),
         perfumeApc: String(f.apc) === "Sim",
+        perfumeProductId: target?.id,
         payment: purchasePayment,
         paid: purchasePayment === "À prazo" ? 0 : total,
         dueDate: purchaseInstallments[0]?.date,
@@ -14080,25 +14113,17 @@ function Form({
   function submit(e: any) {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(e.currentTarget));
-    // UUID-backed products remain separate entities. In sales, identical visible
-    // names are resolved to the concrete sellable record; purchases still require
-    // an unambiguous identity to avoid joining inventory incorrectly.
-    const ambiguous =
-      type === "purchase" &&
-      kind === "Perfume" &&
-      d.products.filter(
-        (p) =>
-          perfumeIdentity(p.brand, p.name) ===
-          perfumeIdentity(
-            String(f.brand || ""),
-            parseBottleMarker(f.productName).name,
-          ),
-      ).length > 1;
-    if (ambiguous) {
-      void showAlert(
-        "Há mais de um produto com esta marca e nome. Confira as identidades antes de lançar esta operação.",
-      );
-      return;
+    // Compras de perfume escolhem o cadastro pelo seletor; quando há mais de um
+    // cadastro com o mesmo nome, a entrada vai para o do frasco mais recente.
+    if (type === "purchase" && kind === "Perfume") {
+      if (!String(f.brand || "").trim()) {
+        void showAlert("Selecione a marca do perfume.");
+        return;
+      }
+      if (!parseBottleMarker(f.productName).name.trim()) {
+        void showAlert("Selecione o perfume ou cadastre um novo.");
+        return;
+      }
     }
     if (isSale && !isOldSale) {
       const invalid = Array.from({ length: lines }, (_, i) =>
@@ -15362,22 +15387,13 @@ function Form({
             />
             {kind === "Perfume" ? (
               <>
-                <BrandFields
+                <PurchasePerfumePicker
+                  products={d.products}
                   brands={d.brands}
                   onAddBrand={addBrandFromForm}
+                  qty={purchaseCalc.qty}
                 />
-                <Field n="productName" l="Nome do perfume" />
-                <Choices
-                  name="category"
-                  label="Categoria"
-                  a={["Nicho", "Árabe", "Designer"]}
-                />
-                <Choices
-                  name="gender"
-                  label="Público"
-                  a={["Masculino", "Feminino", "Unissex"]}
-                />
-                <Choices name="apc" label="APC?" a={["Sim", "Não"]} v="Sim" />
+                <Choices name="apc" label="Este frasco tem APC?" a={["Sim", "Não"]} v="Sim" />
                 <div className="row three">
                   <Field
                     n="qty"
@@ -16037,6 +16053,225 @@ const mkC = (f: any, n: number, id = Date.now()): C => ({
     ),
   })).filter((a) => a.value),
 });
+/**
+ * Compra de perfume: seletor de marca e seletor de perfume (todos os que já
+ * existiram, com ou sem estoque) ou cadastro de um perfume novo. Mostra qual
+ * número de frasco a compra vai gerar.
+ */
+function PurchasePerfumePicker({
+  products,
+  brands,
+  onAddBrand,
+  qty,
+}: {
+  products: P[];
+  brands: string[];
+  onAddBrand?: (brand: string) => void;
+  qty: number;
+}) {
+  const NEW_PERFUME = "__new__";
+  const sortedBrands = Array.from(
+    new Set(
+      [...brands, ...products.map((product) => product.brand)]
+        .map((brand) => String(brand || "").trim())
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "pt-BR", { sensitivity: "base" }));
+  const [brand, setBrand] = useState("");
+  const [perfumeKey, setPerfumeKey] = useState("");
+  const [newName, setNewName] = useState("");
+  const [creatingBrand, setCreatingBrand] = useState(false);
+  const [newBrand, setNewBrand] = useState("");
+
+  const perfumes = useMemo(() => {
+    const groups = new Map<string, P[]>();
+    products
+      .filter(
+        (product) =>
+          String(product.brand || "").trim().localeCompare(brand, "pt-BR", {
+            sensitivity: "base",
+          }) === 0,
+      )
+      .forEach((product) => {
+        const key = perfumeIdentity(product.brand, product.name);
+        groups.set(key, [...(groups.get(key) || []), product]);
+      });
+    return Array.from(groups.entries())
+      .map(([key, records]) => {
+        const target = perfumeTargetRecord(records)!;
+        return {
+          key,
+          records,
+          target,
+          name: parseBottleMarker(target.name).name,
+          stock: records.reduce((sum, product) => sum + Math.max(0, Number(product.stock) || 0), 0),
+          highest: highestBottleNumber(records),
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }));
+  }, [products, brand]);
+
+  const selected = perfumes.find((perfume) => perfume.key === perfumeKey);
+  const isNew = perfumeKey === NEW_PERFUME;
+  const typedMatch = isNew
+    ? perfumes.find(
+        (perfume) => perfume.key === perfumeIdentity(brand, newName),
+      )
+    : undefined;
+
+  function saveNewBrand() {
+    const clean = newBrand.trim();
+    if (!clean) return;
+    const existing = sortedBrands.find(
+      (item) => item.localeCompare(clean, "pt-BR", { sensitivity: "base" }) === 0,
+    );
+    if (!existing) onAddBrand?.(clean);
+    setBrand(existing || clean);
+    setPerfumeKey(existing ? "" : NEW_PERFUME);
+    setCreatingBrand(false);
+    setNewBrand("");
+  }
+
+  return (
+    <div className="purchasePerfumePicker">
+      <div className="brandFieldBlock">
+        <label>
+          <span>Marca</span>
+          <SysSelect
+            name="brand"
+            value={brand}
+            required
+            onChange={(event) => {
+              setBrand(event.target.value);
+              setPerfumeKey("");
+              setNewName("");
+            }}
+          >
+            <option value="" disabled>
+              Selecione a marca
+            </option>
+            {brand && !sortedBrands.includes(brand) ? (
+              <option value={brand}>{brand}</option>
+            ) : null}
+            {sortedBrands.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </SysSelect>
+        </label>
+        {onAddBrand ? (
+          !creatingBrand ? (
+            <button
+              type="button"
+              className="inlineAddBrandButton"
+              onClick={() => setCreatingBrand(true)}
+            >
+              <Plus /> Adicionar nova marca
+            </button>
+          ) : (
+            <div className="inlineAddBrandEditor">
+              <input
+                value={newBrand}
+                onChange={(event) => setNewBrand(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    saveNewBrand();
+                  }
+                }}
+                placeholder="Nome da nova marca"
+                autoFocus
+              />
+              <button type="button" className="iconButton" onClick={saveNewBrand}>
+                <Check /> Adicionar
+              </button>
+              <button
+                type="button"
+                className="iconButton"
+                onClick={() => {
+                  setCreatingBrand(false);
+                  setNewBrand("");
+                }}
+              >
+                <X /> Cancelar
+              </button>
+            </div>
+          )
+        ) : null}
+      </div>
+
+      <label>
+        <span>Perfume</span>
+        <SysSelect
+          value={perfumeKey}
+          disabled={!brand}
+          required
+          onChange={(event) => setPerfumeKey(event.target.value)}
+        >
+          <option value="" disabled>
+            {brand ? "Selecione o perfume" : "Escolha a marca primeiro"}
+          </option>
+          {perfumes.map((perfume) => (
+            <option key={perfume.key} value={perfume.key}>
+              {perfume.name} ·{" "}
+              {perfume.stock > 0
+                ? `${perfume.stock.toLocaleString("pt-BR")} ml em estoque`
+                : "sem estoque"}{" "}
+              · último frasco nº {perfume.highest || 1}
+            </option>
+          ))}
+          <option value={NEW_PERFUME}>+ Novo perfume desta marca</option>
+        </SysSelect>
+      </label>
+
+      {isNew ? (
+        <>
+          <Field
+            n="productName"
+            l="Nome do novo perfume"
+            v={newName}
+            onChange={(event) => setNewName(event.target.value)}
+          />
+          <Choices name="category" label="Categoria" a={["Nicho", "Árabe", "Designer"]} />
+          <Choices name="gender" label="Público" a={["Masculino", "Feminino", "Unissex"]} />
+        </>
+      ) : selected ? (
+        <>
+          <input type="hidden" name="productName" value={selected.name} />
+          <input type="hidden" name="perfumeProductId" value={selected.target.id} />
+          <input type="hidden" name="category" value={selected.target.category || "Designer"} />
+          <input type="hidden" name="gender" value={selected.target.gender || "Unissex"} />
+        </>
+      ) : null}
+
+      {selected ? (
+        <div className="purchaseBottleNotice">
+          <PackageOpen />
+          <div>
+            <strong>Recompra de {selected.name}</strong>
+            <span>{bottleNumbersLabel(selected.highest, qty)}</span>
+          </div>
+        </div>
+      ) : isNew && brand ? (
+        <div className={"purchaseBottleNotice" + (typedMatch ? " warning" : "")}>
+          <PackageOpen />
+          <div>
+            <strong>
+              {typedMatch ? "Esse perfume já existe" : "Perfume novo no estoque"}
+            </strong>
+            <span>
+              {typedMatch
+                ? `Ele será tratado como recompra de ${typedMatch.name}. ${bottleNumbersLabel(typedMatch.highest, qty)}`
+                : bottleNumbersLabel(0, qty)}
+            </span>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function BrandFields({
   brands,
   value,
