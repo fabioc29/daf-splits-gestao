@@ -16343,6 +16343,8 @@ select.sysInvalid {
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
 /* ---------- Compra de perfume: seletores e aviso do frasco ---------- */
 .purchasePerfumePicker {
   display: grid;
