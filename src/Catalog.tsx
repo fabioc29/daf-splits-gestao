@@ -683,9 +683,22 @@ function CatalogPricesDialog({ item, onClose }: { item: CatalogItem; onClose: ()
             </li>
           </ul>
         ) : (
-          <p className="catalogPricesEmpty">
-            Os valores deste perfume estão sendo atualizados. Fale com a gente pelo WhatsApp para saber o preço.
-          </p>
+          <>
+            <p className="catalogPricesEmpty">
+              Os valores deste perfume estão sendo atualizados. Fale com a gente pelo WhatsApp para saber o preço.
+            </p>
+            {!item.apc ? (
+              <ul className="catalogPricesList catalogPricesApcOnly">
+                <li className="apc unavailable">
+                  <span>APC</span>
+                  <i aria-hidden="true" />
+                  <b>
+                    <CircleSlash /> Indisponível
+                  </b>
+                </li>
+              </ul>
+            ) : null}
+          </>
         )}
 
         <p className="catalogPricesStock">

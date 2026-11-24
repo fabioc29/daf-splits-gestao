@@ -5196,3 +5196,7 @@ vercel-toolbar {
   margin-top: 16px !important;
   min-height: 52px !important;
 }
+
+.catalogPricesApcOnly {
+  margin-top: 10px;
+}
