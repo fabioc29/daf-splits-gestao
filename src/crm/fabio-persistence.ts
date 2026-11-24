@@ -83,10 +83,27 @@ export class FabioStateWriter {
       }
 
       if (this.stopped) throw Error("STATE_WRITER_CLOSED");
-      const { data, error } = await this.client.rpc("daf_publish_catalog", {
+      let { data, error } = await this.client.rpc("daf_publish_catalog", {
         p_expected_revision: snapshot.revision,
         p_items: items,
       });
+      // Banco ainda sem suporte a preços (migração de preços não aplicada):
+      // publica sem os preços em vez de deixar o catálogo desatualizado.
+      if (
+        error &&
+        String(error.message || "").includes("UNSAFE_PUBLIC_CATALOG_FIELD") &&
+        items.some((item: any) => item && typeof item === "object" && "prices" in item)
+      ) {
+        const withoutPrices = items.map((item: any) => {
+          if (!item || typeof item !== "object" || !("prices" in item)) return item;
+          const { prices: _prices, ...rest } = item;
+          return rest;
+        });
+        ({ data, error } = await this.client.rpc("daf_publish_catalog", {
+          p_expected_revision: snapshot.revision,
+          p_items: withoutPrices,
+        }));
+      }
       if (error) {
         return {
           status:
